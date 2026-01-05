@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ExpertDashboardLayout from '@/components/ExpertDashboardLayout'
@@ -50,17 +50,7 @@ export default function ExpertMessagesPage() {
   const [sending, setSending] = useState(false)
   const [activeTab, setActiveTab] = useState<'new' | 'send'>('new')
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  useEffect(() => {
-    if (selectedConversation) {
-      loadMessages(selectedConversation)
-    }
-  }, [selectedConversation])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const supabase = createClient()
       
@@ -153,7 +143,17 @@ export default function ExpertMessagesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    if (selectedConversation) {
+      loadMessages(selectedConversation)
+    }
+  }, [selectedConversation])
 
   const loadMessages = async (conversationId: string) => {
     try {

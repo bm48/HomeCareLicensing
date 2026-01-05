@@ -151,7 +151,7 @@ export default async function DashboardPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Welcome Back</h1>
           <p className="text-gray-600 text-sm sm:text-base lg:text-lg">
-            Here's an overview of your home care licensing operations
+            Here&apos;s an overview of your home care licensing operations
           </p>
         </div>
 
