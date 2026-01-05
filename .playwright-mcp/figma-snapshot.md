@@ -1,0 +1,66 @@
+### New console messages
+- [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://b5dc351e-b7d...
+- [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://b5dc351e-b7d...
+
+### Page state
+- Page URL: https://www.figma.com/make/i26O5m3Y3IpCQ94e733Zsr/Home-Care-Licensing-App?p=f&fullscreen=1
+- Page Title: Home Care Licensing App – Figma Make
+- Page Snapshot:
+```yaml
+- generic [active] [ref=e9]:
+  - generic [ref=e1]:
+    - generic [ref=e2]: a
+    - generic [ref=e3]: a
+    - generic [ref=e4]: a
+    - generic [ref=e5]: a
+    - generic [ref=e6]: a
+    - generic [ref=e7]: a
+    - generic [ref=e8]: a
+  - generic [ref=e13]:
+    - generic [ref=e19]:
+      - generic [ref=e21]:
+        - img [ref=e23]
+        - generic [ref=e25]:
+          - status [ref=e26]:
+            - generic [ref=e27]: "Warning:"
+            - generic [ref=e28]: You're viewing something built by another Figma user. Be careful when entering any personal information.
+          - link "Learn more" [ref=e29] [cursor=pointer]:
+            - /url: https://help.figma.com/hc/articles/31304412302231
+        - button "Dismiss" [ref=e31]:
+          - generic:
+            - img
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - button "Back to files" [ref=e34]:
+            - generic:
+              - img
+          - link "Learn more" [ref=e35] [cursor=pointer]:
+            - /url: https://help.figma.com/hc/articles/23870272542231
+            - generic [ref=e36]: AI
+        - generic [ref=e38]:
+          - button "Home Care Licensing App, file name" [ref=e39]: Home Care Licensing App
+          - button "Edit file menu" [ref=e41]:
+            - generic:
+              - img
+        - generic [ref=e42]:
+          - button "Help" [ref=e45]:
+            - img
+          - button "Sign up with email" [ref=e46]:
+            - generic:
+              - generic:
+                - generic: Sign up with email
+          - button "Continue with Google" [ref=e50]:
+            - generic:
+              - generic:
+                - img
+              - generic: Continue with Google
+      - generic [ref=e65]:
+        - generic:
+          - status:
+            - generic: Loading
+            - img
+    - status
+    - group [ref=e69]:
+      - alert [ref=e71]
+      - alert [ref=e73]
+```
