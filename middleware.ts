@@ -52,7 +52,13 @@ export async function middleware(request: NextRequest) {
       // no user, potentially respond by redirecting the user to the login page
       const url = request.nextUrl.clone()
       url.pathname = '/login'
-      return NextResponse.redirect(url)
+      const redirectResponse = NextResponse.redirect(url)
+      // Copy cookies from supabaseResponse to redirect response
+      const cookies = supabaseResponse.cookies.getAll()
+      cookies.forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value)
+      })
+      return redirectResponse
     }
 
     // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
