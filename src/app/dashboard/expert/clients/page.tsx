@@ -63,7 +63,7 @@ export default async function ExpertClientsPage() {
     }
     acc[caseItem.client_id].push(caseItem)
     return acc
-  }, {} as Record<string, typeof cases>) || {}
+  }, {} as Record<string, Array<NonNullable<typeof cases>[number]>>) || {}
 
   // Format date helper
   const formatDate = (date: string | Date | null) => {
@@ -154,7 +154,7 @@ export default async function ExpertClientsPage() {
         <div className="space-y-4 sm:space-y-6">
           {clients && clients.length > 0 ? (
             clients.map((client) => {
-              const clientCases = casesByClient[client.id] || []
+              const clientCases: Array<NonNullable<typeof cases>[number]> = casesByClient[client.id] || []
               return (
                 <div key={client.id} className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6">
                   {/* Client Header */}

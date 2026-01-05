@@ -68,7 +68,7 @@ export default async function MyLicensesPage() {
   }
 
   // Get status badge styling
-  const getStatusBadge = (license: typeof staffLicenses[0]) => {
+  const getStatusBadge = (license: NonNullable<typeof staffLicenses>[number]) => {
     const daysUntilExpiry = license.days_until_expiry !== null && license.days_until_expiry !== undefined
       ? license.days_until_expiry
       : getDaysUntilExpiry(license.expiry_date)

@@ -67,7 +67,7 @@ export default async function ClientsPage() {
   // Get cases for progress calculation
   const { data: cases } = await supabase
     .from('cases')
-    .select('client_id, progress_percentage')
+    .select('client_id, progress_percentage, status')
     .in('client_id', clientIds)
 
   // Calculate statistics

@@ -20,7 +20,7 @@ interface ExpertDashboardLayoutProps {
   children: React.ReactNode
   user: {
     email?: string | null
-  }
+  } | null
   profile: {
     full_name?: string | null
     role?: string | null
@@ -76,7 +76,7 @@ export default function ExpertDashboardLayout({
   }
 
   const getDisplayName = () => {
-    return profile?.full_name || user.email || 'User'
+    return profile?.full_name || user?.email || 'User'
   }
 
   const getRoleDisplay = () => {
@@ -119,7 +119,7 @@ export default function ExpertDashboardLayout({
             {/* User Info */}
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center font-semibold text-sm sm:text-base">
-                {getInitials(profile?.full_name, user.email)}
+                {getInitials(profile?.full_name, user?.email)}
               </div>
               <div className="hidden md:block">
                 <div className="font-semibold text-sm sm:text-base">{getDisplayName()}</div>

@@ -41,7 +41,7 @@ export default async function AdminDashboardPage() {
   const inProgress = cases?.filter(c => c.status === 'in_progress').length || 0
   const inReview = cases?.filter(c => c.status === 'under_review').length || 0
   const completed = cases?.filter(c => c.status === 'approved').length || 0
-  const avgProgress = cases?.length > 0
+  const avgProgress = cases && cases.length > 0
     ? Math.round(cases.reduce((acc, c) => acc + (c.progress_percentage || 0), 0) / cases.length)
     : 0
 
