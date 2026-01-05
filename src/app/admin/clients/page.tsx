@@ -54,7 +54,7 @@ export default async function ClientsPage() {
   // Get unread message counts per client
   const { data: conversations } = await supabase
     .from('conversations')
-    .select('client_id')
+    .select('id')
     .in('client_id', clientIds)
 
   const conversationIds = conversations?.map(c => c.id) || []
