@@ -1,8 +1,8 @@
 // checkout for more details: https://www.npmjs.com/package/next-sitemap
 
-const siteUrl = 'https://localhost'; // Replace with your website's URL
+const siteUrl = 'https://home-care-licensing.vercel.app/'; // Replace with your website's URL
 
-module.exports = {
+const config = {
     siteUrl: siteUrl,
     generateRobotsTxt: true, // Generates a robots.txt file
     outDir: './out',
@@ -29,3 +29,5 @@ module.exports = {
         additionalSitemaps: [`${siteUrl}/sitemap.xml`],
     },
 };
+
+export default config;
