@@ -2,7 +2,7 @@
 
 const siteUrl = 'https://home-care-licensing.vercel.app/'; // Replace with your website's URL
 
-const config = {
+module.exports = {
     siteUrl: siteUrl,
     generateRobotsTxt: true, // Generates a robots.txt file
     outDir: './out',
@@ -10,7 +10,7 @@ const config = {
     // Additional configuration options can be added here
 
     // Customizing the sitemap paths
-    transform: async (config: { siteUrl: any; }, path: any) => {
+    transform: async (config, path) => {
         return {
             loc: `${config.siteUrl}${path}`,
             lastmod: new Date().toISOString(),
@@ -30,4 +30,3 @@ const config = {
     },
 };
 
-export default config;
