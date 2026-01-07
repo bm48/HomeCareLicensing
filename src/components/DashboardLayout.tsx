@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   Home, 
+  Medal,
   FileText, 
   ClipboardList, 
   Users, 
@@ -12,12 +14,12 @@ import {
   LogOut, 
   Bell, 
   ChevronLeft,
-  Shield,
   Menu,
   X
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
+import UserDropdown from './UserDropdown'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -60,7 +62,7 @@ export default function DashboardLayout({
 
   const menuItems = [
     { href: '/dashboard', label: 'Home', icon: Home },
-    { href: '/dashboard/licenses', label: 'Licenses', icon: FileText },
+    { href: '/dashboard/licenses', label: 'Licenses', icon: Medal },
     { href: '/dashboard/applications', label: 'Applications', icon: ClipboardList },
     { href: '/dashboard/staff', label: 'Staff', icon: Users },
     { href: '/dashboard/profile', label: 'My Profile', icon: User },
@@ -95,8 +97,8 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       {isLoading && <LoadingSpinner />}
-      {/* Top Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
+      {/* Top Header - Fixed */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
         <div className="flex items-center justify-between px-4 sm:px-6 py-4">
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Mobile Menu Button */}
@@ -107,10 +109,17 @@ export default function DashboardLayout({
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg">
-              <Shield className="w-4 h-4 sm:w-6 sm:h-6" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="relative w-20 h-12 sm:w-40 sm:h-16">
+                <Image
+                  src="/cropped-HomeSights-NEWLOGO-1.png"
+                  alt="Home Sights Consulting Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
             </div>
-            <span className="text-base sm:text-xl font-bold truncate">HOME SIGHTS CONSULTING</span>
           </div>
           
           <div className="flex items-center gap-2 sm:gap-4">
@@ -124,36 +133,33 @@ export default function DashboardLayout({
               )}
             </div>
 
-            {/* User Info */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center font-semibold text-sm sm:text-base">
-                {getInitials(profile?.full_name, user.email)}
-              </div>
-              <div className="hidden md:block">
-                <div className="font-semibold text-sm sm:text-base">{getDisplayName()}</div>
-                <div className="text-xs sm:text-sm text-blue-100">{getRoleDisplay()}</div>
-              </div>
-            </div>
+            {/* User Dropdown */}
+            <UserDropdown 
+              user={user} 
+              profile={profile} 
+              profileUrl="/dashboard/profile"
+              changePasswordUrl="/change-password"
+            />
           </div>
         </div>
       </header>
 
-      <div className="flex relative">
+      <div className="flex relative pt-[73px]">
         {/* Mobile Overlay */}
         {mobileMenuOpen && (
           <div 
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            className="fixed top-[73px] left-0 right-0 bottom-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
-        {/* Sidebar */}
+        {/* Sidebar - Fixed */}
         <aside className={`
           bg-white shadow-lg transition-all duration-300 
-          fixed lg:static inset-y-0 left-0 z-50
+          fixed top-[73px] left-0 bottom-0 z-40
           ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           ${sidebarCollapsed ? 'w-16' : 'w-64'}
-          min-h-[calc(100vh-73px)] lg:min-h-[calc(100vh-73px)]
+          overflow-y-auto
         `}>
           <div className="p-4 h-full flex flex-col">
             <div>
@@ -208,7 +214,9 @@ export default function DashboardLayout({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 sm:p-6 w-full lg:w-auto">
+        <main className={`flex-1 p-4 sm:p-6 w-full transition-all duration-300 ${
+          sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+        }`}>
           {children}
         </main>
       </div>

@@ -74,7 +74,7 @@ export default async function AdminDashboardPage() {
       <div className="space-y-4 md:space-y-6">
         {/* Page Header */}
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 md:gap-3">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2 md:gap-3">
             <LayoutDashboard className="w-6 h-6 md:w-8 md:h-8 text-purple-600" />
             <span className="break-words">Admin Dashboard</span>
           </h1>
@@ -89,7 +89,7 @@ export default async function AdminDashboardPage() {
                 <Users className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{totalCases}</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{totalCases}</div>
             <div className="text-xs md:text-sm text-gray-600">All time</div>
           </div>
 
@@ -99,7 +99,7 @@ export default async function AdminDashboardPage() {
                 <Clock className="w-5 h-5 md:w-6 md:h-6 text-orange-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{inProgress}</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{inProgress}</div>
             <div className="text-xs md:text-sm text-gray-600">Active cases</div>
           </div>
 
@@ -109,7 +109,7 @@ export default async function AdminDashboardPage() {
                 <AlertCircle className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{inReview}</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{inReview}</div>
             <div className="text-xs md:text-sm text-gray-600">Pending approval</div>
           </div>
 
@@ -119,7 +119,7 @@ export default async function AdminDashboardPage() {
                 <CheckCircle2 className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{completed}</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{completed}</div>
             <div className="text-xs md:text-sm text-gray-600">Successfully licensed</div>
           </div>
 
@@ -129,7 +129,7 @@ export default async function AdminDashboardPage() {
                 <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-purple-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{avgProgress}%</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{avgProgress}%</div>
             <div className="text-xs md:text-sm text-gray-600">Across all cases</div>
           </div>
         </div>
@@ -188,7 +188,7 @@ export default async function AdminDashboardPage() {
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900">{totalCases}</div>
+                    <div className="text-xl font-bold text-gray-900">{totalCases}</div>
                     <div className="text-xs text-gray-500">Total</div>
                   </div>
                 </div>

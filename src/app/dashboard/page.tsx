@@ -81,11 +81,49 @@ export default async function DashboardPage() {
     return false
   }).length || 0
 
+  // Calculate certification status counts for nursing staff
+  const today = new Date()
+  const certifiedCount = staffLicenses?.filter(sl => {
+    if (sl.status === 'active' && sl.days_until_expiry !== null && sl.days_until_expiry !== undefined) {
+      return sl.days_until_expiry > 30
+    }
+    return sl.status === 'active'
+  }).length || 0
+
+  const expiringSoonCount = staffLicenses?.filter(sl => {
+    if (sl.days_until_expiry) {
+      return sl.days_until_expiry <= 30 && sl.days_until_expiry > 0
+    }
+    return false
+  }).length || 0
+
+  const expiredCount = staffLicenses?.filter(sl => {
+    if (sl.days_until_expiry !== null && sl.days_until_expiry !== undefined) {
+      return sl.days_until_expiry <= 0
+    }
+    return sl.status === 'expired'
+  }).length || 0
+
   const expiringSoon = expiringLicenses + expiringStaffCertifications
   const unreadNotifications = notifications?.length || 0
 
   // Get recent licenses
   const recentLicenses = licenses?.slice(0, 2).map(license => {
+    const expiryDate = license.expiry_date ? new Date(license.expiry_date) : null
+    let status = license.status
+    if (status === 'active' && expiryDate) {
+      const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysUntilExpiry <= 60 && daysUntilExpiry > 0) {
+        status = 'expiring'
+      } else if (daysUntilExpiry <= 0) {
+        status = 'expired'
+      }
+    }
+    return { ...license, status, expiryDate }
+  }) || []
+
+  // Get all licenses with status for Action Items
+  const allLicensesWithStatus = licenses?.map(license => {
     const expiryDate = license.expiry_date ? new Date(license.expiry_date) : null
     const today = new Date()
     let status = license.status
@@ -99,6 +137,11 @@ export default async function DashboardPage() {
     }
     return { ...license, status, expiryDate }
   }) || []
+
+  // Get expiring licenses for Action Items
+  const expiringLicensesForAction = allLicensesWithStatus
+    .filter(license => license.status === 'expiring' || license.status === 'expired')
+    .slice(0, 3)
 
   // Format date helper
   const formatDate = (date: string | Date | null) => {
@@ -149,8 +192,8 @@ export default async function DashboardPage() {
       <div className="space-y-4 sm:space-y-6">
         {/* Welcome Section */}
         <div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600 text-sm sm:text-base lg:text-lg">
+          <h1 className="text-xl sm:text-2xl lg:text-2xl font-bold text-gray-900 mb-2">Welcome Back</h1>
+          <p className="text-gray-600 text-xs sm:text-sm lg:text-sm">
             Here&apos;s an overview of your home care licensing operations
           </p>
         </div>
@@ -164,7 +207,7 @@ export default async function DashboardPage() {
                 <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{activeLicenses}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{activeLicenses}</div>
             <div className="text-xs sm:text-sm text-gray-600">Active Licenses</div>
           </div>
 
@@ -175,7 +218,7 @@ export default async function DashboardPage() {
                 <Users className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{staff?.length || 0}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{staff?.length || 0}</div>
             <div className="text-xs sm:text-sm text-gray-600">Nursing Staff</div>
             <div className="text-xs text-gray-500 mt-1">Active and certified</div>
           </div>
@@ -187,7 +230,7 @@ export default async function DashboardPage() {
                 <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{expiringSoon}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{expiringSoon}</div>
             <div className="text-xs sm:text-sm text-gray-600">Expiring Soon</div>
             <div className="text-xs text-gray-500 mt-1">
               {expiringLicenses} licenses, {expiringStaffCertifications} certifications
@@ -201,13 +244,107 @@ export default async function DashboardPage() {
                 <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{unreadNotifications}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{unreadNotifications}</div>
             <div className="text-xs sm:text-sm text-gray-600">Notifications</div>
             <div className="text-xs text-gray-500 mt-1">Unread messages</div>
           </div>
         </div>
 
-        {/* Main Content Grid */}
+        {/* Main Content Grid - Nursing Staff & Action Items */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          {/* Nursing Staff Section */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Nursing Staff</h2>
+              <span className="text-sm text-gray-600">{staff?.length || 0} total</span>
+            </div>
+
+            {/* Certification Status Breakdown */}
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <span className="text-sm text-gray-700">Certified</span>
+                <span className="ml-auto text-sm font-semibold text-gray-900">{certifiedCount}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                <span className="text-sm text-gray-700">Expiring Soon</span>
+                <span className="ml-auto text-sm font-semibold text-gray-900">{expiringSoonCount}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <span className="text-sm text-gray-700">Expired</span>
+                <span className="ml-auto text-sm font-semibold text-gray-900">{expiredCount}</span>
+              </div>
+            </div>
+
+            {/* Warning Message */}
+            {expiringSoonCount > 0 && (
+              <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-orange-800">
+                  {expiringSoonCount} staff member{expiringSoonCount !== 1 ? 's' : ''} have certifications expiring within 30 days
+                </p>
+              </div>
+            )}
+
+            {/* Manage Staff Certifications Button */}
+            <Link
+              href="/dashboard/staff"
+              className="block w-full text-center py-2.5 px-4 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg text-gray-700 font-medium transition-colors"
+            >
+              Manage Staff Certifications
+            </Link>
+          </div>
+
+          {/* Action Items Section */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Action Items</h2>
+            </div>
+
+            {/* License Information Cards */}
+            <div className="space-y-3 mb-4">
+              {expiringLicensesForAction.length > 0 ? (
+                expiringLicensesForAction.map((license) => (
+                  <div key={license.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-semibold text-gray-900">
+                        {license.state} License
+                      </div>
+                      {license.status === 'expiring' && (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">
+                          expiring
+                        </span>
+                      )}
+                    </div>
+                    {license.expiryDate && (
+                      <div className="text-sm text-red-600 font-medium">
+                        Expires {formatDate(license.expiryDate)}
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6 text-gray-500">
+                  <FileText className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No action items</p>
+                </div>
+              )}
+            </div>
+
+            {/* Apply for New License Button */}
+            <Link
+              href="/dashboard/licenses"
+              className="block w-full text-center py-2.5 px-4 bg-black hover:bg-gray-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Apply for New License
+            </Link>
+          </div>
+        </div>
+
+        {/* Additional Sections - Your Licenses & Recent Notifications */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Your Licenses */}
           <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6">
@@ -315,24 +452,6 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Additional Sections - Staff Preview */}
-        {staff && staff.length > 0 && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Nursing Staff</h2>
-              <Link 
-                href="/dashboard/staff"
-                className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
-              >
-                View All
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-            <div className="text-gray-600">
-              {staff.length} total staff members
-            </div>
-          </div>
-        )}
       </div>
     </DashboardLayout>
   )

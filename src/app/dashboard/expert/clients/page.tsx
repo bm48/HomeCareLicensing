@@ -98,8 +98,8 @@ export default async function ExpertClientsPage() {
       <div className="space-y-4 sm:space-y-6">
         {/* Page Header */}
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Clients</h1>
-          <p className="text-gray-600 text-sm sm:text-base">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">My Clients</h1>
+          <p className="text-gray-600 text-xs sm:text-sm">
             Manage and support your assigned clients
           </p>
         </div>
@@ -123,7 +123,7 @@ export default async function ExpertClientsPage() {
                 <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{totalClients}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{totalClients}</div>
             <div className="text-xs sm:text-sm text-gray-600">Total Clients</div>
           </div>
 
@@ -134,7 +134,7 @@ export default async function ExpertClientsPage() {
                 <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{activeApplications}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{activeApplications}</div>
             <div className="text-xs sm:text-sm text-gray-600">Active Applications</div>
           </div>
 
@@ -145,7 +145,7 @@ export default async function ExpertClientsPage() {
                 <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{pendingReviews}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{pendingReviews}</div>
             <div className="text-xs sm:text-sm text-gray-600">Pending Reviews</div>
           </div>
         </div>
@@ -159,7 +159,7 @@ export default async function ExpertClientsPage() {
                 <div key={client.id} className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6">
                   {/* Client Header */}
                   <div className="mb-4 sm:mb-6">
-                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">
                       {client.company_name}
                     </h2>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
@@ -179,7 +179,7 @@ export default async function ExpertClientsPage() {
                   {/* License Applications */}
                   {clientCases.length > 0 && (
                     <div>
-                      <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
                         License Applications ({clientCases.length})
                       </h3>
                       <div className="space-y-3 sm:space-y-4">
@@ -241,7 +241,7 @@ export default async function ExpertClientsPage() {
           ) : (
             <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8 sm:p-12 text-center">
               <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No clients assigned</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No clients assigned</h3>
               <p className="text-gray-600">You don&apos;t have any assigned clients yet.</p>
             </div>
           )}

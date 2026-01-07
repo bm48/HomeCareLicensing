@@ -150,7 +150,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-2 mb-2">
           <User className="w-6 h-6 text-gray-600" />
-          <h1 className="text-2xl font-bold text-gray-900">User Profile</h1>
+          <h1 className="text-lg font-bold text-gray-900">User Profile</h1>
         </div>
         <p className="text-gray-600">Manage your account settings and preferences</p>
       </div>
@@ -197,12 +197,12 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
 
             {/* Header with Avatar */}
             <div className="flex items-center gap-4 pb-6 border-b border-gray-200">
-              <div className="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-2xl">
+              <div className="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
                 {getInitials()}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-4 mb-2">
-                  <h2 className="text-2xl font-semibold text-gray-900">
+                  <h2 className="text-lg font-semibold text-gray-900">
                     {profile?.full_name || user.email || 'User'}
                   </h2>
                   <button
@@ -372,6 +372,9 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
     </div>
   )
 }
+
+
+
 
 
 

@@ -118,7 +118,7 @@ export default async function ClientsPage() {
       <div className="space-y-4 md:space-y-6">
         {/* Page Header */}
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 md:gap-3">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2 md:gap-3">
             <Building2 className="w-6 h-6 md:w-8 md:h-8 text-purple-600" />
             <span className="break-words">Client Management</span>
           </h1>
@@ -133,7 +133,7 @@ export default async function ClientsPage() {
                 <Building2 className="w-5 h-5 md:w-6 md:h-6 text-purple-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{totalClients}</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{totalClients}</div>
             <div className="text-xs md:text-sm text-gray-600">Total Clients</div>
           </div>
 
@@ -143,7 +143,7 @@ export default async function ClientsPage() {
                 <CheckCircle2 className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{activeApplications}</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{activeApplications}</div>
             <div className="text-xs md:text-sm text-gray-600">Active Applications</div>
           </div>
 
@@ -153,7 +153,7 @@ export default async function ClientsPage() {
                 <Clock className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{pendingReview}</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{pendingReview}</div>
             <div className="text-xs md:text-sm text-gray-600">Pending Review</div>
           </div>
 
@@ -163,7 +163,7 @@ export default async function ClientsPage() {
                 <MessageSquare className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{unreadMessagesCount}</div>
+            <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{unreadMessagesCount}</div>
             <div className="text-xs md:text-sm text-gray-600">Unread Messages</div>
           </div>
         </div>

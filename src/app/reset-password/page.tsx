@@ -127,7 +127,7 @@ function ResetPasswordPageContent() {
                 />
               </svg>
             </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Reset Password</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Reset Password</h1>
           <p className="text-sm sm:text-base text-gray-600">Enter your new password</p>
           </div>
 
@@ -232,7 +232,7 @@ function ResetPasswordPageContent() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Reset Password</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Reset Password</h1>
           <p className="text-sm sm:text-base text-gray-600">Enter your email to receive a reset link</p>
         </div>
 

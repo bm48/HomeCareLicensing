@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
+import UserDropdown from './UserDropdown'
 
 interface ExpertDashboardLayoutProps {
   children: React.ReactNode
@@ -116,17 +117,15 @@ export default function ExpertDashboardLayout({
               )}
             </div>
 
-            {/* User Info */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center font-semibold text-sm sm:text-base">
-                {getInitials(profile?.full_name, user?.email)}
-              </div>
-              <div className="hidden md:block">
-                <div className="font-semibold text-sm sm:text-base">{getDisplayName()}</div>
-                <div className="text-xs sm:text-sm text-blue-100">{getRoleDisplay()}</div>
-              </div>
-              <ChevronLeft className="w-4 h-4 hidden md:block rotate-[-90deg] cursor-pointer hover:text-blue-200" />
-            </div>
+            {/* User Dropdown */}
+            {user && (
+              <UserDropdown 
+                user={user} 
+                profile={profile} 
+                profileUrl="/dashboard/expert/profile"
+                changePasswordUrl="/change-password"
+              />
+            )}
           </div>
         </div>
       </header>

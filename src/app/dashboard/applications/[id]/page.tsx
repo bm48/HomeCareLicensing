@@ -2,17 +2,22 @@ import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import DashboardLayout from '@/components/DashboardLayout'
-import ApplicationsContent from '@/components/ApplicationsContent'
+import ApplicationDetailContent from '@/components/ApplicationDetailContent'
 
-export default async function ApplicationsPage() {
+export default async function ApplicationDetailPage({
+  params
+}: {
+  params: Promise<{ id: string }>
+}) {
   const session = await getSession()
 
   if (!session) {
     redirect('/login')
   }
 
+  const { id } = await params
   const supabase = await createClient()
-  
+
   // Get user profile
   const { data: profile } = await supabase
     .from('user_profiles')
@@ -27,28 +32,30 @@ export default async function ApplicationsPage() {
     .eq('user_id', session.user.id)
     .eq('is_read', false)
 
-  // Get all applications
-  const { data: applications } = await supabase
+  // Get application
+  const { data: application } = await supabase
     .from('applications')
     .select('*')
+    .eq('id', id)
     .eq('company_owner_id', session.user.id)
-    .order('last_updated_date', { ascending: false })
+    .single()
 
-  // Get application documents count
-  const { data: applicationDocuments } = await supabase
+  if (!application) {
+    redirect('/dashboard/applications')
+  }
+
+  // Get application documents
+  const { data: documents } = await supabase
     .from('application_documents')
-    .select('application_id')
-
-  const documentCounts = applicationDocuments?.reduce((acc: Record<string, number>, doc) => {
-    acc[doc.application_id] = (acc[doc.application_id] || 0) + 1
-    return acc
-  }, {}) || {}
+    .select('*')
+    .eq('application_id', id)
+    .order('created_at', { ascending: false })
 
   return (
     <DashboardLayout user={session.user} profile={profile} unreadNotifications={unreadNotifications || 0}>
-      <ApplicationsContent 
-        applications={applications || []} 
-        documentCounts={documentCounts}
+      <ApplicationDetailContent 
+        application={application}
+        documents={documents || []}
       />
     </DashboardLayout>
   )

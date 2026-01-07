@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
+import UserDropdown from './UserDropdown'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -119,17 +120,13 @@ export default function AdminLayout({
               )}
             </div>
 
-            {/* User Info */}
-            <div className="flex items-center gap-2 md:gap-3 cursor-pointer hover:bg-blue-700 px-2 md:px-3 py-2 rounded-lg transition-colors">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-500 rounded-full flex items-center justify-center font-semibold text-white text-sm md:text-base">
-                {getInitials(profile?.full_name, user.email)}
-              </div>
-              <div className="hidden md:block">
-                <div className="font-semibold text-sm">{getDisplayName()}</div>
-                <div className="text-xs text-blue-100">Administrator</div>
-              </div>
-              <ChevronLeft className="w-4 h-4 rotate-[-90deg] hidden lg:block" />
-            </div>
+            {/* User Dropdown */}
+            <UserDropdown 
+              user={user} 
+              profile={profile} 
+              profileUrl="/admin/profile"
+              changePasswordUrl="/change-password"
+            />
           </div>
         </div>
       </header>

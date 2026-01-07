@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -236,8 +237,16 @@ function LoginPageContent() {
             <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8 sm:p-10">
               {/* Logo and Title for Mobile */}
               <div className="lg:hidden text-center mb-8">
-                <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg mb-4">
-                  <Shield className="w-7 h-7 text-white" />
+                <div className="inline-flex items-center justify-center w-32 h-20 bg-white rounded-2xl shadow-lg mb-4 p-3">
+                  <div className="relative w-full h-full">
+                    <Image
+                      src="/cropped-HomeSights-NEWLOGO-1.png"
+                      alt="Home Sights Consulting Logo"
+                      fill
+                      className="object-contain"
+                      priority
+                    />
+                  </div>
                 </div>
                 <h2 className="text-3xl font-bold text-white mb-2">Sign In</h2>
                 <p className="text-gray-200">Access your account</p>

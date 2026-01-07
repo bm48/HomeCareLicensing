@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, 
@@ -9,11 +10,11 @@ import {
   User, 
   LogOut, 
   Bell, 
-  ChevronLeft,
-  Shield
+  ChevronLeft
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
+import UserDropdown from './UserDropdown'
 
 interface StaffLayoutProps {
   children: React.ReactNode
@@ -92,10 +93,15 @@ export default function StaffLayout({
       <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
         <div className="flex items-center justify-between px-4 md:px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="inline-flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-white/20 rounded-lg">
-              <Shield className="w-5 h-5 md:w-6 md:h-6" />
+            <div className="relative w-20 h-12 md:w-28 md:h-16">
+              <Image
+                src="/cropped-HomeSights-NEWLOGO-1.png"
+                alt="Home Sights Consulting Logo"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
-            <span className="text-lg md:text-xl font-bold">HOME + SIGHTS CONSULTING</span>
           </div>
           
           <div className="flex items-center gap-3 md:gap-4">
@@ -109,16 +115,13 @@ export default function StaffLayout({
               )}
             </div>
 
-            {/* User Info */}
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-white/20 rounded-full flex items-center justify-center font-semibold text-sm md:text-base">
-                {getInitials(profile?.full_name, user.email)}
-              </div>
-              <div className="hidden md:block">
-                <div className="font-semibold text-sm">{getDisplayName()}</div>
-                <div className="text-xs text-blue-100">{getRoleDisplay()}</div>
-              </div>
-            </div>
+            {/* User Dropdown */}
+            <UserDropdown 
+              user={user} 
+              profile={profile} 
+              profileUrl="/staff-dashboard/profile"
+              changePasswordUrl="/change-password"
+            />
           </div>
         </div>
       </header>
