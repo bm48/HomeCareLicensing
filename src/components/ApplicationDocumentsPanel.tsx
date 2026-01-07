@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Folder, Upload, Download, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import UploadDocumentButton from './UploadDocumentButton'
@@ -29,11 +29,7 @@ export default function ApplicationDocumentsPanel({
   const [isLoading, setIsLoading] = useState(true)
   const [fileSizes, setFileSizes] = useState<Record<string, string>>({})
 
-  useEffect(() => {
-    fetchDocuments()
-  }, [applicationId])
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     setIsLoading(true)
     try {
       const supabase = createClient()
@@ -75,7 +71,11 @@ export default function ApplicationDocumentsPanel({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [applicationId])
+
+  useEffect(() => {
+    fetchDocuments()
+  }, [fetchDocuments])
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes'

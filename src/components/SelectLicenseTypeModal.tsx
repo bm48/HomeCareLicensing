@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Modal from './Modal'
 import { Heart, Users, ArrowRight, DollarSign, Clock, RefreshCw, Loader2 } from 'lucide-react'
 import { LicenseType } from '@/types/license'
@@ -29,13 +29,7 @@ export default function SelectLicenseTypeModal({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (isOpen && state) {
-      fetchLicenseTypes()
-    }
-  }, [isOpen, state])
-
-  const fetchLicenseTypes = async () => {
+  const fetchLicenseTypes = useCallback(async () => {
     setIsLoading(true)
     setError(null)
 
@@ -73,7 +67,13 @@ export default function SelectLicenseTypeModal({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [state])
+
+  useEffect(() => {
+    if (isOpen && state) {
+      fetchLicenseTypes()
+    }
+  }, [isOpen, state, fetchLicenseTypes])
 
   const handleLicenseTypeClick = (licenseType: LicenseType) => {
     onSelectLicenseType(licenseType)

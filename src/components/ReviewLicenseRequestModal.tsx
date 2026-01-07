@@ -161,7 +161,7 @@ export default function ReviewLicenseRequestModal({
             <li>Your license application request will be submitted to the admin team</li>
             <li>An admin will review and approve your request</li>
             <li>A licensing expert will be assigned to guide you through the process</li>
-            <li>You'll receive a notification once approved and can begin working on your application</li>
+            <li>You&apos;ll receive a notification once approved and can begin working on your application</li>
           </ol>
         </div>
 

@@ -141,7 +141,7 @@ export default function NewLicenseApplicationModal({
             <div>
               <p className="text-sm font-semibold text-blue-900 mb-1">Note:</p>
               <p className="text-sm text-blue-800">
-                Each state has different license types and requirements. After selecting your state, you'll see available license options.
+                Each state has different license types and requirements. After selecting your state, you&apos;ll see available license options.
               </p>
             </div>
           </div>
