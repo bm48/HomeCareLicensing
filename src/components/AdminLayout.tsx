@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, 
@@ -14,7 +15,6 @@ import {
   LogOut, 
   Bell, 
   ChevronLeft,
-  Home,
   Menu,
   X
 } from 'lucide-react'
@@ -93,20 +93,29 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       {isLoading && <LoadingSpinner />}
-      {/* Top Header */}
-      <header className="bg-blue-600 text-white shadow-lg">
+      {/* Top Header - Fixed */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
         <div className="flex items-center justify-between px-4 md:px-6 py-4">
           <div className="flex items-center gap-2 md:gap-3">
+            {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 hover:bg-blue-700 rounded-lg transition-colors"
+              className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="Toggle menu"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className="inline-flex items-center justify-center">
-              <Home className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="relative w-20 h-12 sm:w-40 sm:h-16">
+                <Image
+                  src="/cropped-HomeSights-NEWLOGO-1.png"
+                  alt="Home Sights Consulting Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
             </div>
-            <span className="text-base md:text-xl font-bold">HOME + SIGHTS CONSULTING</span>
           </div>
           
           <div className="flex items-center gap-2 md:gap-4">
@@ -131,7 +140,7 @@ export default function AdminLayout({
         </div>
       </header>
 
-      <div className="flex relative">
+      <div className="flex pt-[73px]">
         {/* Mobile Sidebar Overlay */}
         {mobileMenuOpen && (
           <div
@@ -140,54 +149,56 @@ export default function AdminLayout({
           />
         )}
 
-        {/* Sidebar */}
+        {/* Sidebar - Fixed */}
         <aside className={`
           bg-gray-100 shadow-lg transition-all duration-300
-          fixed lg:static inset-y-0 left-0 z-50
+          fixed top-[73px] left-0 bottom-0 z-40
           ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           ${sidebarCollapsed ? 'w-16' : 'w-64'}
-          min-h-[calc(100vh-73px)] lg:min-h-[calc(100vh-73px)]
         `}>
-          <div className="p-4 h-full overflow-y-auto">
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="hidden lg:flex w-full items-center justify-center p-2 hover:bg-gray-200 rounded-lg transition-colors mb-4"
-            >
-              <ChevronLeft className={`w-5 h-5 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} />
-            </button>
+          <div className="p-4 h-full flex flex-col overflow-y-auto">
+            <div className="flex-shrink-0">
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="hidden lg:flex w-full items-center justify-center p-2 hover:bg-gray-200 rounded-lg transition-colors mb-4"
+              >
+                <ChevronLeft className={`w-5 h-5 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} />
+              </button>
 
-            {!sidebarCollapsed && (
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-3">
-                Admin Menu
-              </div>
-            )}
+              {!sidebarCollapsed && (
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-3">
+                  Admin Menu
+                </div>
+              )}
 
-            <nav className="space-y-1">
-              {menuItems.map((item) => {
-                const isActive = pathname === item.href
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => {
-                      handleLinkClick(item.href)
-                      setMobileMenuOpen(false)
-                    }}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
-                      isActive
-                        ? 'bg-gray-200 text-gray-900 font-semibold'
-                        : 'text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    {!sidebarCollapsed && <span>{item.label}</span>}
-                  </Link>
-                )
-              })}
-            </nav>
+              <nav className="space-y-1">
+                {menuItems.map((item) => {
+                  const isActive = pathname === item.href
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => {
+                        handleLinkClick(item.href)
+                        setMobileMenuOpen(false)
+                      }}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
+                        isActive
+                          ? 'bg-gray-200 text-gray-900 font-semibold'
+                          : 'text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {!sidebarCollapsed && <span>{item.label}</span>}
+                    </Link>
+                  )
+                })}
+              </nav>
+            </div>
 
-            <div className="mt-8 pt-4 border-t border-gray-300">
+            {/* Logout button at bottom */}
+            <div className="mt-auto pt-4 border-t border-gray-300">
               <form action={signOut}>
                 <button
                   type="submit"
@@ -202,7 +213,7 @@ export default function AdminLayout({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-6 w-full lg:w-auto">
+        <main className={`flex-1 p-4 md:p-6 transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
           {children}
         </main>
       </div>

@@ -31,7 +31,11 @@ export default async function DashboardPage() {
     .eq('id', session.user.id)
     .single()
 
-  // Redirect experts to their dashboard
+  // Redirect based on role
+  if (profile?.role === 'admin') {
+    redirect('/admin')
+  }
+  
   if (profile?.role === 'expert') {
     redirect('/dashboard/expert/clients')
   }
@@ -199,54 +203,54 @@ export default async function DashboardPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Active Licenses */}
-          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-md border border-gray-100">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+          <div className="bg-white rounded-lg p-3 shadow-md border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                <Shield className="w-4 h-4 text-green-600" />
               </div>
             </div>
-            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{activeLicenses}</div>
-            <div className="text-xs sm:text-sm text-gray-600">Active Licenses</div>
+            <div className="text-lg font-bold text-gray-900 mb-0.5">{activeLicenses}</div>
+            <div className="text-xs text-gray-600">Active Licenses</div>
           </div>
 
           {/* Nursing Staff */}
-          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-md border border-gray-100">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+          <div className="bg-white rounded-lg p-3 shadow-md border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Users className="w-4 h-4 text-blue-600" />
               </div>
             </div>
-            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{staff?.length || 0}</div>
-            <div className="text-xs sm:text-sm text-gray-600">Nursing Staff</div>
-            <div className="text-xs text-gray-500 mt-1">Active and certified</div>
+            <div className="text-lg font-bold text-gray-900 mb-0.5">{staff?.length || 0}</div>
+            <div className="text-xs text-gray-600">Nursing Staff</div>
+            <div className="text-xs text-gray-500 mt-0.5">Active and certified</div>
           </div>
 
           {/* Expiring Soon */}
-          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-md border border-gray-100">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
+          <div className="bg-white rounded-lg p-3 shadow-md border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                <Clock className="w-4 h-4 text-orange-600" />
               </div>
             </div>
-            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{expiringSoon}</div>
-            <div className="text-xs sm:text-sm text-gray-600">Expiring Soon</div>
-            <div className="text-xs text-gray-500 mt-1">
+            <div className="text-lg font-bold text-gray-900 mb-0.5">{expiringSoon}</div>
+            <div className="text-xs text-gray-600">Expiring Soon</div>
+            <div className="text-xs text-gray-500 mt-0.5">
               {expiringLicenses} licenses, {expiringStaffCertifications} certifications
             </div>
           </div>
 
           {/* Notifications */}
-          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-md border border-gray-100">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
+          <div className="bg-white rounded-lg p-3 shadow-md border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Bell className="w-4 h-4 text-purple-600" />
               </div>
             </div>
-            <div className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{unreadNotifications}</div>
-            <div className="text-xs sm:text-sm text-gray-600">Notifications</div>
-            <div className="text-xs text-gray-500 mt-1">Unread messages</div>
+            <div className="text-lg font-bold text-gray-900 mb-0.5">{unreadNotifications}</div>
+            <div className="text-xs text-gray-600">Notifications</div>
+            <div className="text-xs text-gray-500 mt-0.5">Unread messages</div>
           </div>
         </div>
 

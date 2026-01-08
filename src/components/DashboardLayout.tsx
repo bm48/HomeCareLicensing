@@ -8,7 +8,6 @@ import {
   Home, 
   Medal,
   FileText, 
-  ClipboardList, 
   Users, 
   User, 
   LogOut, 
@@ -20,10 +19,12 @@ import {
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
 import UserDropdown from './UserDropdown'
+import NotificationDropdown from './NotificationDropdown'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
   user: {
+    id?: string
     email?: string | null
   }
   profile: {
@@ -63,7 +64,6 @@ export default function DashboardLayout({
   const menuItems = [
     { href: '/dashboard', label: 'Home', icon: Home },
     { href: '/dashboard/licenses', label: 'Licenses', icon: Medal },
-    { href: '/dashboard/applications', label: 'Applications', icon: ClipboardList },
     { href: '/dashboard/staff', label: 'Staff', icon: Users },
     { href: '/dashboard/profile', label: 'My Profile', icon: User },
   ]
@@ -124,14 +124,12 @@ export default function DashboardLayout({
           
           <div className="flex items-center gap-2 sm:gap-4">
             {/* Notifications */}
-            <div className="relative">
-              <Bell className="w-5 h-5 sm:w-6 sm:h-6 cursor-pointer hover:text-blue-200 transition-colors" />
-              {unreadNotifications > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {unreadNotifications}
-                </span>
-              )}
-            </div>
+            {user.id && (
+              <NotificationDropdown 
+                userId={user.id}
+                initialUnreadCount={unreadNotifications}
+              />
+            )}
 
             {/* User Dropdown */}
             <UserDropdown 

@@ -44,11 +44,30 @@ export default async function LicensesPage() {
     return acc
   }, {}) || {}
 
+  // Get all applications
+  const { data: applications } = await supabase
+    .from('applications')
+    .select('*')
+    .eq('company_owner_id', session.user.id)
+    .order('last_updated_date', { ascending: false })
+
+  // Get application documents count
+  const { data: applicationDocuments } = await supabase
+    .from('application_documents')
+    .select('application_id')
+
+  const applicationDocumentCounts = applicationDocuments?.reduce((acc: Record<string, number>, doc) => {
+    acc[doc.application_id] = (acc[doc.application_id] || 0) + 1
+    return acc
+  }, {}) || {}
+
   return (
     <DashboardLayout user={session.user} profile={profile} unreadNotifications={unreadNotifications || 0}>
       <LicensesContent 
         licenses={licenses || []} 
         documentCounts={documentCounts}
+        applications={applications || []}
+        applicationDocumentCounts={applicationDocumentCounts}
       />
     </DashboardLayout>
   )

@@ -41,7 +41,7 @@ export default async function ApplicationDetailPage({
     .single()
 
   if (!application) {
-    redirect('/dashboard/applications')
+    redirect('/dashboard/licenses')
   }
 
   // Get application documents

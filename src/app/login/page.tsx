@@ -116,7 +116,9 @@ function LoginPageContent() {
           .single()
         
         // Redirect based on role
-        if (profile?.role === 'staff_member') {
+        if (profile?.role === 'admin') {
+          router.push('/admin')
+        } else if (profile?.role === 'staff_member') {
           router.push('/staff-dashboard')
         } else {
           router.push('/dashboard')
@@ -158,7 +160,9 @@ function LoginPageContent() {
           .single()
         
         // Redirect based on role
-        if (profile?.role === 'staff_member') {
+        if (profile?.role === 'admin') {
+          router.push('/admin')
+        } else if (profile?.role === 'staff_member') {
           router.push('/staff-dashboard')
         } else {
           router.push('/dashboard')
