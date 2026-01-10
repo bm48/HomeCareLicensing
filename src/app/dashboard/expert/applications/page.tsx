@@ -29,9 +29,8 @@ export default async function ExpertApplicationsPage() {
     .order('created_at', { ascending: false })
 
   // Get unique owner IDs from applications
-  const ownerIds = [
-    ...new Set((assignedApplicationsData?.map(app => app.company_owner_id) || []).filter(Boolean))
-  ]
+  const ownerIdArray = (assignedApplicationsData?.map(app => app.company_owner_id) || []).filter(Boolean)
+  const ownerIds = Array.from(new Set(ownerIdArray))
 
   // Fetch owner profiles for all unique owner IDs
   const { data: ownerProfiles } = ownerIds.length > 0
