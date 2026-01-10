@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { 
@@ -80,31 +80,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   
   const supabase = createClient()
 
-  useEffect(() => {
-    if (licenseType) {
-      if (activeTab !== 'general') {
-        setActiveTab('general')
-      }
-      loadData()
-    } else {
-      setSteps([])
-      setExpertSteps([])
-      setDocuments([])
-      setStepsCount(0)
-      setExpertStepsCount(0)
-      setDocumentsCount(0)
-      setIsLoading(false)
-      setRequirementId(null)
-    }
-  }, [licenseType, selectedState])
-
-  useEffect(() => {
-    if (licenseType && (activeTab === 'steps' || activeTab === 'documents' || activeTab === 'expert')) {
-      loadData()
-    }
-  }, [activeTab])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!licenseType) return
 
     setIsLoading(true)
@@ -169,7 +145,31 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [licenseType, selectedState])
+
+  useEffect(() => {
+    if (licenseType) {
+      if (activeTab !== 'general') {
+        setActiveTab('general')
+      }
+      loadData()
+    } else {
+      setSteps([])
+      setExpertSteps([])
+      setDocuments([])
+      setStepsCount(0)
+      setExpertStepsCount(0)
+      setDocumentsCount(0)
+      setIsLoading(false)
+      setRequirementId(null)
+    }
+  }, [licenseType, selectedState, activeTab, loadData])
+
+  useEffect(() => {
+    if (licenseType && (activeTab === 'steps' || activeTab === 'documents' || activeTab === 'expert')) {
+      loadData()
+    }
+  }, [activeTab, licenseType, loadData])
 
   const handleAddStep = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   X,
@@ -114,20 +114,7 @@ export default function ExpertApplicationDetailModal({
     ).join(' ')
   }
 
-  // Fetch documents and steps when modal opens
-  useEffect(() => {
-    if (isOpen && application) {
-      fetchDocuments()
-      fetchSteps()
-    } else {
-      setDocuments([])
-      setSteps([])
-      setReviewAction(null)
-      setRevisionReason('')
-    }
-  }, [isOpen, application])
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     if (!application) return
     
     setIsLoadingDocs(true)
@@ -152,9 +139,9 @@ export default function ExpertApplicationDetailModal({
     } finally {
       setIsLoadingDocs(false)
     }
-  }
+  }, [application])
 
-  const fetchSteps = async () => {
+  const fetchSteps = useCallback(async () => {
     if (!application) return
     
     setIsLoadingSteps(true)
@@ -264,7 +251,20 @@ export default function ExpertApplicationDetailModal({
     } finally {
       setIsLoadingSteps(false)
     }
-  }
+  }, [application])
+
+  // Fetch documents and steps when modal opens
+  useEffect(() => {
+    if (isOpen && application) {
+      fetchDocuments()
+      fetchSteps()
+    } else {
+      setDocuments([])
+      setSteps([])
+      setReviewAction(null)
+      setRevisionReason('')
+    }
+  }, [isOpen, application, fetchDocuments, fetchSteps])
 
   const handleDownload = async (documentUrl: string, documentName: string) => {
     try {

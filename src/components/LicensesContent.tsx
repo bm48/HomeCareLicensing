@@ -438,7 +438,7 @@ export default function LicensesContent({
               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
                 <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No requested applications</h3>
-                <p className="text-gray-600 mb-6">All your application requests have been approved or you haven't submitted any yet</p>
+                <p className="text-gray-600 mb-6">All your application requests have been approved or you haven&apos;t submitted any yet</p>
                 <button
                   onClick={() => setIsStateModalOpen(true)}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"

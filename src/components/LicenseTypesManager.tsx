@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, Save, X, FileText } from 'lucide-react'
 import { createLicenseType, deleteLicenseType, type CreateLicenseTypeData } from '@/app/actions/license-types'
 import { createClient } from '@/lib/supabase/client'
@@ -60,12 +60,7 @@ export default function LicenseTypesManager({
 
   const supabase = createClient()
 
-  // Load license types for selected state
-  useEffect(() => {
-    loadLicenseTypes()
-  }, [selectedState])
-
-  const loadLicenseTypes = async () => {
+  const loadLicenseTypes = useCallback(async () => {
     setIsLoading(true)
     try {
       const { data, error } = await supabase
@@ -82,7 +77,12 @@ export default function LicenseTypesManager({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [selectedState])
+
+  // Load license types for selected state
+  useEffect(() => {
+    loadLicenseTypes()
+  }, [selectedState, loadLicenseTypes])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -367,11 +367,7 @@ function LicenseTypeItem({ licenseType, selectedState, onDelete, isDeleting, isS
   const [loadingCounts, setLoadingCounts] = useState(true)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadCounts()
-  }, [licenseType.name, selectedState])
-
-  const loadCounts = async () => {
+  const loadCounts = useCallback(async () => {
     setLoadingCounts(true)
     try {
       const { data: requirement, error: reqError } = await supabase
@@ -409,7 +405,11 @@ function LicenseTypeItem({ licenseType, selectedState, onDelete, isDeleting, isS
     } finally {
       setLoadingCounts(false)
     }
-  }
+  }, [licenseType.name, selectedState])
+
+  useEffect(() => {
+    loadCounts()
+  }, [loadCounts])
 
   return (
     <div 
