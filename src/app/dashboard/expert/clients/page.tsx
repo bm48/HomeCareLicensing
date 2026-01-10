@@ -80,6 +80,9 @@ export default async function ExpertClientsPage() {
 
   // Group applications by owner
   // Only include applications with valid company_owner_id
+  type ApplicationWithOwner = (NonNullable<typeof applicationsData>[number]) & {
+    owner_profile: (NonNullable<typeof ownerProfiles>[number]) | null
+  }
   const applicationsByOwner = (applicationsData || []).reduce((acc, app) => {
     const ownerId = app.company_owner_id
     // Skip applications without a valid company_owner_id
@@ -93,9 +96,9 @@ export default async function ExpertClientsPage() {
     acc[ownerId].push({
       ...app,
       owner_profile: ownerProfilesMap.get(ownerId) || null
-    })
+    } as ApplicationWithOwner)
     return acc
-  }, {} as Record<string, Array<typeof applicationsData[0] & { owner_profile: typeof ownerProfiles[0] | null }>>)
+  }, {} as Record<string, ApplicationWithOwner[]>)
 
   // Debug logging for applicationsByOwner (only in development)
   if (process.env.NODE_ENV === 'development') {
