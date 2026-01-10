@@ -77,6 +77,7 @@ export default function LicenseTypesManager({
     } finally {
       setIsLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedState])
 
   // Load license types for selected state
@@ -405,6 +406,7 @@ function LicenseTypeItem({ licenseType, selectedState, onDelete, isDeleting, isS
     } finally {
       setLoadingCounts(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [licenseType.name, selectedState])
 
   useEffect(() => {

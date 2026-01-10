@@ -33,12 +33,9 @@ export default async function AdminLicensesPage() {
     .order('created_at', { ascending: false })
 
   // Get unique owner IDs from both application sets
-  const ownerIds = [
-    ...new Set([
-      ...(requestedApplicationsData?.map(app => app.company_owner_id) || []),
-      ...(allApplicationsData?.map(app => app.company_owner_id) || [])
-    ])
-  ]
+  const requestedOwnerIds = requestedApplicationsData?.map(app => app.company_owner_id) || []
+  const allOwnerIds = allApplicationsData?.map(app => app.company_owner_id) || []
+  const ownerIds = Array.from(new Set(requestedOwnerIds.concat(allOwnerIds)))
 
   // Fetch owner profiles for all unique owner IDs
   const { data: ownerProfiles, error: profilesError } = ownerIds.length > 0
