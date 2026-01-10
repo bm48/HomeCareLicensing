@@ -419,7 +419,7 @@ export default function LicensesContent({
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-3">
-                            <span>Submitted {formatDate(application.created_at || application.submitted_date)}</span>
+                            <span>Submitted {formatDate(application.created_at ?? application.submitted_date ?? null)}</span>
                             <span>State: {application.state}</span>
                           </div>
                           <div className="text-xs text-gray-500">
