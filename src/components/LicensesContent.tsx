@@ -42,6 +42,8 @@ interface Application {
   progress_percentage: number | null
   started_date: string | Date | null
   last_updated_date: string | Date | null
+  submitted_date?: string | Date | null
+  created_at?: string | Date | null
   revision_reason?: string | null
 }
 
