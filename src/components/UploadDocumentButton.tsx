@@ -37,6 +37,60 @@ export default function UploadDocumentButton({
         throw new Error('You must be logged in to upload documents')
       }
 
+      // Get application to check license type
+      const { data: application, error: appError } = await supabase
+        .from('applications')
+        .select('license_type_id, state, status')
+        .eq('id', applicationId)
+        .single()
+
+      if (appError || !application) {
+        throw new Error('Application not found')
+      }
+
+      // Validate if application has license_type_id (should have for approved applications)
+      if (application.license_type_id) {
+        // Get license type name
+        const { data: licenseType, error: licenseTypeError } = await supabase
+          .from('license_types')
+          .select('name')
+          .eq('id', application.license_type_id)
+          .single()
+
+        if (licenseTypeError || !licenseType) {
+          throw new Error('License type not found')
+        }
+
+        // Find license_requirement_id for this state and license type
+        const { data: licenseRequirement, error: reqError } = await supabase
+          .from('license_requirements')
+          .select('id')
+          .eq('state', application.state)
+          .eq('license_type', licenseType.name)
+          .single()
+
+        if (!reqError && licenseRequirement) {
+          // Count documents and steps for this license requirement
+          const { count: documentsCount } = await supabase
+            .from('license_requirement_documents')
+            .select('*', { count: 'exact', head: true })
+            .eq('license_requirement_id', licenseRequirement.id)
+
+          const { count: stepsCount } = await supabase
+            .from('license_requirement_steps')
+            .select('*', { count: 'exact', head: true })
+            .eq('license_requirement_id', licenseRequirement.id)
+
+          const totalItems = (documentsCount || 0) + (stepsCount || 0)
+
+          // If no documents and no steps, show error
+          if (totalItems === 0) {
+            throw new Error('Current license type doesn\'t have any document and steps.')
+          }
+        }
+        // If license_requirement doesn't exist, allow upload (might be a new license type setup)
+      }
+
       // Upload file to Supabase Storage
       const fileExt = file.name.split('.').pop()
       const fileName = `${applicationId}/${Date.now()}.${fileExt}`
@@ -149,7 +203,7 @@ export default function UploadDocumentButton({
         )}
       </button>
       {uploadStatus === 'error' && errorMessage && (
-        <div className="absolute top-full left-0 mt-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs whitespace-nowrap z-10">
+        <div className="absolute top-full left-0 mt-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs max-w-xs z-10 shadow-lg">
           {errorMessage}
         </div>
       )}

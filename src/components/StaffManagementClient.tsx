@@ -224,128 +224,110 @@ export default function StaffManagementClient({
           </div>
         </div>
 
-        {/* Staff List */}
-        <div className="space-y-4">
-          {staffWithExpiringLicenses.map((staff) => {
-            const licenses = licensesByStaff[staff.id] || []
-            const activeLicenses = licenses.filter(l => l.status === 'active')
+        {/* Staff List Table */}
+        {staffMembers.length > 0 ? (
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Staff Member</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Phone</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Licenses</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Expiring Licenses</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {staffWithExpiringLicenses.map((staff) => {
+                    const licenses = licensesByStaff[staff.id] || []
+                    const activeLicenses = licenses.filter(l => l.status === 'active')
+                    const expiringCount = licenses.filter(l => {
+                      if (l.days_until_expiry) {
+                        return l.days_until_expiry <= 30 && l.days_until_expiry > 0
+                      }
+                      return false
+                    }).length
 
-            return (
-              <div key={staff.id} className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1">
-                    {/* Avatar */}
-                    <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
-                      {getInitials(staff.first_name, staff.last_name)}
-                    </div>
-
-                    {/* Staff Info */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <h3 className="text-lg font-bold text-gray-900">
-                          {staff.first_name} {staff.last_name}
-                        </h3>
-                        <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${getStatusBadge(staff.status)}`}>
-                          {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
-                        </span>
-                        {staff.expiringLicensesCount && staff.expiringLicensesCount > 0 && (
-                          <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-xs font-semibold flex items-center gap-1">
-                            <ClockIcon className="w-3 h-3" />
-                            {staff.expiringLicensesCount} Licenses Expiring
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-gray-600 mb-3">{staff.role}</div>
-
-                      {/* Contact Info - Always displayed */}
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-4">
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4" />
-                          {staff.email || '-'}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Phone className="w-4 h-4" />
-                          {staff.phone || '-'}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Medal className="w-4 h-4" />
-                          {licenses.length === 0 ? '0 licenses' : `${licenses.length} License${licenses.length !== 1 ? 's' : ''}`}
-                        </div>
-                      </div>
-
-                      {/* Active Licenses & Certifications - Always displayed */}
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <h4 className="font-semibold text-gray-900 mb-3">Active Licenses & Certifications</h4>
-                        {activeLicenses.length === 0 ? (
-                          <p className="text-gray-500 text-sm">No active licenses or certifications.</p>
-                        ) : (
-                          <div className="space-y-3">
-                            {activeLicenses.map((license) => {
-                              const isExpiring = license.days_until_expiry && license.days_until_expiry <= 30 && license.days_until_expiry > 0
-                              return (
-                                <div key={license.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                  <div className="flex items-center gap-3 flex-1">
-                                    <FileText className="w-5 h-5 text-gray-400" />
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="font-medium text-gray-900">{license.license_type}</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getLicenseStatusBadge(isExpiring ? 'expiring' : license.status)}`}>
-                                          {license.status === 'active' && isExpiring ? 'Expiring' : license.status.charAt(0).toUpperCase() + license.status.slice(1)}
-                                        </span>
-                                      </div>
-                                      <div className="text-sm text-gray-600">
-                                        {license.license_number}
-                                        {license.state && ` • ${license.state}`}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    {license.expiry_date ? (
-                                      <>
-                                        <div className="text-xs text-gray-500 mb-1">Expires</div>
-                                        <div className="text-sm font-semibold text-gray-900 mb-1">
-                                          {formatDate(license.expiry_date)}
-                                        </div>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <div className="text-xs text-gray-500 mb-1">Expires</div>
-                                        <div className="text-sm font-semibold text-gray-900 mb-1">-</div>
-                                      </>
-                                    )}
-                                    {license.days_until_expiry !== null && license.days_until_expiry !== undefined ? (
-                                      <div className={`text-xs font-semibold ${
-                                        license.days_until_expiry <= 30 ? 'text-orange-600' : 'text-gray-500'
-                                      }`}>
-                                        {license.days_until_expiry} days remaining
-                                      </div>
-                                    ) : (
-                                      <div className="text-xs text-gray-500">-</div>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
+                    return (
+                      <tr key={staff.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                              {getInitials(staff.first_name, staff.last_name)}
+                            </div>
+                            <div>
+                              <div className="text-sm font-semibold text-gray-900">
+                                {staff.first_name} {staff.last_name}
+                              </div>
+                              {staff.employee_id && (
+                                <div className="text-xs text-gray-500">ID: {staff.employee_id}</div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions Dropdown */}
-                  <StaffActionsDropdown
-                    staffId={staff.id}
-                    onViewDetails={() => handleViewDetails(staff)}
-                    onEdit={() => handleEdit(staff)}
-                    onManageLicenses={() => handleManageLicenses(staff)}
-                    onDeactivate={() => handleDeactivate(staff)}
-                  />
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{staff.role}</div>
+                          {staff.job_title && (
+                            <div className="text-xs text-gray-500">{staff.job_title}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${getStatusBadge(staff.status)}`}>
+                            {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Mail className="w-4 h-4 text-gray-400" />
+                            {staff.email || <span className="text-gray-400">-</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="w-4 h-4 text-gray-400" />
+                            {staff.phone || <span className="text-gray-400">-</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Medal className="w-4 h-4 text-gray-400" />
+                            <span>{licenses.length} {licenses.length === 1 ? 'License' : 'Licenses'}</span>
+                          </div>
+                          {activeLicenses.length > 0 && (
+                            <div className="text-xs text-gray-500 mt-1">{activeLicenses.length} active</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {expiringCount > 0 ? (
+                            <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-xs font-semibold flex items-center gap-1 w-fit">
+                              <ClockIcon className="w-3 h-3" />
+                              {expiringCount}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <StaffActionsDropdown
+                            staffId={staff.id}
+                            onViewDetails={() => handleViewDetails(staff)}
+                            onEdit={() => handleEdit(staff)}
+                            onManageLicenses={() => handleManageLicenses(staff)}
+                            onDeactivate={() => handleDeactivate(staff)}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
 
         {/* Empty State */}
         {staffMembers.length === 0 && (

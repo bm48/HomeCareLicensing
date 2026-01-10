@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Bell, AlertCircle, FileText, CheckCircle2, X, Clock } from 'lucide-react'
+import { Bell, AlertCircle, FileText, CheckCircle2, Clock, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -36,6 +36,7 @@ export default function NotificationDropdown({
     if (isOpen && userId) {
       fetchNotifications()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, userId])
 
   // Close dropdown when clicking outside
@@ -131,6 +132,34 @@ export default function NotificationDropdown({
       router.refresh()
     } catch (err) {
       console.error('Error marking all notifications as read:', err)
+    }
+  }
+
+  const deleteNotification = async (notificationId: string, isUnread: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId)
+        .eq('user_id', userId)
+
+      if (error) {
+        console.error('Error deleting notification:', error)
+        return
+      }
+
+      // Update local state - remove the deleted notification
+      setNotifications(prev => prev.filter(n => n.id !== notificationId))
+      
+      // Update unread count if the deleted notification was unread
+      if (isUnread) {
+        setUnreadCount(prev => Math.max(0, prev - 1))
+      }
+      
+      // Refresh the page to update unread count in header
+      router.refresh()
+    } catch (err) {
+      console.error('Error deleting notification:', err)
     }
   }
 
@@ -245,9 +274,22 @@ export default function NotificationDropdown({
                                 {notification.message}
                               </div>
                             </div>
-                            {!notification.is_read && (
-                              <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-1"></div>
-                            )}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {!notification.is_read && (
+                                <div className="w-2 h-2 bg-blue-600 rounded-full mt-1"></div>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  deleteNotification(notification.id, !notification.is_read)
+                                }}
+                                className="p-1 hover:bg-gray-200 rounded transition-colors text-gray-400 hover:text-red-600"
+                                aria-label="Delete notification"
+                                title="Delete notification"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                           <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
                             <Clock className="w-3 h-3" />

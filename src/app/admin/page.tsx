@@ -67,7 +67,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <AdminLayout 
-      user={user} 
+      user={{ id: user.id, email: user.email }} 
       profile={profile} 
       unreadNotifications={unreadNotifications || 0}
     >

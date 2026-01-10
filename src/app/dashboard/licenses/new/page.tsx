@@ -155,7 +155,7 @@ function NewLicensePageContent() {
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">New License Application</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">New Application Request</h1>
             <p className="text-gray-600 text-lg">
               Add a new home care license for your organization
             </p>

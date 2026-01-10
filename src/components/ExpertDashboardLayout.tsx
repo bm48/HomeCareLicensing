@@ -2,24 +2,25 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   Users, 
   MessageSquare, 
   LogOut, 
-  Bell, 
   ChevronLeft,
   Menu,
-  X,
-  Home
+  X
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
 import UserDropdown from './UserDropdown'
+import NotificationDropdown from './NotificationDropdown'
 
 interface ExpertDashboardLayoutProps {
   children: React.ReactNode
   user: {
+    id?: string
     email?: string | null
   } | null
   profile: {
@@ -100,22 +101,27 @@ export default function ExpertDashboardLayout({
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg">
-              <Home className="w-4 h-4 sm:w-6 sm:h-6" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="relative w-20 h-12 sm:w-40 sm:h-16">
+                <Image
+                  src="/cropped-HomeSights-NEWLOGO-1.png"
+                  alt="Home Sights Consulting Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
             </div>
-            <span className="text-base sm:text-xl font-bold truncate">HOME + SIGHTS CONSULTING</span>
           </div>
           
           <div className="flex items-center gap-2 sm:gap-4">
             {/* Notifications */}
-            <div className="relative">
-              <Bell className="w-5 h-5 sm:w-6 sm:h-6 cursor-pointer hover:text-blue-200 transition-colors" />
-              {unreadNotifications > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {unreadNotifications}
-                </span>
-              )}
-            </div>
+            {user?.id && (
+              <NotificationDropdown 
+                userId={user.id} 
+                initialUnreadCount={unreadNotifications || 0} 
+              />
+            )}
 
             {/* User Dropdown */}
             {user && (

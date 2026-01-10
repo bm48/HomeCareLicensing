@@ -45,21 +45,23 @@ export default function ReviewLicenseRequestModal({
         return
       }
 
-      // Calculate expiry date based on renewal period
-      // Parse renewal period (e.g., "2 years" -> 2, "1 year" -> 1)
-      const renewalYears = parseInt(licenseType.renewalPeriod.match(/\d+/)?.[0] || '1')
-      const expiryDate = new Date()
-      expiryDate.setFullYear(expiryDate.getFullYear() + renewalYears)
+      const today = new Date()
+      const todayStr = today.toISOString().split('T')[0]
 
-      // Create the license application request
-      const { data: license, error: insertError } = await supabase
-        .from('licenses')
+      // Create the application request with status 'requested'
+      // The database trigger will automatically notify admin users
+      const { data: application, error: insertError } = await supabase
+        .from('applications')
         .insert({
           company_owner_id: user.id,
-          license_name: licenseType.name,
+          application_name: licenseType.name,
           state: state,
-          status: 'pending',
-          expiry_date: expiryDate.toISOString().split('T')[0],
+          license_type_id: licenseType.id,
+          status: 'requested',
+          progress_percentage: 0,
+          started_date: todayStr,
+          last_updated_date: todayStr,
+          submitted_date: todayStr,
         })
         .select()
         .single()

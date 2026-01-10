@@ -16,15 +16,18 @@ import {
   Bell, 
   ChevronLeft,
   Menu,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
 import UserDropdown from './UserDropdown'
+import NotificationDropdown from './NotificationDropdown'
 
 interface AdminLayoutProps {
   children: React.ReactNode
   user: {
+    id?: string
     email?: string | null
   }
   profile: {
@@ -64,6 +67,7 @@ export default function AdminLayout({
   const menuItems = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/clients', label: 'Client Management', icon: Building2 },
+    { href: '/admin/licenses', label: 'License', icon: ShieldCheck },
     { href: '/admin/experts', label: 'Licensing Experts', icon: Users },
     { href: '/admin/messages', label: 'Messages', icon: MessageSquare },
     { href: '/admin/license-requirements', label: 'License Requirements', icon: FileText },
@@ -120,14 +124,12 @@ export default function AdminLayout({
           
           <div className="flex items-center gap-2 md:gap-4">
             {/* Notifications */}
-            <div className="relative">
-              <Bell className="w-5 h-5 md:w-6 md:h-6 cursor-pointer hover:text-blue-200 transition-colors" />
-              {unreadNotifications > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {unreadNotifications}
-                </span>
-              )}
-            </div>
+            {user.id && (
+              <NotificationDropdown 
+                userId={user.id}
+                initialUnreadCount={unreadNotifications}
+              />
+            )}
 
             {/* User Dropdown */}
             <UserDropdown 
