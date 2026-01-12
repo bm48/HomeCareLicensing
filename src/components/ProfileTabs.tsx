@@ -47,7 +47,8 @@ const companyDetailsSchema = z.object({
   path: ['mailingStreetAddress'],
 })
 
-type CompanyDetailsFormData = z.infer<typeof companyDetailsSchema>
+type CompanyDetailsFormInput = z.input<typeof companyDetailsSchema>
+type CompanyDetailsFormOutput = z.output<typeof companyDetailsSchema>
 
 interface ProfileTabsProps {
   user: {
@@ -99,7 +100,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
     formState: { errors: companyErrors },
     watch: watchCompany,
     setValue: setCompanyValue,
-  } = useForm<CompanyDetailsFormData>({
+  } = useForm<CompanyDetailsFormInput, any, CompanyDetailsFormOutput>({
     resolver: zodResolver(companyDetailsSchema),
     defaultValues: {
       companyName: 'HomeCare Solutions LLC',
@@ -121,7 +122,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
 
   const sameAsPhysical = watchCompany('sameAsPhysical')
 
-  const onCompanySubmit = async (data: CompanyDetailsFormData) => {
+  const onCompanySubmit = async (data: CompanyDetailsFormOutput) => {
     setIsLoading(true)
     setError(null)
     setSuccess(false)
