@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Building, Bell, Lock, Save } from 'lucide-react'
+import { User, Building, Save, FileText, Clock } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -22,6 +22,33 @@ const personalInfoSchema = z.object({
 
 type PersonalInfoFormData = z.infer<typeof personalInfoSchema>
 
+const companyDetailsSchema = z.object({
+  companyName: z.string().min(1, 'Company name is required'),
+  businessType: z.string().min(1, 'Business type is required'),
+  taxId: z.string().min(1, 'Tax ID / EIN is required'),
+  primaryLicenseNumber: z.string().min(1, 'Primary license number is required'),
+  website: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
+  physicalStreetAddress: z.string().min(1, 'Street address is required'),
+  physicalCity: z.string().min(1, 'City is required'),
+  physicalState: z.string().min(1, 'State is required'),
+  physicalZipCode: z.string().min(1, 'ZIP code is required'),
+  sameAsPhysical: z.boolean().default(true),
+  mailingStreetAddress: z.string().optional(),
+  mailingCity: z.string().optional(),
+  mailingState: z.string().optional(),
+  mailingZipCode: z.string().optional(),
+}).refine((data) => {
+  if (!data.sameAsPhysical) {
+    return data.mailingStreetAddress && data.mailingCity && data.mailingState && data.mailingZipCode
+  }
+  return true
+}, {
+  message: 'Mailing address fields are required when not same as physical address',
+  path: ['mailingStreetAddress'],
+})
+
+type CompanyDetailsFormData = z.infer<typeof companyDetailsSchema>
+
 interface ProfileTabsProps {
   user: {
     id: string
@@ -40,6 +67,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [isEditingCompany, setIsEditingCompany] = useState(true)
 
   // Parse full name
   const fullName = profile?.full_name || ''
@@ -64,6 +92,56 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
       startDate: '',
     },
   })
+
+  const {
+    register: registerCompany,
+    handleSubmit: handleSubmitCompany,
+    formState: { errors: companyErrors },
+    watch: watchCompany,
+    setValue: setCompanyValue,
+  } = useForm<CompanyDetailsFormData>({
+    resolver: zodResolver(companyDetailsSchema),
+    defaultValues: {
+      companyName: 'HomeCare Solutions LLC',
+      businessType: 'Home Healthcare Agency',
+      taxId: '12-3456789',
+      primaryLicenseNumber: 'HCA-2022-001',
+      website: 'https://homecaresolutions.com',
+      physicalStreetAddress: '123 Healthcare Blvd',
+      physicalCity: 'Austin',
+      physicalState: 'Texas',
+      physicalZipCode: '78701',
+      sameAsPhysical: true,
+      mailingStreetAddress: '',
+      mailingCity: '',
+      mailingState: '',
+      mailingZipCode: '',
+    },
+  })
+
+  const sameAsPhysical = watchCompany('sameAsPhysical')
+
+  const onCompanySubmit = async (data: CompanyDetailsFormData) => {
+    setIsLoading(true)
+    setError(null)
+    setSuccess(false)
+
+    try {
+      // Here you would save to your database
+      // For now, we'll just simulate success
+      setSuccess(true)
+      setIsLoading(false)
+      setIsEditingCompany(false)
+      router.refresh()
+
+      setTimeout(() => {
+        setSuccess(false)
+      }, 3000)
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.')
+      setIsLoading(false)
+    }
+  }
 
   const onSubmit = async (data: PersonalInfoFormData) => {
     setIsLoading(true)
@@ -140,8 +218,6 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
   const tabs = [
     { id: 'personal', label: 'Personal Information', icon: User },
     { id: 'company', label: 'Company Details', icon: Building },
-    { id: 'notifications', label: 'Notification Preferences', icon: Bell },
-    { id: 'security', label: 'Security Settings', icon: Lock },
   ]
 
   return (
@@ -349,23 +425,276 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
         )}
 
         {activeTab === 'company' && (
-          <div className="text-center py-12 text-gray-500">
-            <Building className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>Company Details section coming soon</p>
-          </div>
-        )}
+          <div className="space-y-6">
+            {/* Page Header */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className="w-6 h-6 text-gray-600" />
+                <h2 className="text-xl font-bold text-gray-900">Company Details</h2>
+              </div>
+              <p className="text-gray-600 text-sm">Update your company information and business details</p>
+            </div>
 
-        {activeTab === 'notifications' && (
-          <div className="text-center py-12 text-gray-500">
-            <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>Notification Preferences section coming soon</p>
-          </div>
-        )}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
 
-        {activeTab === 'security' && (
-          <div className="text-center py-12 text-gray-500">
-            <Lock className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>Security Settings section coming soon</p>
+            {success && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
+                Company details updated successfully!
+              </div>
+            )}
+
+            {/* Company Overview Card */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-blue-500 rounded-lg flex items-center justify-center">
+                  <Building className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">{watchCompany('companyName') || 'HomeCare Solutions LLC'}</h3>
+                  <p className="text-sm text-gray-600">{watchCompany('businessType') || 'Home Healthcare Agency'}</p>
+                  <p className="text-sm text-gray-600">License: {watchCompany('primaryLicenseNumber') || 'HCA-2022-001'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditingCompany(!isEditingCompany)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+              >
+                <Clock className="w-4 h-4" />
+                {isEditingCompany ? 'View Details' : 'Edit Details'}
+              </button>
+            </div>
+
+            {/* Company Details Form */}
+            {isEditingCompany && (
+              <form onSubmit={handleSubmitCompany(onCompanySubmit)} className="space-y-8">
+                {/* Basic Information Section */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-6">Basic Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Company Name *
+                      </label>
+                      <input
+                        {...registerCompany('companyName')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.companyName && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.companyName.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Business Type *
+                      </label>
+                      <input
+                        {...registerCompany('businessType')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.businessType && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.businessType.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Tax ID / EIN *
+                      </label>
+                      <input
+                        {...registerCompany('taxId')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.taxId && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.taxId.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Primary License Number *
+                      </label>
+                      <input
+                        {...registerCompany('primaryLicenseNumber')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.primaryLicenseNumber && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.primaryLicenseNumber.message}</p>
+                      )}
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Website
+                      </label>
+                      <input
+                        type="url"
+                        {...registerCompany('website')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.website && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.website.message}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Physical Address Section */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-6">Physical Address</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Street Address *
+                      </label>
+                      <input
+                        {...registerCompany('physicalStreetAddress')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.physicalStreetAddress && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.physicalStreetAddress.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        City *
+                      </label>
+                      <input
+                        {...registerCompany('physicalCity')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.physicalCity && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.physicalCity.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        State *
+                      </label>
+                      <input
+                        {...registerCompany('physicalState')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.physicalState && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.physicalState.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        ZIP Code *
+                      </label>
+                      <input
+                        {...registerCompany('physicalZipCode')}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                      />
+                      {companyErrors.physicalZipCode && (
+                        <p className="mt-1 text-sm text-red-600">{companyErrors.physicalZipCode.message}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mailing Address Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900">Mailing Address</h3>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        {...registerCompany('sameAsPhysical')}
+                        checked={sameAsPhysical}
+                        onChange={(e) => {
+                          setCompanyValue('sameAsPhysical', e.target.checked)
+                          if (e.target.checked) {
+                            setCompanyValue('mailingStreetAddress', '')
+                            setCompanyValue('mailingCity', '')
+                            setCompanyValue('mailingState', '')
+                            setCompanyValue('mailingZipCode', '')
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Same as physical address</span>
+                    </label>
+                  </div>
+
+                  {!sameAsPhysical && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Street Address *
+                        </label>
+                        <input
+                          {...registerCompany('mailingStreetAddress')}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                        />
+                        {companyErrors.mailingStreetAddress && (
+                          <p className="mt-1 text-sm text-red-600">{companyErrors.mailingStreetAddress.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          City *
+                        </label>
+                        <input
+                          {...registerCompany('mailingCity')}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                        />
+                        {companyErrors.mailingCity && (
+                          <p className="mt-1 text-sm text-red-600">{companyErrors.mailingCity.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          State *
+                        </label>
+                        <input
+                          {...registerCompany('mailingState')}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                        />
+                        {companyErrors.mailingState && (
+                          <p className="mt-1 text-sm text-red-600">{companyErrors.mailingState.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          ZIP Code *
+                        </label>
+                        <input
+                          {...registerCompany('mailingZipCode')}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50"
+                        />
+                        {companyErrors.mailingZipCode && (
+                          <p className="mt-1 text-sm text-red-600">{companyErrors.mailingZipCode.message}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Submit Button */}
+                <div className="flex justify-end pt-4 border-t border-gray-200">
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Save className="w-5 h-5" />
+                    {isLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         )}
       </div>
