@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import { getSession } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import DashboardLayout from '@/components/DashboardLayout'
@@ -63,12 +64,14 @@ export default async function LicensesPage() {
 
   return (
     <DashboardLayout user={session.user} profile={profile} unreadNotifications={unreadNotifications || 0}>
-      <LicensesContent 
-        licenses={licenses || []} 
-        documentCounts={documentCounts}
-        applications={applications || []}
-        applicationDocumentCounts={applicationDocumentCounts}
-      />
+      <Suspense fallback={<div className="p-6">Loading...</div>}>
+        <LicensesContent 
+          licenses={licenses || []} 
+          documentCounts={documentCounts}
+          applications={applications || []}
+          applicationDocumentCounts={applicationDocumentCounts}
+        />
+      </Suspense>
     </DashboardLayout>
   )
 }

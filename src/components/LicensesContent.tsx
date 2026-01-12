@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { 
   FileText, 
   Calendar, 
@@ -15,7 +16,9 @@ import {
   Plus,
   ClipboardList,
   RefreshCw,
-  Loader2
+  Loader2,
+  X,
+  ChevronDown
 } from 'lucide-react'
 import NewLicenseApplicationModal from './NewLicenseApplicationModal'
 import SelectLicenseTypeModal from './SelectLicenseTypeModal'
@@ -61,6 +64,7 @@ export default function LicensesContent({
   applicationDocumentCounts = {} 
 }: LicensesContentProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<'requested' | 'applications' | 'licenses'>('licenses')
   const [isStateModalOpen, setIsStateModalOpen] = useState(false)
   const [isLicenseTypeModalOpen, setIsLicenseTypeModalOpen] = useState(false)
@@ -68,6 +72,25 @@ export default function LicensesContent({
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
   const [selectedState, setSelectedState] = useState<string>('')
   const [selectedLicenseType, setSelectedLicenseType] = useState<LicenseType | null>(null)
+  const [loadingLicenseId, setLoadingLicenseId] = useState<string | null>(null)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+  
+  // Filter states for each tab
+  const [requestFilter, setRequestFilter] = useState<'pending' | 'cancelled' | 'all'>('pending')
+  const [applicationFilter, setApplicationFilter] = useState<'active' | 'approved' | 'denied' | 'all'>('active')
+  const [licenseFilter, setLicenseFilter] = useState<'active' | 'expired' | 'all'>('active')
+
+  // Check for 'new' query parameter and open modal automatically
+  useEffect(() => {
+    const newParam = searchParams.get('new')
+    if (newParam === 'true') {
+      setIsStateModalOpen(true)
+      // Remove the query parameter from URL without reloading
+      const url = new URL(window.location.href)
+      url.searchParams.delete('new')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [searchParams])
 
   const handleStateSelect = (state: string) => {
     setSelectedState(state)
@@ -123,6 +146,39 @@ export default function LicensesContent({
     } finally {
       setResubmittingId(null)
     }
+  }
+
+  const handleCancelRequest = async (applicationId: string) => {
+    if (!confirm('Are you sure you want to cancel this request? This action cannot be undone.')) {
+      return
+    }
+
+    setCancellingId(applicationId)
+    
+    try {
+      const supabase = createClient()
+      
+      const { error } = await supabase
+        .from('applications')
+        .update({
+          status: 'cancelled'
+        })
+        .eq('id', applicationId)
+
+      if (error) throw error
+
+      router.refresh()
+    } catch (error: any) {
+      console.error('Error cancelling request:', error)
+      alert('Failed to cancel request: ' + (error.message || 'Unknown error'))
+    } finally {
+      setCancellingId(null)
+    }
+  }
+
+  const handleViewLicenseDetails = (licenseId: string) => {
+    setLoadingLicenseId(licenseId)
+    router.push(`/dashboard/licenses/${licenseId}`)
   }
 
   // Calculate statistics
@@ -211,15 +267,56 @@ export default function LicensesContent({
 
   // Application statistics
   const requestedCount = applications?.filter(a => a.status === 'requested').length || 0
+  const cancelledCount = applications?.filter(a => a.status === 'cancelled').length || 0
   const inProgressCount = applications?.filter(a => a.status === 'in_progress').length || 0
   const underReviewCount = applications?.filter(a => a.status === 'under_review').length || 0
   const needsRevisionCount = applications?.filter(a => a.status === 'needs_revision').length || 0
+  const approvedCount = applications?.filter(a => a.status === 'approved').length || 0
+  const rejectedCount = applications?.filter(a => a.status === 'rejected').length || 0
 
   // Categorize applications
   const requestedApps = applications?.filter(a => a.status === 'requested') || []
+  const cancelledApps = applications?.filter(a => a.status === 'cancelled') || []
   const inProgressApps = applications?.filter(a => a.status === 'in_progress') || []
   const underReviewApps = applications?.filter(a => a.status === 'under_review') || []
   const needsRevisionApps = applications?.filter(a => a.status === 'needs_revision') || []
+  const approvedApps = applications?.filter(a => a.status === 'approved') || []
+  const rejectedApps = applications?.filter(a => a.status === 'rejected') || []
+
+  // Filter applications based on selected filter
+  const getFilteredApplications = () => {
+    if (applicationFilter === 'active') {
+      return [...inProgressApps, ...underReviewApps, ...needsRevisionApps]
+    } else if (applicationFilter === 'approved') {
+      return approvedApps
+    } else if (applicationFilter === 'denied') {
+      return rejectedApps
+    } else {
+      return applications || []
+    }
+  }
+
+  // Filter requests based on selected filter
+  const getFilteredRequests = () => {
+    if (requestFilter === 'pending') {
+      return requestedApps
+    } else if (requestFilter === 'cancelled') {
+      return cancelledApps
+    } else {
+      return [...requestedApps, ...cancelledApps]
+    }
+  }
+
+  // Filter licenses based on selected filter
+  const getFilteredLicenses = () => {
+    if (licenseFilter === 'active') {
+      return [...activeLicensesList, ...expiringLicensesList]
+    } else if (licenseFilter === 'expired') {
+      return expiredLicensesList
+    } else {
+      return licenses || []
+    }
+  }
 
   // Get status badge styling
   const getStatusBadge = (status: string) => {
@@ -233,7 +330,10 @@ export default function LicensesContent({
       case 'approved':
         return 'bg-green-100 text-green-700'
       case 'rejected':
+      case 'denied':
         return 'bg-red-100 text-red-700'
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-700'
       default:
         return 'bg-gray-100 text-gray-700'
     }
@@ -241,6 +341,8 @@ export default function LicensesContent({
 
   // Get status display name
   const getStatusDisplay = (status: string) => {
+    if (status === 'cancelled') return 'Cancelled'
+    if (status === 'rejected') return 'Denied'
     return status.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ')
@@ -397,15 +499,25 @@ export default function LicensesContent({
         {/* Requested Tab Content */}
         {activeTab === 'requested' && (
           <>
-            {requestedApps.length > 0 ? (
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Requested Applications</h2>
+              <div className="relative">
+                <select
+                  value={requestFilter}
+                  onChange={(e) => setRequestFilter(e.target.value as 'pending' | 'cancelled' | 'all')}
+                  className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm font-medium text-gray-700 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="all">All</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
+            {getFilteredRequests().length > 0 && (
               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  <h2 className="text-lg font-bold text-gray-900">Requested Applications</h2>
-                </div>
-
                 <div className="space-y-4">
-                  {requestedApps.map((application) => (
+                  {getFilteredRequests().map((application) => (
                     <div key={application.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                       <div className="flex items-center gap-4 flex-1">
                         <div className="w-14 h-14 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
@@ -423,31 +535,43 @@ export default function LicensesContent({
                             <span>State: {application.state}</span>
                           </div>
                           <div className="text-xs text-gray-500">
-                            Waiting for admin approval
+                            {application.status === 'cancelled' ? 'Request has been cancelled' : 'Waiting for admin approval'}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold">
-                          Pending Review
-                        </span>
+                        {application.status === 'requested' ? (
+                          <>
+                            <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold">
+                              Pending Review
+                            </span>
+                            <button
+                              onClick={() => handleCancelRequest(application.id)}
+                              disabled={cancellingId === application.id}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {cancellingId === application.id ? (
+                                <>
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  Cancelling...
+                                </>
+                              ) : (
+                                <>
+                                  <X className="w-3 h-3" />
+                                  Cancel
+                                </>
+                              )}
+                            </button>
+                          </>
+                        ) : (
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(application.status)}`}>
+                            {getStatusDisplay(application.status)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
-                <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No requested applications</h3>
-                <p className="text-gray-600 mb-6">All your application requests have been approved or you haven&apos;t submitted any yet</p>
-                <button
-                  onClick={() => setIsStateModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
-                >
-                  <Plus className="w-5 h-5" />
-                  New Application Request
-                </button>
               </div>
             )}
           </>
@@ -456,7 +580,23 @@ export default function LicensesContent({
         {/* Applications Tab Content */}
         {activeTab === 'applications' && (
           <>
-            {(inProgressApps.length > 0 || underReviewApps.length > 0 || needsRevisionApps.length > 0) ? (
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Applications</h2>
+              <div className="relative">
+                <select
+                  value={applicationFilter}
+                  onChange={(e) => setApplicationFilter(e.target.value as 'active' | 'approved' | 'denied' | 'all')}
+                  className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm font-medium text-gray-700 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="active">Active</option>
+                  <option value="approved">Approved</option>
+                  <option value="denied">Denied</option>
+                  <option value="all">All</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
+            {getFilteredApplications().length > 0 ? (
               <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -473,102 +613,8 @@ export default function LicensesContent({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {/* In Progress Applications */}
-                      {inProgressApps.map((application) => (
-                        <tr key={application.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                              {getStateAbbr(application.state)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900">{application.application_name}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(application.status)}`}>
-                              {getStatusDisplay(application.status)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="w-32">
-                              <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-                                <div
-                                  className="bg-blue-600 h-2 rounded-full transition-all"
-                                  style={{ width: `${application.progress_percentage || 0}%` }}
-                                />
-                              </div>
-                              <div className="text-xs text-gray-500">{application.progress_percentage || 0}%</div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {application.started_date ? formatDate(application.started_date) : <span className="text-gray-400">N/A</span>}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {application.last_updated_date ? formatDate(application.last_updated_date) : <span className="text-gray-400">N/A</span>}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            <span className="text-gray-400">-</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <Link
-                              href={`/dashboard/applications/${application.id}`}
-                              className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1 justify-end"
-                            >
-                              View Details
-                              <ArrowRight className="w-4 h-4" />
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                      {/* Under Review Applications */}
-                      {underReviewApps.map((application) => (
-                        <tr key={application.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                              {getStateAbbr(application.state)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900">{application.application_name}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(application.status)}`}>
-                              {getStatusDisplay(application.status)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="w-32">
-                              <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-                                <div
-                                  className="bg-blue-600 h-2 rounded-full transition-all"
-                                  style={{ width: `${application.progress_percentage || 0}%` }}
-                                />
-                              </div>
-                              <div className="text-xs text-gray-500">{application.progress_percentage || 0}%</div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {application.started_date ? formatDate(application.started_date) : <span className="text-gray-400">N/A</span>}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {application.last_updated_date ? formatDate(application.last_updated_date) : <span className="text-gray-400">N/A</span>}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            <span className="text-gray-400">-</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <Link
-                              href={`/dashboard/applications/${application.id}`}
-                              className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1 justify-end"
-                            >
-                              View Details
-                              <ArrowRight className="w-4 h-4" />
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                      {/* Needs Revision Applications */}
-                      {needsRevisionApps.map((application) => (
+                      {/* Filtered Applications */}
+                      {getFilteredApplications().map((application) => (
                         <tr key={application.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
@@ -619,23 +665,25 @@ export default function LicensesContent({
                                 View Details
                                 <ArrowRight className="w-4 h-4" />
                               </Link>
-                              <button
-                                onClick={() => handleResubmit(application.id)}
-                                disabled={resubmittingId === application.id}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {resubmittingId === application.id ? (
-                                  <>
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                    Resubmitting...
-                                  </>
-                                ) : (
-                                  <>
-                                    <RefreshCw className="w-3 h-3" />
-                                    Resubmit
-                                  </>
-                                )}
-                              </button>
+                              {application.status === 'needs_revision' && (
+                                <button
+                                  onClick={() => handleResubmit(application.id)}
+                                  disabled={resubmittingId === application.id}
+                                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {resubmittingId === application.id ? (
+                                    <>
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                      Resubmitting...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <RefreshCw className="w-3 h-3" />
+                                      Resubmit
+                                    </>
+                                  )}
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -647,15 +695,27 @@ export default function LicensesContent({
             ) : (
               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
                 <ClipboardList className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No applications yet</h3>
-                <p className="text-gray-600 mb-6">Approved applications will appear here once they are in progress</p>
-                <button
-                  onClick={() => setIsStateModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
-                >
-                  <Plus className="w-5 h-5" />
-                  New Application Request
-                </button>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  No {applicationFilter === 'active' ? 'active' : applicationFilter === 'approved' ? 'approved' : applicationFilter === 'denied' ? 'denied' : ''} applications
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {applicationFilter === 'active' 
+                    ? 'Approved applications will appear here once they are in progress'
+                    : applicationFilter === 'approved'
+                    ? "You don't have any approved applications yet"
+                    : applicationFilter === 'denied'
+                    ? "You don't have any denied applications yet"
+                    : "You don't have any applications yet"}
+                </p>
+                {applicationFilter === 'active' && (
+                  <button
+                    onClick={() => setIsStateModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
+                  >
+                    <Plus className="w-5 h-5" />
+                    New Application Request
+                  </button>
+                )}
               </div>
             )}
           </>
@@ -664,8 +724,23 @@ export default function LicensesContent({
         {/* Licenses Tab Content */}
         {activeTab === 'licenses' && (
           <>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Current Licenses</h2>
+              <div className="relative">
+                <select
+                  value={licenseFilter}
+                  onChange={(e) => setLicenseFilter(e.target.value as 'active' | 'expired' | 'all')}
+                  className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm font-medium text-gray-700 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="all">All</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
             {/* All Licenses Table */}
-            {licenses.length > 0 ? (
+            {getFilteredLicenses().length > 0 ? (
               <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -682,73 +757,17 @@ export default function LicensesContent({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {/* Active Licenses */}
-                      {activeLicensesList.map((license) => (
-                        <tr key={license.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                              {getStateAbbr(license.state)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900">{license.license_name}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="px-3 py-1 bg-black text-white rounded-full text-xs font-semibold">
-                              Active
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {license.activated_date ? (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {formatDate(license.activated_date)}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">N/A</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {license.expiry_date ? (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {formatDate(license.expiry_date)}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">N/A</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {license.renewal_due_date ? (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {formatDate(license.renewal_due_date)}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">N/A</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <FileText className="w-4 h-4" />
-                              {documentCounts[license.id] || 0}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <Link
-                              href={`/dashboard/licenses/${license.id}`}
-                              className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1 justify-end"
-                            >
-                              View Details
-                              <ArrowRight className="w-4 h-4" />
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                      {/* Expiring Soon Licenses */}
-                      {expiringLicensesList.map((license) => {
-                        const expiryDate = license.expiry_date ? new Date(license.expiry_date) : null
-                        const renewalDueDate = license.renewal_due_date ? new Date(license.renewal_due_date) : null
+                      {/* Filtered Licenses */}
+                      {getFilteredLicenses().map((license) => {
+                        // Determine if license is expiring soon
+                        const isExpiringSoon = license.expiry_date && license.status === 'active' ? (() => {
+                          const expiryDate = new Date(license.expiry_date)
+                          const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                          return daysUntilExpiry <= 60 && daysUntilExpiry > 0
+                        })() : false
+                        
+                        const isExpired = license.expiry_date ? new Date(license.expiry_date) < today : license.status === 'expired'
+                        
                         return (
                           <tr key={license.id} className="hover:bg-gray-50 transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -760,9 +779,19 @@ export default function LicensesContent({
                               <div className="text-sm font-semibold text-gray-900">{license.license_name}</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">
-                                Expiring Soon
-                              </span>
+                              {isExpired ? (
+                                <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
+                                  Expired
+                                </span>
+                              ) : isExpiringSoon ? (
+                                <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">
+                                  Expiring Soon
+                                </span>
+                              ) : (
+                                <span className="px-3 py-1 bg-black text-white rounded-full text-xs font-semibold">
+                                  Active
+                                </span>
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                               {license.activated_date ? (
@@ -775,20 +804,20 @@ export default function LicensesContent({
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                              {expiryDate ? (
+                              {license.expiry_date ? (
                                 <div className="flex items-center gap-1">
                                   <Calendar className="w-4 h-4" />
-                                  {formatDate(expiryDate)}
+                                  {formatDate(license.expiry_date)}
                                 </div>
                               ) : (
                                 <span className="text-gray-400">N/A</span>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                              {renewalDueDate ? (
+                              {license.renewal_due_date ? (
                                 <div className="flex items-center gap-1">
                                   <Calendar className="w-4 h-4" />
-                                  {formatDate(renewalDueDate)}
+                                  {formatDate(license.renewal_due_date)}
                                 </div>
                               ) : (
                                 <span className="text-gray-400">N/A</span>
@@ -797,90 +826,57 @@ export default function LicensesContent({
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                               <div className="flex items-center gap-1">
                                 <FileText className="w-4 h-4" />
-                                0
+                                {documentCounts[license.id] || 0}
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="flex items-center gap-3 justify-end">
-                                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium">
-                                  <Upload className="w-4 h-4" />
-                                  Upload
-                                </button>
-                                <Link
-                                  href={`/dashboard/licenses/${license.id}`}
-                                  className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
+                              {isExpiringSoon && !isExpired ? (
+                                <div className="flex items-center gap-3 justify-end">
+                                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium">
+                                    <Upload className="w-4 h-4" />
+                                    Upload
+                                  </button>
+                                  <button
+                                    onClick={() => handleViewLicenseDetails(license.id)}
+                                    disabled={loadingLicenseId === license.id}
+                                    className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {loadingLicenseId === license.id ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Loading...
+                                      </>
+                                    ) : (
+                                      <>
+                                        View Details
+                                        <ArrowRight className="w-4 h-4" />
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleViewLicenseDetails(license.id)}
+                                  disabled={loadingLicenseId === license.id}
+                                  className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1 justify-end disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  View Details
-                                  <ArrowRight className="w-4 h-4" />
-                                </Link>
-                              </div>
+                                  {loadingLicenseId === license.id ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      Loading...
+                                    </>
+                                  ) : (
+                                    <>
+                                      View Details
+                                      <ArrowRight className="w-4 h-4" />
+                                    </>
+                                  )}
+                                </button>
+                              )}
                             </td>
                           </tr>
                         )
                       })}
-                      {/* Expired Licenses */}
-                      {expiredLicensesList.map((license) => (
-                        <tr key={license.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                              {getStateAbbr(license.state)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900">{license.license_name}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
-                              Expired
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {license.activated_date ? (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {formatDate(license.activated_date)}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">N/A</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {license.expiry_date ? (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {formatDate(license.expiry_date)}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">N/A</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {license.renewal_due_date ? (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {formatDate(license.renewal_due_date)}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">N/A</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <FileText className="w-4 h-4" />
-                              {documentCounts[license.id] || 0}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <Link
-                              href={`/dashboard/licenses/${license.id}`}
-                              className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1 justify-end"
-                            >
-                              View Details
-                              <ArrowRight className="w-4 h-4" />
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -889,15 +885,25 @@ export default function LicensesContent({
               /* Empty State for Licenses */
               <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
                 <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No licenses yet</h3>
-                <p className="text-gray-600 mb-6">Get started by adding your first license application</p>
-                <button
-                  onClick={() => setIsStateModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
-                >
-                  <FileText className="w-5 h-5" />
-                  New Application Request
-                </button>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  No {licenseFilter === 'active' ? 'active' : licenseFilter === 'expired' ? 'expired' : ''} licenses
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {licenseFilter === 'active' 
+                    ? 'Get started by adding your first license application'
+                    : licenseFilter === 'expired'
+                    ? "You don't have any expired licenses"
+                    : "You don't have any licenses yet"}
+                </p>
+                {licenseFilter === 'active' && (
+                  <button
+                    onClick={() => setIsStateModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
+                  >
+                    <FileText className="w-5 h-5" />
+                    New Application Request
+                  </button>
+                )}
               </div>
             )}
           </>

@@ -14,6 +14,7 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react'
+import ApplyForNewLicenseButton from '@/components/ApplyForNewLicenseButton'
 
 export default async function DashboardPage() {
   const session = await getSession()
@@ -338,13 +339,7 @@ export default async function DashboardPage() {
             </div>
 
             {/* Apply for New License Button */}
-            <Link
-              href="/dashboard/licenses"
-              className="block w-full text-center py-2.5 px-4 bg-black hover:bg-gray-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              <FileText className="w-4 h-4" />
-              Apply for New License
-            </Link>
+            <ApplyForNewLicenseButton />
           </div>
         </div>
 

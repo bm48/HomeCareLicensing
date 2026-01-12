@@ -123,8 +123,15 @@ export default function StaffManagementClient({
     setIsManageLicensesOpen(true)
   }
 
-  const handleDeactivate = async (staff: StaffMember) => {
-    if (!confirm(`Are you sure you want to deactivate ${staff.first_name} ${staff.last_name}?`)) {
+  const handleToggleStatus = async (staff: StaffMember, e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation() // Prevent row click from triggering
+
+    const newStatus = e.target.checked ? 'active' : 'inactive'
+    const action = newStatus === 'active' ? 'activate' : 'deactivate'
+
+    if (!confirm(`Are you sure you want to ${action} ${staff.first_name} ${staff.last_name}?`)) {
+      // Revert the toggle if user cancels
+      e.target.checked = !e.target.checked
       return
     }
 
@@ -132,17 +139,21 @@ export default function StaffManagementClient({
       const supabase = createClient()
       const { error } = await supabase
         .from('staff_members')
-        .update({ status: 'inactive' })
+        .update({ status: newStatus })
         .eq('id', staff.id)
 
       if (error) {
-        alert('Failed to deactivate staff member: ' + error.message)
+        // Revert the toggle on error
+        e.target.checked = !e.target.checked
+        alert(`Failed to ${action} staff member: ` + error.message)
         return
       }
 
       router.refresh()
     } catch (err: any) {
-      alert('Failed to deactivate staff member: ' + err.message)
+      // Revert the toggle on error
+      e.target.checked = !e.target.checked
+      alert(`Failed to ${action} staff member: ` + err.message)
     }
   }
 
@@ -253,7 +264,11 @@ export default function StaffManagementClient({
                     }).length
 
                     return (
-                      <tr key={staff.id} className="hover:bg-gray-50 transition-colors">
+                      <tr 
+                        key={staff.id} 
+                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => handleViewDetails(staff)}
+                      >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
@@ -275,10 +290,20 @@ export default function StaffManagementClient({
                             <div className="text-xs text-gray-500">{staff.job_title}</div>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${getStatusBadge(staff.status)}`}>
-                            {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
-                          </span>
+                        <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={staff.status === 'active'}
+                              onChange={(e) => handleToggleStatus(staff, e)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            <span className="ml-3 text-sm font-medium text-gray-700">
+                              {staff.status === 'active' ? 'Active' : 'Inactive'}
+                            </span>
+                          </label>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -311,13 +336,12 @@ export default function StaffManagementClient({
                             <span className="text-sm text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                           <StaffActionsDropdown
                             staffId={staff.id}
                             onViewDetails={() => handleViewDetails(staff)}
                             onEdit={() => handleEdit(staff)}
                             onManageLicenses={() => handleManageLicenses(staff)}
-                            onDeactivate={() => handleDeactivate(staff)}
                           />
                         </td>
                       </tr>

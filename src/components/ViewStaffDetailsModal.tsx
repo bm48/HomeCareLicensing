@@ -1,7 +1,7 @@
 'use client'
 
-import Modal from './Modal'
-import { Mail, Phone, FileText, Calendar, User, Briefcase } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { X, Mail, Phone, Award, MoreVertical, AlertTriangle } from 'lucide-react'
 
 interface StaffMember {
   id: string
@@ -40,6 +40,50 @@ export default function ViewStaffDetailsModal({
   staff,
   licenses,
 }: ViewStaffDetailsModalProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    if (isOpen) {
+      window.addEventListener('keydown', handleEscape)
+    }
+    return () => {
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [isOpen, onClose])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isMenuOpen])
+
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'N/A'
     const d = typeof date === 'string' ? new Date(date) : date
@@ -50,152 +94,142 @@ export default function ViewStaffDetailsModal({
     return `${firstName[0]}${lastName[0]}`.toUpperCase()
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-700'
-      case 'inactive':
-        return 'bg-gray-100 text-gray-700'
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
+  const activeLicenses = licenses.filter(l => l.status === 'active')
+  const expiringLicensesCount = licenses.filter(l => {
+    if (l.days_until_expiry) {
+      return l.days_until_expiry <= 60 && l.days_until_expiry > 0
     }
-  }
+    return false
+  }).length
+
+  if (!isOpen) return null
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Staff Member Details" size="lg">
-      <div className="space-y-6">
-        {/* Staff Header */}
-        <div className="flex items-start gap-4 pb-6 border-b border-gray-200">
-          <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
-            {getInitials(staff.first_name, staff.last_name)}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header with Close Button and Three Dots */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-end gap-2 rounded-t-xl z-10">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Close modal"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {/* Staff Header Section */}
+          <div className="flex items-start gap-4 mb-6">
+            {/* Avatar */}
+            <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
+              {getInitials(staff.first_name, staff.last_name)}
+            </div>
+
+            {/* Staff Info */}
+            <div className="flex-1">
+              <div className="flex items-center gap-3 flex-wrap mb-2">
+                <h3 className="text-xl font-bold text-gray-900">
+                  {staff.first_name} {staff.last_name}
+                </h3>
+                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                  Active
+                </span>
+                {expiringLicensesCount > 0 && (
+                  <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {expiringLicensesCount} License{expiringLicensesCount > 1 ? 's' : ''} Expiring
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-600 text-sm">{staff.role}</p>
+            </div>
           </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">
-              {staff.first_name} {staff.last_name}
-            </h3>
-            <div className="flex items-center gap-3 mb-2">
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(staff.status)}`}>
-                {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
-              </span>
-              {staff.role && (
-                <span className="text-gray-600">{staff.role}</span>
+
+          {/* Contact and Summary Row */}
+          <div className="flex flex-wrap items-center gap-6 mb-6 pb-6 border-b border-gray-200">
+            <div className="flex items-center gap-2 text-sm text-gray-700">
+              <Mail className="w-4 h-4 text-gray-400" />
+              <span>{staff.email}</span>
+            </div>
+            {staff.phone && (
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <Phone className="w-4 h-4 text-gray-400" />
+                <span>{staff.phone}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-sm text-gray-700">
+              <Award className="w-4 h-4 text-gray-400" />
+              <span>{activeLicenses.length} License{activeLicenses.length !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+
+          {/* Active Licenses & Certifications Section */}
+          <div>
+            <h4 className="text-lg font-bold text-gray-900 mb-4">Active Licenses & Certifications</h4>
+            <div className="space-y-3">
+              {activeLicenses.length > 0 ? (
+                activeLicenses.map((license) => {
+                  const daysRemaining = license.days_until_expiry !== null && license.days_until_expiry !== undefined
+                    ? license.days_until_expiry
+                    : null
+
+                  return (
+                    <div
+                      key={license.id}
+                      className="bg-gray-50 rounded-lg p-4 flex items-start gap-4 hover:bg-gray-100 transition-colors"
+                    >
+                      {/* Ribbon Icon */}
+                      <div className="flex-shrink-0 pt-1">
+                        <Award className="w-5 h-5 text-gray-400" />
+                      </div>
+
+                      {/* License Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-medium text-gray-900">{license.license_type}</span>
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                            Active
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {license.license_number}
+                          {license.state && ` • ${license.state}`}
+                        </div>
+                      </div>
+
+                      {/* Expiry Info - Right Aligned */}
+                      {license.expiry_date && (
+                        <div className="flex-shrink-0 text-right">
+                          <div className="text-xs text-gray-500 mb-1">Expires</div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {formatDate(license.expiry_date)}
+                          </div>
+                          {daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 60 && (
+                            <div className="text-sm text-orange-600 font-medium mt-1">
+                              {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No active licenses or certifications
+                </div>
               )}
             </div>
           </div>
         </div>
-
-        {/* Contact Information */}
-        <div>
-          <h4 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h4>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <Mail className="w-5 h-5 text-gray-400" />
-              <span className="text-gray-700">{staff.email}</span>
-            </div>
-            {staff.phone && (
-              <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-gray-400" />
-                <span className="text-gray-700">{staff.phone}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Employment Details */}
-        <div>
-          <h4 className="text-lg font-semibold text-gray-900 mb-4">Employment Details</h4>
-          <div className="grid grid-cols-2 gap-4">
-            {staff.job_title && (
-              <div className="flex items-center gap-3">
-                <Briefcase className="w-5 h-5 text-gray-400" />
-                <div>
-                  <div className="text-xs text-gray-500">Job Title</div>
-                  <div className="text-gray-700 font-medium">{staff.job_title}</div>
-                </div>
-              </div>
-            )}
-            {staff.employee_id && (
-              <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-gray-400" />
-                <div>
-                  <div className="text-xs text-gray-500">Employee ID</div>
-                  <div className="text-gray-700 font-medium">{staff.employee_id}</div>
-                </div>
-              </div>
-            )}
-            {staff.start_date && (
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-gray-400" />
-                <div>
-                  <div className="text-xs text-gray-500">Start Date</div>
-                  <div className="text-gray-700 font-medium">{formatDate(staff.start_date)}</div>
-                </div>
-              </div>
-            )}
-            {staff.created_at && (
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-gray-400" />
-                <div>
-                  <div className="text-xs text-gray-500">Added Date</div>
-                  <div className="text-gray-700 font-medium">{formatDate(staff.created_at)}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Licenses */}
-        {licenses.length > 0 && (
-          <div>
-            <h4 className="text-lg font-semibold text-gray-900 mb-4">Licenses & Certifications</h4>
-            <div className="space-y-3">
-              {licenses.map((license) => (
-                <div key={license.id} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-gray-900">{license.license_type}</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      license.status === 'active' ? 'bg-green-100 text-green-700' :
-                      license.status === 'expired' ? 'bg-red-100 text-red-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {license.status.charAt(0).toUpperCase() + license.status.slice(1)}
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-600 mb-1">
-                    {license.license_number}
-                    {license.state && ` • ${license.state}`}
-                  </div>
-                  {license.expiry_date && (
-                    <div className="text-sm text-gray-600">
-                      Expires: {formatDate(license.expiry_date)}
-                      {license.days_until_expiry !== null && license.days_until_expiry !== undefined && (
-                        <span className={`ml-2 font-semibold ${
-                          license.days_until_expiry <= 30 ? 'text-orange-600' : 'text-gray-500'
-                        }`}>
-                          ({license.days_until_expiry} days remaining)
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Close Button */}
-        <div className="flex justify-end pt-4 border-t border-gray-200">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
-          >
-            Close
-          </button>
-        </div>
       </div>
-    </Modal>
+    </div>
   )
 }
-
