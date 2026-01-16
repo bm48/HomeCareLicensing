@@ -6,8 +6,6 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, 
-  Building2, 
-  Users, 
   MessageSquare, 
   FileText, 
   DollarSign,
@@ -17,7 +15,8 @@ import {
   ChevronLeft,
   Menu,
   X,
-  ShieldCheck
+  ShieldCheck,
+  Settings
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
@@ -66,12 +65,11 @@ export default function AdminLayout({
 
   const menuItems = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/admin/clients', label: 'Client Management', icon: Building2 },
     { href: '/admin/licenses', label: 'License', icon: ShieldCheck },
-    { href: '/admin/experts', label: 'Licensing Experts', icon: Users },
     { href: '/admin/messages', label: 'Messages', icon: MessageSquare },
     { href: '/admin/license-requirements', label: 'License Requirements', icon: FileText },
     { href: '/admin/billing', label: 'Billing & Invoicing', icon: DollarSign },
+    { href: '/admin/configuration', label: 'Configuration', icon: Settings },
     { href: '/admin/users', label: 'User Management', icon: UserCog },
   ]
 

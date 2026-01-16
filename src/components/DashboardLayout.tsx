@@ -14,7 +14,8 @@ import {
   Bell, 
   ChevronLeft,
   Menu,
-  X
+  X,
+  MessageSquare
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
@@ -65,6 +66,7 @@ export default function DashboardLayout({
     { href: '/dashboard', label: 'Home', icon: Home },
     { href: '/dashboard/licenses', label: 'Licenses', icon: Medal },
     { href: '/dashboard/staff', label: 'Staff', icon: Users },
+    { href: '/dashboard/messages', label: 'Messages', icon: MessageSquare },
     { href: '/dashboard/profile', label: 'My Profile', icon: User },
   ]
 

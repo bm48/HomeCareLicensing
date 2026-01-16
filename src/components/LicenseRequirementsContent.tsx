@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import LicenseTypesManager from '@/components/LicenseTypesManager'
 import LicenseTypeDetails from '@/components/LicenseTypeDetails'
 
@@ -11,13 +11,20 @@ interface LicenseType {
   description: string
   processing_time_display: string
   cost_display: string
+  service_fee_display?: string
   renewal_period_display: string
 }
+
 
 export default function LicenseRequirementsContent() {
   const [selectedLicenseType, setSelectedLicenseType] = useState<LicenseType | null>(null)
   const [selectedState, setSelectedState] = useState('California')
 
+  
+  const handleSelectLicenseType = (licenseType: LicenseType | null) => {
+    setSelectedLicenseType(licenseType)
+  }
+  
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Page Header */}
@@ -32,9 +39,7 @@ export default function LicenseRequirementsContent() {
           <LicenseTypesManager 
             initialState={selectedState}
             selectedLicenseTypeId={selectedLicenseType?.id || null}
-            onSelectLicenseType={(licenseType) => {
-              setSelectedLicenseType(licenseType)
-            }}
+            onSelectLicenseType={handleSelectLicenseType}
             onStateChange={(state) => {
               setSelectedState(state)
               setSelectedLicenseType(null) // Clear selection when state changes

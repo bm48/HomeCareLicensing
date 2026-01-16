@@ -423,7 +423,7 @@ function LicenseTypeItem({ licenseType, selectedState, onDelete, isDeleting, isS
       onClick={onSelect}
     >
       <div className="flex items-start justify-between">
-        <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex-1">
           <h3 className="font-semibold text-gray-900 mb-1">{licenseType.name}</h3>
           {loadingCounts ? (
             <p className="text-sm text-gray-600">Loading...</p>

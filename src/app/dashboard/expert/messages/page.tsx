@@ -108,7 +108,7 @@ export default function ExpertMessagesPage() {
           client:clients(*)
         `)
         .eq('expert_id', expertRecord.id)
-        .order('last_message_at', { ascending: false })
+        .order('last_message_at', { ascending: false, nullsFirst: false })
 
       // Get unread message counts for each conversation
       const conversationsWithUnread = await Promise.all(
@@ -157,6 +157,54 @@ export default function ExpertMessagesPage() {
     }
   }, [selectedConversation])
 
+  // Set up real-time subscription for new messages
+  useEffect(() => {
+    if (!selectedConversation || !user) return
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`messages:${selectedConversation}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${selectedConversation}`
+        },
+        async (payload) => {
+          // Get the new message
+          const newMessage = payload.new as Message
+          
+          // Add new message to existing messages (avoid duplicates)
+          setMessages(prevMessages => {
+            // Check if message already exists (avoid duplicates)
+            const exists = prevMessages.some(m => m.id === newMessage.id)
+            if (exists) return prevMessages
+            
+            // Add new message and sort by created_at
+            const updated = [...prevMessages, newMessage]
+            return updated.sort((a, b) => 
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            )
+          })
+
+          // Mark as read if not sent by current user
+          if (newMessage.sender_id !== user.id && !newMessage.is_read) {
+            await supabase
+              .from('messages')
+              .update({ is_read: true })
+              .eq('id', newMessage.id)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [selectedConversation, user])
+
   const loadMessages = async (conversationId: string) => {
     try {
       const supabase = createClient()
@@ -198,7 +246,8 @@ export default function ExpertMessagesPage() {
         .select('*')
         .eq('client_id', selectedClient)
         .eq('expert_id', expertRecord.id)
-        .single()
+        .is('admin_id', null)
+        .maybeSingle()
 
       if (existingConv) {
         conversationId = existingConv.id
@@ -207,7 +256,8 @@ export default function ExpertMessagesPage() {
           .from('conversations')
           .insert({
             client_id: selectedClient,
-            expert_id: expertRecord.id
+            expert_id: expertRecord.id,
+            admin_id: null
           })
           .select()
           .single()
@@ -227,11 +277,28 @@ export default function ExpertMessagesPage() {
 
       if (messageError) throw messageError
 
-      // Clear message and reload
+      // Clear message
       setMessageContent('')
-      await loadData()
-      if (conversationId) {
+      
+      // Add the new message to the list immediately (optimistic update)
+      const newMessage: Message = {
+        id: '', // Will be set by real-time subscription
+        conversation_id: conversationId!,
+        sender_id: currentUser.id,
+        content: messageContent.trim(),
+        is_read: true,
+        created_at: new Date().toISOString()
+      }
+      
+      // Update messages optimistically
+      setMessages(prev => [...prev, newMessage])
+      
+      // Update conversation list if needed
+      if (conversationId && !selectedConversation) {
         setSelectedConversation(conversationId)
+        await loadMessages(conversationId)
+      } else if (conversationId) {
+        // Just reload messages to get the actual message with ID
         await loadMessages(conversationId)
       }
     } catch (error) {

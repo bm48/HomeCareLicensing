@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2, GripVertical, Users2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { 
   createStep, 
@@ -15,6 +15,7 @@ import {
   deleteDocument,
   deleteExpertStep
 } from '@/app/actions/license-requirements'
+import { updateLicenseType } from '@/app/actions/configuration'
 
 interface LicenseType {
   id: string
@@ -23,6 +24,7 @@ interface LicenseType {
   description: string
   processing_time_display: string
   cost_display: string
+  service_fee_display?: string
   renewal_period_display: string
 }
 
@@ -40,6 +42,7 @@ interface Step {
   description: string | null
   is_expert_step?: boolean
   phase?: string | null
+  estimated_days?: number | null
 }
 
 interface Document {
@@ -52,6 +55,7 @@ interface Document {
 
 export default function LicenseTypeDetails({ licenseType, selectedState }: LicenseTypeDetailsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('general')
+  const prevLicenseTypeRef = useRef<LicenseType | null>(null)
   const [stepsCount, setStepsCount] = useState(0)
   const [expertStepsCount, setExpertStepsCount] = useState(0)
   const [documentsCount, setDocumentsCount] = useState(0)
@@ -78,7 +82,135 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [documentFormData, setDocumentFormData] = useState({ documentName: '', description: '', isRequired: true })
   const [expertFormData, setExpertFormData] = useState({ phase: 'Pre-Application', stepTitle: '', description: '' })
   
+  // Overview tab editable fields
+  const [overviewFields, setOverviewFields] = useState({
+    processingTime: '',
+    applicationFee: '',
+    serviceFee: '',
+    renewalPeriod: ''
+  })
+  const [isSavingOverview, setIsSavingOverview] = useState(false)
+  const [overviewSaveStatus, setOverviewSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
   const supabase = createClient()
+
+  // Get default service fee if not set
+  const getDefaultServiceFee = (lt: LicenseType | null) => {
+    if (!lt) return '$0'
+    if (lt.service_fee_display) return lt.service_fee_display
+    // Calculate as 10% of application fee if not set
+    const appFeeMatch = lt.cost_display?.replace(/[^0-9.]/g, '') || '0'
+    const appFee = parseFloat(appFeeMatch)
+    const serviceFee = appFee * 0.1
+    return `$${serviceFee.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  }
+
+  // Helper functions to extract and format values
+  const extractNumber = (value: string): string => {
+    // Extract numeric value (including decimals)
+    const match = value.replace(/[^0-9.]/g, '')
+    return match || '0'
+  }
+
+  const formatProcessingTime = (value: string): string => {
+    const num = extractNumber(value)
+    if (!num || num === '0') return ''
+    return `${num} days`
+  }
+
+  const formatCurrency = (value: string): string => {
+    const num = extractNumber(value)
+    if (!num || num === '0') return '$0'
+    const numValue = parseFloat(num)
+    if (isNaN(numValue)) return '$0'
+    return `$${numValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  }
+
+  const formatRenewalPeriod = (value: string): string => {
+    const num = extractNumber(value)
+    if (!num || num === '0') return ''
+    const numValue = parseFloat(num)
+    if (isNaN(numValue)) return ''
+    return numValue === 1 ? '1 year' : `${numValue} years`
+  }
+
+  // Initialize overview fields when license type changes
+  useEffect(() => {
+    if (licenseType) {
+      setOverviewFields({
+        processingTime: licenseType.processing_time_display || '',
+        applicationFee: licenseType.cost_display || '',
+        serviceFee: licenseType.service_fee_display || getDefaultServiceFee(licenseType),
+        renewalPeriod: licenseType.renewal_period_display || ''
+      })
+      setOverviewSaveStatus('idle')
+    }
+  }, [licenseType])
+
+  // Ref to track latest field values for saving
+  const overviewFieldsRef = useRef(overviewFields)
+  useEffect(() => {
+    overviewFieldsRef.current = overviewFields
+  }, [overviewFields])
+
+  // Auto-save overview fields with debounce
+  const handleOverviewFieldChange = (field: string, value: string) => {
+    if (!licenseType) return
+
+    // Update local state immediately
+    const updatedFields = {
+      ...overviewFields,
+      [field]: value
+    }
+    setOverviewFields(updatedFields)
+    overviewFieldsRef.current = updatedFields
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    setOverviewSaveStatus('saving')
+
+    // Debounce: save after 1 second of no changes
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const currentFields = overviewFieldsRef.current
+        const updateData = {
+          id: licenseType.id,
+          renewalPeriod: currentFields.renewalPeriod || licenseType.renewal_period_display || '1 year',
+          applicationFee: currentFields.applicationFee || licenseType.cost_display || '$0',
+          serviceFee: currentFields.serviceFee || getDefaultServiceFee(licenseType),
+          processingTime: currentFields.processingTime || licenseType.processing_time_display || '0 days'
+        }
+
+        const result = await updateLicenseType(updateData)
+        if (result.error) {
+          console.error('Error saving:', result.error)
+          setOverviewSaveStatus('idle')
+        } else {
+          setOverviewSaveStatus('saved')
+          // Hide success message after 3 seconds
+          setTimeout(() => {
+            setOverviewSaveStatus('idle')
+          }, 3000)
+        }
+      } catch (error: any) {
+        console.error('Error saving overview fields:', error)
+        setOverviewSaveStatus('idle')
+      }
+    }, 1000)
+  }
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const loadData = useCallback(async () => {
     if (!licenseType) return
@@ -149,8 +281,11 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   }, [licenseType, selectedState])
 
   useEffect(() => {
+    // Only reset to 'general' tab when licenseType actually changes (not on every render)
+    const licenseTypeChanged = prevLicenseTypeRef.current?.id !== licenseType?.id
+    
     if (licenseType) {
-      if (activeTab !== 'general') {
+      if (licenseTypeChanged) {
         setActiveTab('general')
       }
       loadData()
@@ -164,7 +299,11 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setIsLoading(false)
       setRequirementId(null)
     }
-  }, [licenseType, selectedState, activeTab, loadData])
+    
+    // Update the ref to track the current licenseType
+    prevLicenseTypeRef.current = licenseType
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [licenseType, selectedState]) // Removed activeTab and loadData from dependencies
 
   useEffect(() => {
     if (licenseType && (activeTab === 'steps' || activeTab === 'documents' || activeTab === 'expert')) {
@@ -430,10 +569,8 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 md:p-6">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl md:text-2xl font-bold text-gray-900">{licenseType.name}</h2>
-        </div>
-        <p className="text-sm md:text-base text-gray-600 mt-2">{licenseType.description}</p>
+        <h2 className="text-2xl font-bold text-gray-900">{licenseType.name}</h2>
+        <p className="text-sm text-gray-600 mt-1">{licenseType.description}</p>
       </div>
 
       {/* Tabs */}
@@ -443,17 +580,17 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
             onClick={() => setActiveTab('general')}
             className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'general'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 bg-gray-50'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            General Info
+            Overview
           </button>
           <button
             onClick={() => setActiveTab('steps')}
             className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'steps'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 bg-gray-50'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -463,7 +600,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
             onClick={() => setActiveTab('documents')}
             className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'documents'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 bg-gray-50'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -471,13 +608,14 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           </button>
           <button
             onClick={() => setActiveTab('expert')}
-            className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors ${
+            className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${
               activeTab === 'expert'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 bg-gray-50'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            Expert Process {expertStepsCount > 0 && `(${expertStepsCount})`}
+            <Users2 className="w-4 h-4" />
+            Expert Process
           </button>
         </nav>
       </div>
@@ -500,48 +638,138 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                   <p className="text-sm text-gray-600">Loading license details...</p>
                 </div>
               </div>
-            ) : (
+            ) : licenseType ? (
               <>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">License Requirements Details</h3>
                 
                 <div className="space-y-4">
-                  {/* Processing Time */}
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Clock className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900 mb-1">Average Processing Time</h4>
-                      <p className="text-2xl font-bold text-gray-900 mb-1">{licenseType.processing_time_display}</p>
-                      <p className="text-sm text-gray-600">How long it typically takes to process this license type</p>
-                    </div>
+                  {/* Average Processing Time */}
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Average Processing Time</label>
+                    <input
+                      type="text"
+                      value={overviewFields.processingTime || licenseType.processing_time_display || ''}
+                      onFocus={(e) => {
+                        const numericValue = extractNumber(e.target.value)
+                        setOverviewFields({ ...overviewFields, processingTime: numericValue })
+                        e.target.select()
+                      }}
+                      onBlur={(e) => {
+                        const formatted = formatProcessingTime(e.target.value)
+                        setOverviewFields({ ...overviewFields, processingTime: formatted })
+                        if (formatted) {
+                          handleOverviewFieldChange('processingTime', formatted)
+                        }
+                      }}
+                      onChange={(e) => {
+                        setOverviewFields({ ...overviewFields, processingTime: e.target.value })
+                      }}
+                      className="bg-white w-full text-2xl font-bold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 -mx-2 -my-1 mb-2 hover:bg-white/50 transition-colors"
+                      placeholder="60 days"
+                    />
+                    <p className="text-sm text-gray-600">How long it typically takes to process this license type</p>
                   </div>
 
                   {/* Application Fee */}
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <DollarSign className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900 mb-1">Application Fee</h4>
-                      <p className="text-2xl font-bold text-gray-900 mb-1">{licenseType.cost_display}</p>
-                      <p className="text-sm text-gray-600">Cost to apply for this license</p>
-                    </div>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Application Fee</label>
+                    <input
+                      type="text"
+                      value={overviewFields.applicationFee || licenseType.cost_display || ''}
+                      onFocus={(e) => {
+                        const numericValue = extractNumber(e.target.value)
+                        setOverviewFields({ ...overviewFields, applicationFee: numericValue })
+                        e.target.select()
+                      }}
+                      onBlur={(e) => {
+                        const formatted = formatCurrency(e.target.value)
+                        setOverviewFields({ ...overviewFields, applicationFee: formatted })
+                        if (formatted) {
+                          handleOverviewFieldChange('applicationFee', formatted)
+                        }
+                      }}
+                      onChange={(e) => {
+                        setOverviewFields({ ...overviewFields, applicationFee: e.target.value })
+                      }}
+                      className="bg-white w-full text-2xl font-bold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 -mx-2 -my-1 mb-2 hover:bg-white/50 transition-colors"
+                      placeholder="$500"
+                    />
+                    <p className="text-sm text-gray-600">Cost to apply for this license</p>
+                  </div>
+
+                  {/* Service Fee */}
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Service Fee</label>
+                    <input
+                      type="text"
+                      value={overviewFields.serviceFee || licenseType.service_fee_display || getDefaultServiceFee(licenseType)}
+                      onFocus={(e) => {
+                        const numericValue = extractNumber(e.target.value)
+                        setOverviewFields({ ...overviewFields, serviceFee: numericValue })
+                        e.target.select()
+                      }}
+                      onBlur={(e) => {
+                        const formatted = formatCurrency(e.target.value)
+                        setOverviewFields({ ...overviewFields, serviceFee: formatted })
+                        if (formatted) {
+                          handleOverviewFieldChange('serviceFee', formatted)
+                        }
+                      }}
+                      onChange={(e) => {
+                        setOverviewFields({ ...overviewFields, serviceFee: e.target.value })
+                      }}
+                      className="bg-white w-full text-2xl font-bold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 -mx-2 -my-1 mb-2 hover:bg-white/50 transition-colors"
+                      placeholder="$3,500"
+                    />
+                    <p className="text-sm text-gray-600">Cost of helping the owner submit their license</p>
                   </div>
 
                   {/* Renewal Period */}
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <Calendar className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900 mb-1">Renewal Period</h4>
-                      <p className="text-2xl font-bold text-gray-900 mb-1">{licenseType.renewal_period_display}</p>
-                      <p className="text-sm text-gray-600">How often the license must be renewed</p>
-                    </div>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Renewal Period</label>
+                    <input
+                      type="text"
+                      value={overviewFields.renewalPeriod || licenseType.renewal_period_display || ''}
+                      onFocus={(e) => {
+                        const numericValue = extractNumber(e.target.value)
+                        setOverviewFields({ ...overviewFields, renewalPeriod: numericValue })
+                        e.target.select()
+                      }}
+                      onBlur={(e) => {
+                        const formatted = formatRenewalPeriod(e.target.value)
+                        setOverviewFields({ ...overviewFields, renewalPeriod: formatted })
+                        if (formatted) {
+                          handleOverviewFieldChange('renewalPeriod', formatted)
+                        }
+                      }}
+                      onChange={(e) => {
+                        setOverviewFields({ ...overviewFields, renewalPeriod: e.target.value })
+                      }}
+                      className="bg-white w-full text-2xl font-bold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 -mx-2 -my-1 mb-2 hover:bg-white/50 transition-colors"
+                      placeholder="1 year"
+                    />
+                    <p className="text-sm text-gray-600">How often the license must be renewed</p>
                   </div>
                 </div>
+
+                {/* Auto-save status message */}
+                {overviewSaveStatus === 'saved' && (
+                  <div className="flex items-center gap-2 text-sm text-green-600 mt-4">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Changes are saved automatically</span>
+                  </div>
+                )}
+                {overviewSaveStatus === 'saving' && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mt-4">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving changes...</span>
+                  </div>
+                )}
               </>
+            ) : (
+              <div className="text-center py-12 text-gray-500">
+                <p>Please select a license type to view details</p>
+              </div>
             )}
           </div>
         )}
@@ -555,7 +783,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                   setShowStepForm(!showStepForm)
                   setError(null)
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add Step
@@ -643,35 +871,40 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 {steps.map((step) => (
                   <div
                     key={step.id}
-                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-semibold text-blue-600">{step.step_order}</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
-                        {step.description && (
-                          <p className="text-sm text-gray-600">{step.description}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEditStep(step)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Edit step"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteStep(step.id)}
-                          disabled={isSubmitting}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                          title="Delete step"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                    <GripVertical className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0 cursor-move" />
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-semibold text-white">{step.step_order}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
+                      {step.description && (
+                        <p className="text-sm text-gray-600 mb-2">{step.description}</p>
+                      )}
+                      {step.estimated_days && (
+                        <div className="flex items-center gap-1 text-sm text-gray-500">
+                          <Clock className="w-4 h-4" />
+                          <span>Estimated: {step.estimated_days} days</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleEditStep(step)}
+                        className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                        title="Edit step"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteStep(step.id)}
+                        disabled={isSubmitting}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                        title="Delete step"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -779,42 +1012,38 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-semibold text-gray-900">{doc.document_name}</h4>
-                          {doc.is_required && (
-                            <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
-                              Required
-                            </span>
-                          )}
-                        </div>
-                        {doc.description && (
-                          <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
-                        )}
-                        {doc.document_type && (
-                          <p className="text-sm text-gray-500 mt-1">Type: {doc.document_type}</p>
+                    <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-semibold text-gray-900">{doc.document_name}</h4>
+                        {doc.is_required && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">
+                            Required
+                          </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <button
-                          onClick={() => handleEditDocument(doc)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Edit document"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDocument(doc.id)}
-                          disabled={isSubmitting}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                          title="Delete document"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {doc.description && (
+                        <p className="text-sm text-gray-600">{doc.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleEditDocument(doc)}
+                        className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                        title="Edit document"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        disabled={isSubmitting}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                        title="Delete document"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -854,6 +1083,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       required
                     >
                       <option value="Pre-Application">Pre-Application</option>
+                      <option value="Post-Application">Post-Application</option>
                       <option value="Application">Application</option>
                       <option value="Review">Review</option>
                       <option value="Post-Approval">Post-Approval</option>
@@ -921,49 +1151,148 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 <p className="text-sm text-gray-400 mt-2">Add expert steps to define the expert process for this license type.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {expertSteps.map((step) => (
-                  <div
-                    key={step.id}
-                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-semibold text-purple-600">{step.step_order}</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-semibold text-gray-900">{step.step_name}</h4>
-                          {step.phase && (
-                            <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
-                              {step.phase}
-                            </span>
-                          )}
-                        </div>
-                        {step.description && (
-                          <p className="text-sm text-gray-600">{step.description}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEditExpertStep(step)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Edit expert step"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteExpertStep(step.id)}
-                          disabled={isSubmitting}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                          title="Delete expert step"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+              <div className="space-y-6">
+                {/* Pre-Application Steps */}
+                {expertSteps.filter(s => s.phase === 'Pre-Application' || s.phase === 'Pre-Application Steps').length > 0 && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Pre-Application Steps:</h4>
+                    <div className="space-y-3">
+                      {expertSteps
+                        .filter(s => s.phase === 'Pre-Application' || s.phase === 'Pre-Application Steps')
+                        .map((step, index) => (
+                          <div
+                            key={step.id}
+                            className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-semibold text-white">{index + 1}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
+                              {step.description && (
+                                <p className="text-sm text-gray-600">{step.description}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => handleEditExpertStep(step)}
+                                className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                title="Edit expert step"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteExpertStep(step.id)}
+                                disabled={isSubmitting}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                title="Delete expert step"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* Post-Application Steps */}
+                {expertSteps.filter(s => s.phase === 'Post-Application' || s.phase === 'Post-Application Steps').length > 0 && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Post-Application Steps:</h4>
+                    <div className="space-y-3">
+                      {expertSteps
+                        .filter(s => s.phase === 'Post-Application' || s.phase === 'Post-Application Steps')
+                        .map((step, index) => (
+                          <div
+                            key={step.id}
+                            className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-semibold text-white">{index + 1}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
+                              {step.description && (
+                                <p className="text-sm text-gray-600">{step.description}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => handleEditExpertStep(step)}
+                                className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                title="Edit expert step"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteExpertStep(step.id)}
+                                disabled={isSubmitting}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                title="Delete expert step"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Other phases */}
+                {expertSteps.filter(s => 
+                  s.phase !== 'Pre-Application' && 
+                  s.phase !== 'Pre-Application Steps' &&
+                  s.phase !== 'Post-Application' && 
+                  s.phase !== 'Post-Application Steps'
+                ).length > 0 && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Other Steps:</h4>
+                    <div className="space-y-3">
+                      {expertSteps
+                        .filter(s => 
+                          s.phase !== 'Pre-Application' && 
+                          s.phase !== 'Pre-Application Steps' &&
+                          s.phase !== 'Post-Application' && 
+                          s.phase !== 'Post-Application Steps'
+                        )
+                        .map((step, index) => (
+                          <div
+                            key={step.id}
+                            className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-semibold text-white">{index + 1}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
+                              {step.description && (
+                                <p className="text-sm text-gray-600">{step.description}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => handleEditExpertStep(step)}
+                                className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                title="Edit expert step"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteExpertStep(step.id)}
+                                disabled={isSubmitting}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                title="Delete expert step"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
