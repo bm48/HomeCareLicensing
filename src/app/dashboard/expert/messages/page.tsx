@@ -32,6 +32,7 @@ interface Conversation {
 
 interface Message {
   id: string
+  conversation_id: string
   content: string
   sender_id: string
   created_at: string
