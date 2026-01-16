@@ -12,10 +12,10 @@ import { Loader2 } from 'lucide-react'
 const billingSchema = z.object({
   clientId: z.string().min(1, 'Client is required'),
   billingMonth: z.string().min(1, 'Billing month is required'),
-  userLicensesCount: z.coerce.number().int().min(0),
-  userLicenseRate: z.coerce.number().min(0),
-  applicationsCount: z.coerce.number().int().min(0),
-  applicationRate: z.coerce.number().min(0),
+  userLicensesCount: z.number().int().min(0),
+  userLicenseRate: z.number().min(0),
+  applicationsCount: z.number().int().min(0),
+  applicationRate: z.number().min(0),
   status: z.enum(['pending', 'paid', 'overdue']),
 })
 
@@ -188,7 +188,9 @@ export default function AddBillingModal({ isOpen, onClose, clients }: AddBilling
               User Licenses Count
             </label>
             <input
-              {...register('userLicensesCount')}
+              {...register('userLicensesCount', {
+                setValueAs: (v) => (v === '' ? 0 : Number(v))
+              })}
               type="number"
               id="userLicensesCount"
               min="0"
@@ -206,7 +208,9 @@ export default function AddBillingModal({ isOpen, onClose, clients }: AddBilling
               Rate per License ($/mo)
             </label>
             <input
-              {...register('userLicenseRate')}
+              {...register('userLicenseRate', {
+                setValueAs: (v) => (v === '' ? 0 : Number(v))
+              })}
               type="number"
               id="userLicenseRate"
               min="0"
@@ -227,7 +231,9 @@ export default function AddBillingModal({ isOpen, onClose, clients }: AddBilling
               Applications Count
             </label>
             <input
-              {...register('applicationsCount')}
+              {...register('applicationsCount', {
+                setValueAs: (v) => (v === '' ? 0 : Number(v))
+              })}
               type="number"
               id="applicationsCount"
               min="0"
@@ -245,7 +251,9 @@ export default function AddBillingModal({ isOpen, onClose, clients }: AddBilling
               Rate per Application ($)
             </label>
             <input
-              {...register('applicationRate')}
+              {...register('applicationRate', {
+                setValueAs: (v) => (v === '' ? 0 : Number(v))
+              })}
               type="number"
               id="applicationRate"
               min="0"
