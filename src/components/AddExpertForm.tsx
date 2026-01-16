@@ -18,7 +18,7 @@ const expertSchema = z.object({
   confirmPassword: z.string().min(8, 'Please confirm your password'),
   expertise: z.string().optional(),
   role: z.string().optional(),
-  status: z.enum(['active', 'inactive']).default('active'),
+  status: z.enum(['active', 'inactive']),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],

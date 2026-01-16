@@ -12,11 +12,11 @@ import { Loader2 } from 'lucide-react'
 const billingSchema = z.object({
   clientId: z.string().min(1, 'Client is required'),
   billingMonth: z.string().min(1, 'Billing month is required'),
-  userLicensesCount: z.coerce.number().int().min(0).default(0),
-  userLicenseRate: z.coerce.number().min(0).default(50.00),
-  applicationsCount: z.coerce.number().int().min(0).default(0),
-  applicationRate: z.coerce.number().min(0).default(500.00),
-  status: z.enum(['pending', 'paid', 'overdue']).default('pending'),
+  userLicensesCount: z.coerce.number().int().min(0),
+  userLicenseRate: z.coerce.number().min(0),
+  applicationsCount: z.coerce.number().int().min(0),
+  applicationRate: z.coerce.number().min(0),
+  status: z.enum(['pending', 'paid', 'overdue']),
 })
 
 type BillingFormData = z.infer<typeof billingSchema>
