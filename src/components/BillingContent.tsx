@@ -347,7 +347,7 @@ export default function BillingContent({
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Billing & Client Management</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Billing & Invoicing</h1>
           <p className="text-sm text-gray-600 mt-1">
             View all clients and their license applications for invoicing
           </p>
