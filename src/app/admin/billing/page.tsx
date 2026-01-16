@@ -73,7 +73,20 @@ export default async function BillingPage({
     .order('started_date', { ascending: false })
 
   // Group ALL cases by client (will be filtered by month on client side)
-  type Case = { id: string; client_id: string; started_date: string; [key: string]: any }
+  // Case type matches BillingContent interface
+  type Case = {
+    id: string
+    case_id: string
+    client_id: string
+    business_name: string
+    state: string
+    status: string
+    progress_percentage: number
+    started_date: string
+    last_activity: string
+    documents_count: number
+    steps_count: number
+  }
   const allCasesByClient: Record<string, Case[]> = {}
   if (allCases) {
     allCases.forEach(c => {
@@ -81,7 +94,7 @@ export default async function BillingPage({
         if (!allCasesByClient[c.client_id]) {
           allCasesByClient[c.client_id] = []
         }
-        allCasesByClient[c.client_id].push(c)
+        allCasesByClient[c.client_id].push(c as Case)
       }
     })
   }
