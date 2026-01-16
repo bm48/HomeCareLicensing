@@ -120,7 +120,7 @@ export default function BillingContent({
         setSelectedYear(year)
       }
     }
-  }, [searchParams]) // Only depend on searchParams
+  }, [searchParams, selectedMonth, selectedYear]) // Depend on searchParams and current state
 
   // Filter cases by selected month and calculate billing data
   const billingData = useMemo(() => {

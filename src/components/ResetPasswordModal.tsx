@@ -40,7 +40,7 @@ export default function ResetPasswordModal({
     <Modal isOpen={isOpen} onClose={handleClose} title="Reset Password" size="md">
       <div className="space-y-6">
         <p className="text-sm text-gray-600">
-          Send a password reset link to this user's email address.
+          Send a password reset link to this user&apos;s email address.
         </p>
 
         {/* User Information */}
@@ -57,7 +57,7 @@ export default function ResetPasswordModal({
 
         {/* Explanation */}
         <p className="text-sm text-gray-600">
-          Click "Send Reset Link" to set a new password for this user. The password will be updated and sent to the user's email address.
+          Click &quot;Send Reset Link&quot; to set a new password for this user. The password will be updated and sent to the user&apos;s email address.
         </p>
 
         {/* Action Buttons */}

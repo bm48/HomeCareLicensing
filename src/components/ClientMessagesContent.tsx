@@ -289,7 +289,7 @@ export default function ClientMessagesContent({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [selectedConversationId, userId])
+  }, [selectedConversationId, userId, supabase])
 
   const totalUnread = conversations.reduce((acc, conv) => acc + (conv.unread_count || 0), 0)
 

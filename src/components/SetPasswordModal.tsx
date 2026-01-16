@@ -81,7 +81,7 @@ export default function SetPasswordModal({
     <Modal isOpen={isOpen} onClose={handleClose} title="Set Password" size="md">
       <form onSubmit={handleSubmit} className="space-y-6">
         <p className="text-sm text-gray-600">
-          Enter a new password for {userName}. This password will be set and sent to the user's email address.
+          Enter a new password for {userName}. This password will be set and sent to the user&apos;s email address.
         </p>
 
         {/* Password Field */}
