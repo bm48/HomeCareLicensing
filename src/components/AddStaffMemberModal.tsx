@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import { createStaffUserAccount } from '@/app/actions/users'
 import Modal from './Modal'
 import { Loader2 } from 'lucide-react'
 
@@ -45,6 +46,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddS
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const {
     register,
@@ -73,11 +75,69 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddS
         return
       }
 
-      // Create the staff member
+      // Get client record for the current user (company_owner_id now references clients.id)
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('company_owner_id', user.id)
+        .single()
+
+      if (clientError || !client) {
+        setError('Client record not found. Please contact the administrator.')
+        setIsLoading(false)
+        return
+      }
+
+      // Generate password from last name: {lastName}123!
+      // Example: "john" -> "john123!"
+      const password = `${data.last_name.toLowerCase().trim()}123!`
+
+      // Create user account with password and send login link
+      const result = await createStaffUserAccount(
+        data.email,
+        password,
+        data.first_name,
+        data.last_name
+      )
+
+      console.log('createStaffUserAccount result:', result)
+
+      if (result.error || !result.data) {
+        setError(result.error || 'Failed to create user account. Please try again.')
+        setIsLoading(false)
+        return
+      }
+
+      const userAccount = result.data
+
+      // Ensure we have a userId - this is critical for staff members to access their dashboard
+      if (!userAccount || !userAccount.userId) {
+        console.error('User account data:', userAccount)
+        setError('User account was created but user ID is missing. Please contact support.')
+        setIsLoading(false)
+        return
+      }
+
+      const userIdToUse = userAccount.userId
+
+      // Validate userId is a valid UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (!uuidRegex.test(userIdToUse)) {
+        console.error('Invalid userId format:', userIdToUse)
+        setError(`Invalid user ID format: ${userIdToUse}. Please contact support.`)
+        setIsLoading(false)
+        return
+      }
+
+      console.log('Creating staff member with userId:', userIdToUse, 'for client:', client.id)
+
+      // Create the staff member using client.id as company_owner_id
+      // Link the user_id - this is required for staff members to access their dashboard
       const { data: staffMember, error: insertError } = await supabase
         .from('staff_members')
         .insert({
-          company_owner_id: user.id,
+          company_owner_id: client.id,
+          user_id: userIdToUse, // Must not be null and must be a valid UUID
           first_name: data.first_name,
           last_name: data.last_name,
           email: data.email,
@@ -92,20 +152,35 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddS
         .single()
 
       if (insertError) {
-        throw insertError
+        console.error('Error creating staff member record:', insertError)
+        setError(`Failed to create staff member record: ${insertError.message}. The user account was created successfully.`)
+        setIsLoading(false)
+        return
       }
 
-      // Reset form and close modal
-      reset()
-      onClose()
-      
-      // Refresh the page to show the new staff member
-      router.refresh()
-      
-      // Call success callback if provided
-      if (onSuccess) {
-        onSuccess()
+      if (!staffMember) {
+        setError('Staff member record was not created. Please try again or contact support.')
+        setIsLoading(false)
+        return
       }
+
+      // Show success message
+      setSuccessMessage(`Staff member created successfully! Login link sent to ${data.email}. Password: ${password}`)
+
+      // Reset form and close modal after a short delay
+      setTimeout(() => {
+        reset()
+        setSuccessMessage(null)
+        onClose()
+        
+        // Refresh the page to show the new staff member
+        router.refresh()
+        
+        // Call success callback if provided
+        if (onSuccess) {
+          onSuccess()
+        }
+      }, 2000)
     } catch (err: any) {
       setError(err.message || 'Failed to add staff member. Please try again.')
     } finally {
@@ -117,6 +192,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddS
     if (!isLoading) {
       reset()
       setError(null)
+      setSuccessMessage(null)
       onClose()
     }
   }
@@ -127,6 +203,12 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddS
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
+            {successMessage}
           </div>
         )}
 

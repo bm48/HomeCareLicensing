@@ -27,12 +27,25 @@ export default async function StaffPage() {
     .eq('user_id', session.user.id)
     .eq('is_read', false)
 
-  // Get all staff members
-  const { data: staffMembers } = await supabase
+  // Get client record for the current user
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('company_owner_id', session.user.id)
+    .single()
+
+  // Get all staff members (RLS will filter automatically based on client relationship)
+  // If client exists, we can filter by client_id for efficiency, otherwise RLS will handle it
+  const staffQuery = supabase
     .from('staff_members')
     .select('*')
-    .eq('company_owner_id', session.user.id)
     .order('created_at', { ascending: false })
+  
+  if (client?.id) {
+    staffQuery.eq('company_owner_id', client.id)
+  }
+  
+  const { data: staffMembers } = await staffQuery
 
   // Get all staff licenses
   const { data: allStaffLicenses } = await supabase
