@@ -74,6 +74,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddS
       }
 
       // Create the staff member
+      console.log("user.id: ",user.id)
       const { data: staffMember, error: insertError } = await supabase
         .from('staff_members')
         .insert({
@@ -90,6 +91,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddS
         })
         .select()
         .single()
+        console.log("staffMember: +",staffMember)
 
       if (insertError) {
         throw insertError

@@ -34,11 +34,24 @@ export default async function StaffPage() {
     .eq('company_owner_id', session.user.id)
     .order('created_at', { ascending: false })
 
-  // Get all staff licenses
-  const { data: allStaffLicenses } = await supabase
-    .from('staff_licenses')
+  // Get all staff licenses from applications table
+  const { data: allStaffLicensesData } = await supabase
+    .from('applications')
     .select('*')
     .in('staff_member_id', staffMembers?.map(s => s.id) || [])
+    .not('staff_member_id', 'is', null)
+
+  // Map applications to match the expected license structure
+  const allStaffLicenses = allStaffLicensesData?.map(app => ({
+    id: app.id,
+    staff_member_id: app.staff_member_id,
+    license_type: app.application_name,
+    license_number: app.license_number || 'N/A',
+    state: app.state,
+    status: app.status === 'approved' ? 'active' : app.status === 'rejected' ? 'expired' : 'active',
+    expiry_date: app.expiry_date,
+    days_until_expiry: app.days_until_expiry,
+  })) || []
 
   // Group licenses by staff member
   const licensesByStaff = allStaffLicenses?.reduce((acc: Record<string, typeof allStaffLicenses>, license) => {

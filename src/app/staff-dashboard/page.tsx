@@ -9,7 +9,12 @@ import {
   AlertCircle,
   FileText,
   Plus,
-  Calendar
+  Calendar,
+  User,
+  Bell,
+  FolderOpen,
+  ArrowRight,
+  ChevronRight
 } from 'lucide-react'
 
 export default async function StaffDashboardPage() {
@@ -50,12 +55,50 @@ export default async function StaffDashboardPage() {
     redirect('/login?error=Staff member record not found. Please contact your administrator.')
   }
 
-  // Get staff licenses
-  const { data: staffLicenses } = await supabase
-    .from('staff_licenses')
+  // Get staff licenses from applications table
+  const { data: applicationsData, error: applicationError } = await supabase
+    .from('applications')
     .select('*')
-    .eq('staff_member_id', staffMember.id)
+    .not('staff_member_id', 'is', null)
     .order('expiry_date', { ascending: true })
+    
+    console.log("applicationsData: ",applicationsData)
+
+  // Get application document counts
+  const applicationIds = applicationsData?.map(app => app.id) || []
+  const { data: applicationDocuments } = applicationIds.length > 0
+    ? await supabase
+        .from('application_documents')
+        .select('application_id')
+        .in('application_id', applicationIds)
+    : { data: [] }
+
+  const documentCounts = applicationDocuments?.reduce((acc: Record<string, number>, doc) => {
+    acc[doc.application_id] = (acc[doc.application_id] || 0) + 1
+    return acc
+  }, {}) || {}
+
+  // Map applications to match the expected license structure
+  const staffLicenses = applicationsData?.map(app => ({
+    id: app.id,
+    license_type: app.application_name,
+    license_number: app.license_number || 'N/A',
+    state: app.state,
+    status: app.status === 'approved' ? 'active' : app.status === 'rejected' ? 'expired' : 'active',
+    issue_date: app.issue_date,
+    expiry_date: app.expiry_date,
+    days_until_expiry: app.days_until_expiry,
+    issuing_authority: app.issuing_authority,
+    activated_date: app.issue_date, // Use issue_date as activated_date
+    renewal_due_date: app.expiry_date ? (() => {
+      // Calculate renewal due date (typically 90 days before expiry)
+      const expiry = new Date(app.expiry_date)
+      const renewal = new Date(expiry)
+      renewal.setDate(renewal.getDate() - 90)
+      return renewal.toISOString().split('T')[0]
+    })() : null,
+    documents_count: documentCounts[app.id] || 0,
+  })) || []
 
   // Get unread notifications
   const { data: notifications } = await supabase
@@ -103,11 +146,24 @@ export default async function StaffDashboardPage() {
     return false
   }) || []
 
-  // Format date helper
+  // Format date helper (for display in cards)
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'N/A'
     const d = typeof date === 'string' ? new Date(date) : date
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  // Format date for table (MM/DD/YYYY)
+  const formatTableDate = (date: string | Date | null) => {
+    if (!date) return 'N/A'
+    const d = typeof date === 'string' ? new Date(date) : date
+    return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+  }
+
+  // Get state abbreviation (first 2 letters, uppercase)
+  const getStateAbbr = (state: string | null | undefined) => {
+    if (!state) return 'N/A'
+    return state.substring(0, 2).toUpperCase()
   }
 
   // Calculate days until expiry
@@ -136,35 +192,35 @@ export default async function StaffDashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
           {/* Active Licenses */}
           <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-green-100 rounded-full flex items-center justify-center mb-3">
+                <CheckCircle2 className="w-6 h-6 md:w-7 md:h-7 text-green-600" />
               </div>
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1">{activeLicenses}</div>
+              <div className="text-sm md:text-base text-gray-600">Active Licenses</div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{activeLicenses}</div>
-            <div className="text-sm text-gray-600">Active Licenses</div>
           </div>
 
           {/* Expiring Soon */}
           <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                <Clock className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-yellow-100 rounded-full flex items-center justify-center mb-3">
+                <Clock className="w-6 h-6 md:w-7 md:h-7 text-yellow-600" />
               </div>
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1">{expiringSoon}</div>
+              <div className="text-sm md:text-base text-gray-600">Expiring Soon</div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{expiringSoon}</div>
-            <div className="text-sm text-gray-600">Expiring Soon</div>
           </div>
 
           {/* Expired Licenses */}
           <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertCircle className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-red-100 rounded-full flex items-center justify-center mb-3">
+                <AlertCircle className="w-6 h-6 md:w-7 md:h-7 text-red-600" />
               </div>
+              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-1">{expiredLicenses}</div>
+              <div className="text-sm md:text-base text-gray-600">Expired Licenses</div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{expiredLicenses}</div>
-            <div className="text-sm text-gray-600">Expired Licenses</div>
           </div>
         </div>
 
@@ -172,37 +228,28 @@ export default async function StaffDashboardPage() {
         {licensesExpiringSoon.length > 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 md:p-6">
             <div className="flex items-start gap-3 mb-4">
-              <AlertCircle className="w-5 h-5 md:w-6 md:h-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <AlertCircle className="w-4 h-4 text-white" />
+              </div>
               <div className="flex-1">
-                <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-1">
-                  Action Required: Licenses Expiring Soon
+                <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-2">
+                  Action Required: License Expiring Soon
                 </h2>
-                <p className="text-sm md:text-base text-gray-700">
+                <p className="text-sm md:text-base text-gray-700 mb-3">
                   You have {licensesExpiringSoon.length} license(s) expiring within 90 days. Please renew them to maintain your active status.
                 </p>
+                {licensesExpiringSoon[0] && (
+                  <p className="text-sm text-gray-600">
+                    {licensesExpiringSoon[0].license_type} / Expires in {licensesExpiringSoon[0].days_until_expiry || getDaysUntilExpiry(licensesExpiringSoon[0].expiry_date)} days
+                  </p>
+                )}
               </div>
-            </div>
-
-            <div className="space-y-3 mt-4">
-              {licensesExpiringSoon.map((license) => {
-                const daysUntilExpiry = license.days_until_expiry || getDaysUntilExpiry(license.expiry_date)
-                return (
-                  <div 
-                    key={license.id} 
-                    className="bg-white rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-                  >
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 mb-1">{license.license_type}</h3>
-                      <p className="text-sm text-gray-600">
-                        Expires in {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <button className="px-4 py-2 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors text-sm md:text-base whitespace-nowrap">
-                      Renew
-                    </button>
-                  </div>
-                )
-              })}
+              <Link
+                href="/staff-dashboard/my-licenses"
+                className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors text-sm md:text-base whitespace-nowrap"
+              >
+                Renew
+              </Link>
             </div>
           </div>
         )}
@@ -220,80 +267,154 @@ export default async function StaffDashboardPage() {
             </Link>
           </div>
 
-          <div className="space-y-4">
-            {staffLicenses && staffLicenses.length > 0 ? (
-              staffLicenses.map((license) => {
-                const daysUntilExpiry = license.days_until_expiry !== null && license.days_until_expiry !== undefined
-                  ? license.days_until_expiry
-                  : getDaysUntilExpiry(license.expiry_date)
-                
-                let status = license.status
-                if (status === 'active' && daysUntilExpiry <= 0) {
-                  status = 'expired'
-                } else if (status === 'active' && daysUntilExpiry <= 90 && daysUntilExpiry > 0) {
-                  status = 'expiring'
-                }
+          {staffLicenses && staffLicenses.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px]">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">STATE</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">LICENSE NAME</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">STATUS</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTIVATED DATE</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">EXPIRY DATE</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">RENEWAL DUE DATE</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">DOCUMENTS</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {staffLicenses.map((license) => {
+                    const daysUntilExpiry = license.days_until_expiry !== null && license.days_until_expiry !== undefined
+                      ? license.days_until_expiry
+                      : getDaysUntilExpiry(license.expiry_date)
+                    
+                    let status = license.status
+                    if (status === 'active' && daysUntilExpiry <= 0) {
+                      status = 'expired'
+                    } else if (status === 'active' && daysUntilExpiry <= 90 && daysUntilExpiry > 0) {
+                      status = 'expiring'
+                    }
 
-                const statusBadgeClass = status === 'active' 
-                  ? 'bg-green-100 text-green-700'
-                  : status === 'expiring'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-red-100 text-red-700'
+                    return (
+                      <tr key={license.id} className="hover:bg-gray-50 transition-colors">
+                        {/* STATE */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center justify-center w-10 h-10 bg-blue-600 text-white text-xs font-semibold rounded">
+                            {getStateAbbr(license.state)}
+                          </span>
+                        </td>
 
-                return (
-                  <div 
-                    key={license.id} 
-                    className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 mb-1 text-base md:text-lg">
-                        {license.license_type}
-                      </h3>
-                      <div className="text-sm text-gray-600 mb-2">
-                        License #: {license.license_number}
-                        {license.state && ` • ${license.state}`}
-                      </div>
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-2">
-                        {license.issue_date && (
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            <span>Issued: {formatDate(license.issue_date)}</span>
+                        {/* LICENSE NAME */}
+                        <td className="px-4 py-4">
+                          <div className="text-sm font-medium text-gray-900">{license.license_type}</div>
+                        </td>
+
+                        {/* STATUS */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-black text-white">
+                            {status === 'active' ? 'Active' : status === 'expiring' ? 'Expiring Soon' : 'Expired'}
+                          </span>
+                        </td>
+
+                        {/* ACTIVATED DATE */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Calendar className="w-4 h-4 text-gray-400" />
+                            <span>{formatTableDate(license.activated_date)}</span>
                           </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          <span>Expires: {formatDate(license.expiry_date)}</span>
-                        </div>
-                        {license.issuing_authority && (
-                          <div>
-                            Issuing Authority: {license.issuing_authority}
+                        </td>
+
+                        {/* EXPIRY DATE */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Calendar className="w-4 h-4 text-gray-400" />
+                            <span>{formatTableDate(license.expiry_date)}</span>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${statusBadgeClass}`}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </span>
-                  </div>
-                )
-              })
-            ) : (
-              <div className="text-center py-12">
-                <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No licenses yet</h3>
-                <p className="text-gray-600 mb-4">Get started by adding your first license or certification</p>
+                        </td>
+
+                        {/* RENEWAL DUE DATE */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Calendar className="w-4 h-4 text-gray-400" />
+                            <span>{formatTableDate(license.renewal_due_date)}</span>
+                          </div>
+                        </td>
+
+                        {/* DOCUMENTS */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <FileText className="w-4 h-4 text-gray-400" />
+                            <span>{license.documents_count}</span>
+                          </div>
+                        </td>
+
+                        {/* ACTIONS */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <Link
+                            href={`/staff-dashboard/my-licenses/${license.id}`}
+                            className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                          >
+                            View Details
+                            <ChevronRight className="w-4 h-4" />
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No licenses yet</h3>
+              <p className="text-gray-600 mb-4">Get started by adding your first license or certification</p>
+              <Link
+                href="/staff-dashboard/my-licenses?action=add"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add License
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          {/* Renewal Reminders Card */}
+          <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Bell className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900 mb-1 text-base md:text-lg">Renewal Reminders</h3>
+                <p className="text-sm text-gray-600 mb-4">Get notified before your license expire</p>
+                <button className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                  Configure Alerts
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* License Documents Card */}
+          <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <FolderOpen className="w-6 h-6 text-purple-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900 mb-1 text-base md:text-lg">License Documents</h3>
+                <p className="text-sm text-gray-600 mb-4">Upload and manage your license documents</p>
                 <Link
-                  href="/staff-dashboard/my-licenses?action=add"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors"
+                  href="/staff-dashboard/my-licenses"
+                  className="inline-block px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
                 >
-                  <Plus className="w-4 h-4" />
-                  Add License
+                  View Documents
                 </Link>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

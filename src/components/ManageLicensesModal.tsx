@@ -75,26 +75,33 @@ export default function ManageLicensesModal({
         daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
       }
 
-      // Determine status
-      let status = 'active'
-      if (daysUntilExpiry !== null) {
-        if (daysUntilExpiry < 0) {
-          status = 'expired'
-        } else if (daysUntilExpiry <= 30) {
-          status = 'active' // Still active but expiring soon
-        }
+      // Determine status for applications table
+      // Map to applications status: 'approved' for active licenses
+      let status = 'approved'
+      if (daysUntilExpiry !== null && daysUntilExpiry < 0) {
+        status = 'rejected' // Use rejected to represent expired
       }
 
+      const today = new Date()
+      const todayStr = today.toISOString().split('T')[0]
+
       const { error: insertError } = await supabase
-        .from('staff_licenses')
+        .from('applications')
         .insert({
           staff_member_id: staffId,
-          license_type: data.license_type,
+          company_owner_id: null, // Staff licenses don't have company_owner_id
+          application_name: data.license_type,
           license_number: data.license_number,
-          state: data.state || null,
+          state: data.state || '',
+          status: status,
+          progress_percentage: 100, // Licenses are considered complete
+          started_date: data.expiry_date ? new Date(data.expiry_date).toISOString().split('T')[0] : todayStr,
+          last_updated_date: todayStr,
+          submitted_date: todayStr,
+          issue_date: data.expiry_date ? new Date(data.expiry_date).toISOString().split('T')[0] : null,
           expiry_date: data.expiry_date || null,
-          status,
           days_until_expiry: daysUntilExpiry,
+          issuing_authority: null, // Can be added later if needed
         })
 
       if (insertError) {
@@ -127,7 +134,7 @@ export default function ManageLicensesModal({
       const supabase = createClient()
 
       const { error: deleteError } = await supabase
-        .from('staff_licenses')
+        .from('applications')
         .delete()
         .eq('id', licenseId)
 

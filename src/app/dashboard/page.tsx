@@ -53,11 +53,25 @@ export default async function DashboardPage() {
     .eq('company_owner_id', session.user.id)
     .eq('status', 'active')
 
-  const { data: staffLicenses } = await supabase
-    .from('staff_licenses')
+  // Get staff licenses from applications table
+  const { data: staffLicensesData } = await supabase
+    .from('applications')
     .select('*')
     .in('staff_member_id', staff?.map(s => s.id) || [])
-    .eq('status', 'active')
+    .not('staff_member_id', 'is', null)
+    .eq('status', 'approved')
+
+  // Map applications to match the expected license structure
+  const staffLicenses = staffLicensesData?.map(app => ({
+    id: app.id,
+    staff_member_id: app.staff_member_id,
+    license_type: app.application_name,
+    license_number: app.license_number || 'N/A',
+    state: app.state,
+    status: 'active',
+    expiry_date: app.expiry_date,
+    days_until_expiry: app.days_until_expiry,
+  })) || []
 
   const { data: notifications } = await supabase
     .from('notifications')

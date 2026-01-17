@@ -107,14 +107,16 @@ function LoginPageContent() {
         return
       }
 
+      console.log('ok')
       if (authData.session) {
+        console.log('authData', authData)
         // Get user profile to check role
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('role')
           .eq('id', authData.user.id)
           .single()
-        
+        console.log('profile', profile)
         // Redirect based on role
         if (profile?.role === 'admin') {
           router.push('/admin')
@@ -132,6 +134,8 @@ function LoginPageContent() {
   }
 
   const handleQuickAccess = async (email: string, password: string) => {
+    console.log('email', email)
+    console.log('password', password)
     setValue('email', email)
     setValue('password', password)
     
