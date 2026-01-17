@@ -47,11 +47,24 @@ export default async function DashboardPage() {
     .select('*')
     .eq('company_owner_id', session.user.id)
 
-  const { data: staff } = await supabase
+  // Get client record for the current user
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('company_owner_id', session.user.id)
+    .single()
+
+  // Get staff members (RLS will filter automatically based on client relationship)
+  const staffQuery = supabase
     .from('staff_members')
     .select('*')
-    .eq('company_owner_id', session.user.id)
     .eq('status', 'active')
+  
+  if (client?.id) {
+    staffQuery.eq('company_owner_id', client.id)
+  }
+  
+  const { data: staff } = await staffQuery
 
   // Get staff licenses from applications table
   const { data: staffLicensesData } = await supabase

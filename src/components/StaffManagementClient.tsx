@@ -70,6 +70,9 @@ export default function StaffManagementClient({
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isManageLicensesOpen, setIsManageLicensesOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedRole, setSelectedRole] = useState('all')
+  const [selectedStatus, setSelectedStatus] = useState('all')
 
   // Helper functions
   const formatDate = (date: string | Date | null) => {
@@ -107,6 +110,35 @@ export default function StaffManagementClient({
         return 'bg-gray-100 text-gray-700'
     }
   }
+
+  // Filter staff members based on search query and filters
+  const filteredStaffMembers = staffWithExpiringLicenses.filter((staff) => {
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      const matchesSearch = 
+        staff.first_name.toLowerCase().includes(query) ||
+        staff.last_name.toLowerCase().includes(query) ||
+        staff.email.toLowerCase().includes(query) ||
+        staff.role.toLowerCase().includes(query) ||
+        (staff.job_title && staff.job_title.toLowerCase().includes(query)) ||
+        (staff.employee_id && staff.employee_id.toLowerCase().includes(query))
+      
+      if (!matchesSearch) return false
+    }
+
+    // Role filter
+    if (selectedRole !== 'all' && staff.role !== selectedRole) {
+      return false
+    }
+
+    // Status filter
+    if (selectedStatus !== 'all' && staff.status !== selectedStatus) {
+      return false
+    }
+
+    return true
+  })
 
   const handleViewDetails = (staff: StaffMember) => {
     setSelectedStaff(staff)
@@ -216,27 +248,38 @@ export default function StaffManagementClient({
             <input
               type="text"
               placeholder="Search staff by name, email, or role..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              suppressHydrationWarning
             />
           </div>
           <div className="flex gap-2">
-            <select className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white">
-              <option>All Roles</option>
-              <option>Registered Nurse</option>
-              <option>Licensed Practical Nurse</option>
-              <option>Certified Nursing Assistant</option>
+            <select 
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+            >
+              <option value="all">All Roles</option>
+              <option value="Registered Nurse">Registered Nurse</option>
+              <option value="Licensed Practical Nurse">Licensed Practical Nurse</option>
+              <option value="Certified Nursing Assistant">Certified Nursing Assistant</option>
             </select>
-            <select className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white">
-              <option>All Status</option>
-              <option>Active</option>
-              <option>Inactive</option>
-              <option>Pending</option>
+            <select 
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="pending">Pending</option>
             </select>
           </div>
         </div>
 
         {/* Staff List Table */}
-        {staffMembers.length > 0 ? (
+        {filteredStaffMembers.length > 0 ? (
           <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -253,7 +296,7 @@ export default function StaffManagementClient({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {staffWithExpiringLicenses.map((staff) => {
+                  {filteredStaffMembers.map((staff) => {
                     const licenses = licensesByStaff[staff.id] || []
                     const activeLicenses = licenses.filter(l => l.status === 'active')
                     const expiringCount = licenses.filter(l => {
@@ -354,7 +397,7 @@ export default function StaffManagementClient({
         ) : null}
 
         {/* Empty State */}
-        {staffMembers.length === 0 && (
+        {staffMembers.length === 0 ? (
           <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
             <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No staff members yet</h3>
@@ -367,7 +410,23 @@ export default function StaffManagementClient({
               Add Staff Member
             </button>
           </div>
-        )}
+        ) : filteredStaffMembers.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
+            <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No staff members found</h3>
+            <p className="text-gray-600 mb-6">Try adjusting your search or filter criteria</p>
+            <button
+              onClick={() => {
+                setSearchQuery('')
+                setSelectedRole('all')
+                setSelectedStatus('all')
+              }}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-all"
+            >
+              Clear Filters
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {/* Modals */}

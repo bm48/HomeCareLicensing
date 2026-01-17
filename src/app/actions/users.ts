@@ -78,3 +78,157 @@ export async function setUserPassword(userId: string, newPassword: string) {
     return { error: err.message || 'Failed to set password', data: null }
   }
 }
+
+export async function createStaffUserAccount(
+  email: string,
+  password: string,
+  firstName: string,
+  lastName: string
+) {
+  const supabase = await createClient()
+
+  try {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const normalizedEmail = email.toLowerCase().trim()
+
+    // First, try to create user with password (this will fail if user exists)
+    const { data: newUser, error: signUpError } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password: password,
+      options: {
+        emailRedirectTo: `${siteUrl}/auth/callback?type=signup`,
+        data: {
+          full_name: `${firstName} ${lastName}`,
+          role: 'staff_member',
+        },
+      },
+    })
+
+    let userId: string | null = null
+
+    if (signUpError) {
+      // Check if user already exists
+      if (signUpError.message.includes('already registered') || 
+          signUpError.message.includes('already exists') ||
+          signUpError.message.includes('User already registered')) {
+        // Get existing user ID from user_profiles
+        const { data: existingProfile } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('email', normalizedEmail)
+          .single()
+
+        userId = existingProfile?.id || null
+
+        // User exists, send magic link for login
+        const { error: magicLinkError } = await supabase.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: {
+            emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink`,
+          },
+        })
+
+        if (magicLinkError) {
+          return { 
+            error: `User already exists. Failed to send login link: ${magicLinkError.message}`, 
+            data: null 
+          }
+        }
+
+        return {
+          error: null,
+          data: {
+            success: true,
+            userId: userId,
+            message: `User already exists. Login link sent to ${email}.`,
+          },
+        }
+      }
+      
+      // Provide more helpful error messages
+      let errorMessage = signUpError.message
+      if (signUpError.message.includes('Database error') || signUpError.message.includes('database')) {
+        errorMessage = 'Database error creating user account. Please ensure the database migration 033_fix_handle_new_user_for_staff_members.sql has been applied.'
+      }
+      
+      return { error: `Failed to create user: ${errorMessage}`, data: null }
+    }
+
+    if (!newUser?.user) {
+      return { error: 'Failed to create user account - no user returned', data: null }
+    }
+
+    userId = newUser.user.id
+
+    // Ensure we have a valid userId
+    if (!userId) {
+      return { error: 'Failed to create user account - user ID is missing', data: null }
+    }
+
+    // Wait a moment for the trigger to create the user_profiles record
+    // The handle_new_user trigger creates the user_profiles record
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    // Verify user profile was created and get the userId from there as a double-check
+    let verifiedUserId = userId
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, role')
+      .eq('id', userId)
+      .single()
+
+    if (profileError || !profile) {
+      console.warn('User profile not found after creation:', profileError)
+      // Try to find by email as fallback
+      const { data: profileByEmail } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .single()
+      
+      if (profileByEmail?.id) {
+        verifiedUserId = profileByEmail.id
+        console.log('Found user profile by email, using ID:', verifiedUserId)
+      } else {
+        console.error('Could not find user profile after user creation')
+        // Still continue with the userId from auth
+      }
+    } else {
+      verifiedUserId = profile.id
+    }
+
+    // Use verified userId
+    userId = verifiedUserId
+
+    // Send magic link for immediate login (this will work even if email confirmation is required)
+    // The magic link will authenticate the user directly
+    const { error: magicLinkError } = await supabase.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink`,
+      },
+    })
+
+    // If magic link fails, user can still use the confirmation email or login with password
+    if (magicLinkError) {
+      console.warn('Failed to send magic link:', magicLinkError.message)
+      // Still return success since user was created and can use confirmation email or password
+    }
+
+    // Ensure userId is not null before returning
+    if (!userId) {
+      return { error: 'Failed to get user ID after account creation', data: null }
+    }
+
+    return {
+      error: null,
+      data: {
+        success: true,
+        userId: userId, // This must be a valid UUID string
+        message: `User account created. Login link sent to ${email}. Password: ${password}`,
+      },
+    }
+  } catch (err: any) {
+    return { error: err.message || 'Failed to create user account', data: null }
+  }
+}
