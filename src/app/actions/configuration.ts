@@ -13,52 +13,49 @@ export async function updatePricing(data: UpdatePricingData) {
   const supabase = await createClient()
 
   try {
-    // Check if pricing record exists
-    const { data: existingPricing } = await supabase
+    // Get current pricing to check if values have changed
+    const { data: currentPricing } = await supabase
       .from('pricing')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('effective_date', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (existingPricing) {
-      // Update existing pricing
-      const { data: pricing, error } = await supabase
-        .from('pricing')
-        .update({
-          owner_admin_license: data.ownerAdminLicense,
-          staff_license: data.staffLicense,
-        })
-        .eq('id', existingPricing.id)
-        .select()
-        .single()
-
-      if (error) {
-        return { error: error.message, data: null }
+    // Check if pricing values have actually changed
+    if (currentPricing) {
+      const ownerChanged = currentPricing.owner_admin_license !== data.ownerAdminLicense
+      const staffChanged = currentPricing.staff_license !== data.staffLicense
+      
+      if (!ownerChanged && !staffChanged) {
+        // No changes, return current pricing
+        return { error: null, data: currentPricing }
       }
-
-      revalidatePath('/admin/configuration')
-      revalidatePath('/admin/billing')
-      return { error: null, data: pricing }
-    } else {
-      // Create new pricing record
-      const { data: pricing, error } = await supabase
-        .from('pricing')
-        .insert({
-          owner_admin_license: data.ownerAdminLicense,
-          staff_license: data.staffLicense,
-        })
-        .select()
-        .single()
-
-      if (error) {
-        return { error: error.message, data: null }
-      }
-
-      revalidatePath('/admin/configuration')
-      revalidatePath('/admin/billing')
-      return { error: null, data: pricing }
     }
+
+    // Get the first day of the current month for the effective date
+    const now = new Date()
+    const effectiveDate = new Date(now.getFullYear(), now.getMonth(), 1)
+    const effectiveDateStr = effectiveDate.toISOString().split('T')[0]
+
+    // Always create a new pricing record to maintain history
+    // This preserves billing history for previous months
+    const { data: pricing, error } = await supabase
+      .from('pricing')
+      .insert({
+        owner_admin_license: data.ownerAdminLicense,
+        staff_license: data.staffLicense,
+        effective_date: effectiveDateStr,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    revalidatePath('/admin/configuration')
+    revalidatePath('/admin/billing')
+    return { error: null, data: pricing }
   } catch (err: any) {
     return { error: err.message || 'Failed to update pricing', data: null }
   }

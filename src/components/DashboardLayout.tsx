@@ -15,7 +15,8 @@ import {
   ChevronLeft,
   Menu,
   X,
-  MessageSquare
+  MessageSquare,
+  BarChart3
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
@@ -66,6 +67,7 @@ export default function DashboardLayout({
     { href: '/dashboard', label: 'Home', icon: Home },
     { href: '/dashboard/licenses', label: 'Licenses', icon: Medal },
     { href: '/dashboard/staff', label: 'Staff', icon: Users },
+    { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
     { href: '/dashboard/messages', label: 'Messages', icon: MessageSquare },
     { href: '/dashboard/profile', label: 'My Profile', icon: User },
   ]
@@ -178,7 +180,7 @@ export default function DashboardLayout({
 
               <nav className="space-y-1">
                 {menuItems.map((item) => {
-                  const isActive = pathname === item.href
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                   const Icon = item.icon
                   return (
                     <Link

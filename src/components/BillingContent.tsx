@@ -15,7 +15,8 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
-  Eye
+  Eye,
+  Loader2
 } from 'lucide-react'
 
 interface Client {
@@ -95,34 +96,75 @@ export default function BillingContent({
   // Use local state for month/year so changes don't trigger server reload
   const [selectedMonth, setSelectedMonth] = useState(initialMonth)
   const [selectedYear, setSelectedYear] = useState(initialYear)
+  
+  const [isNavigatingPrevious, setIsNavigatingPrevious] = useState(false)
+  const [isNavigatingNext, setIsNavigatingNext] = useState(false)
+
   // Track the last URL we set to avoid syncing back our own changes
   const lastSetUrlRef = useRef<string | null>(null)
 
-  // Sync with URL params only when URL changes externally (browser back/forward)
-  // Skip if the URL change is from our own navigation
+  // Sync local state with props when they change (happens after server re-render)
+  // This ensures we update when the page re-renders with new data after navigation
+  useEffect(() => {
+    // Only sync if props actually differ from current state
+    if (initialMonth !== selectedMonth || initialYear !== selectedYear) {
+      setSelectedMonth(initialMonth)
+      setSelectedYear(initialYear)
+      // Reset loading states when props change (navigation completed)
+      setIsNavigatingPrevious(false)
+      setIsNavigatingNext(false)
+      // Clear the ref if props match the URL we set
+      const urlMonth = searchParams.get('month')
+      const urlYear = searchParams.get('year')
+      if (urlMonth && urlYear) {
+        const expectedUrl = `${parseInt(urlMonth)}-${parseInt(urlYear)}`
+        if (expectedUrl === lastSetUrlRef.current) {
+          lastSetUrlRef.current = null
+        }
+      }
+    }
+  }, [initialMonth, initialYear]) // Only depend on props, not state
+
+  // Sync with URL params and reset loading state when navigation completes
+  // Using a ref to track if we're currently navigating to prevent loops
+  const isNavigatingRef = useRef(false)
+  
   useEffect(() => {
     const urlMonth = searchParams.get('month')
     const urlYear = searchParams.get('year')
-    const currentUrl = urlMonth && urlYear ? `${urlMonth}-${urlYear}` : null
     
-    // Skip if this is the URL we just set
+    if (!urlMonth || !urlYear) return
+    
+    const month = parseInt(urlMonth)
+    const year = parseInt(urlYear)
+    const currentUrl = `${month}-${year}`
+    
+    // If URL matches what we set, navigation is complete - reset loading state
     if (currentUrl === lastSetUrlRef.current) {
+      setIsNavigatingPrevious(false)
+      setIsNavigatingNext(false)
+      lastSetUrlRef.current = null
+      isNavigatingRef.current = false
+      // Only update state if it actually differs (using functional update to avoid stale closure)
+      setSelectedMonth(prev => prev !== month ? month : prev)
+      setSelectedYear(prev => prev !== year ? year : prev)
       return
     }
     
-    if (urlMonth && urlYear) {
-      const month = parseInt(urlMonth)
-      const year = parseInt(urlYear)
-      
-      // Only sync if URL differs from current state
-      if (month !== selectedMonth || year !== selectedYear) {
-        setSelectedMonth(month)
-        setSelectedYear(year)
-      }
+    // Handle external URL changes (browser back/forward) - only if not from our navigation
+    if (currentUrl !== lastSetUrlRef.current && !isNavigatingRef.current) {
+      setSelectedMonth(month)
+      setSelectedYear(year)
+      // Reset loading state for external navigation
+      setIsNavigatingPrevious(false)
+      setIsNavigatingNext(false)
+      lastSetUrlRef.current = null
     }
-  }, [searchParams, selectedMonth, selectedYear]) // Depend on searchParams and current state
+  }, [searchParams]) // Only depend on searchParams to avoid loops
 
   // Filter cases by selected month and calculate billing data
+  // Note: License fees are recalculated here using the rates passed as props
+  // which are for the selected month (fetched server-side)
   const billingData = useMemo(() => {
     const monthStart = new Date(selectedYear, selectedMonth - 1, 1)
     const monthEnd = new Date(selectedYear, selectedMonth, 0) // Last day of the month
@@ -135,6 +177,12 @@ export default function BillingContent({
         const caseDate = c.started_date.split('T')[0]
         return caseDate >= monthStartStr && caseDate <= monthEndStr
       })
+
+      // Recalculate license fees using the rates for the selected month
+      // (ownerLicenseRate and staffLicenseRate are passed as props and are for the selected month)
+      const ownerLicenseFee = baseItem.ownerCount * ownerLicenseRate
+      const staffLicenseFee = baseItem.staffCount * staffLicenseRate
+      const totalLicenseFee = ownerLicenseFee + staffLicenseFee
 
       // Calculate application fees for filtered cases
       let totalApplicationFee = 0
@@ -166,10 +214,13 @@ export default function BillingContent({
         }
       })
 
-      const monthlyTotal = baseItem.totalLicenseFee + totalApplicationFee
+      const monthlyTotal = totalLicenseFee + totalApplicationFee
 
       return {
         ...baseItem,
+        ownerLicenseFee,
+        staffLicenseFee,
+        totalLicenseFee,
         applicationsCount: filteredCases.length,
         totalApplicationFee,
         govFee,
@@ -178,7 +229,7 @@ export default function BillingContent({
         cases: filteredCases
       }
     })
-  }, [baseBillingData, selectedMonth, selectedYear, licenseTypes])
+  }, [baseBillingData, selectedMonth, selectedYear, licenseTypes, ownerLicenseRate, staffLicenseRate])
 
   // Calculate summary statistics based on filtered data
   const summary = useMemo(() => {
@@ -234,6 +285,8 @@ export default function BillingContent({
   }
 
   const navigateMonth = (direction: 'prev' | 'next') => {
+    if (isNavigatingPrevious || isNavigatingNext) return // Prevent multiple clicks during navigation
+
     let newMonth = selectedMonth
     let newYear = selectedYear
 
@@ -253,19 +306,23 @@ export default function BillingContent({
       }
     }
 
-    // Update local state first (triggers client-side filtering via useMemo - instant update!)
-    setSelectedMonth(newMonth)
-    setSelectedYear(newYear)
-
-    // Track the URL we're about to set
+    // Set loading state and navigation ref
+    if (direction === 'prev') {
+      setIsNavigatingPrevious(true)
+    } else {
+      setIsNavigatingNext(true)
+    }
+    isNavigatingRef.current = true
     const newUrl = `${newMonth}-${newYear}`
     lastSetUrlRef.current = newUrl
 
-    // Update URL for bookmarking/sharing (without triggering server reload)
+    // Update URL to trigger server reload with correct pricing for the new month
     const params = new URLSearchParams(searchParams.toString())
     params.set('month', newMonth.toString())
     params.set('year', newYear.toString())
-    router.replace(`/admin/billing?${params.toString()}`, { scroll: false })
+    router.push(`/admin/billing?${params.toString()}`)
+    // Note: Server component will automatically re-render when searchParams change
+    // The useEffect hooks will reset loading state when navigation completes
   }
 
   const handleExportCSV = () => {
@@ -366,9 +423,14 @@ export default function BillingContent({
         <div className="flex items-center justify-center gap-4">
           <button
             onClick={() => navigateMonth('prev')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            disabled={isNavigatingPrevious}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[40px]"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+            {isNavigatingPrevious ? (
+              <Loader2 className="w-5 h-5 text-gray-600 animate-spin" />
+            ) : (
+              <ChevronLeft className="w-5 h-5 text-gray-600" />
+            )}
           </button>
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-gray-400" />
@@ -378,9 +440,14 @@ export default function BillingContent({
           </div>
           <button
             onClick={() => navigateMonth('next')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            disabled={isNavigatingNext}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[40px]"
           >
-            <ChevronRight className="w-5 h-5 text-gray-600" />
+            {isNavigatingNext ? (
+              <Loader2 className="w-5 h-5 text-gray-600 animate-spin" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-gray-600" />
+            )}
           </button>
         </div>
       </div>

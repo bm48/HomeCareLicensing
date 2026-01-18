@@ -14,13 +14,10 @@ export default async function ConfigurationPage() {
     .eq('user_id', user.id)
     .eq('is_read', false)
 
-  // Get current pricing
-  const { data: pricingData } = await supabase
-    .from('pricing')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // Get current pricing (most recent effective pricing)
+  const { getCurrentPricing } = await import('@/app/actions/pricing')
+  const pricingResult = await getCurrentPricing()
+  const pricingData = pricingResult.data
   // Get all license types
   const { data: licenseTypes } = await supabase
     .from('license_types')
@@ -29,7 +26,16 @@ export default async function ConfigurationPage() {
     .order('state', { ascending: true })
     .order('name', { ascending: true })
 
-  console.log("licenseTypes", licenseTypes)
+  // Get system lists data
+  const { getCertificationTypes, getStaffRoles } = await import('@/app/actions/system-lists')
+  
+  const certTypesResult = await getCertificationTypes()
+  const certificationTypes = certTypesResult.data || []
+  
+  
+  const rolesResult = await getStaffRoles()
+  const staffRoles = rolesResult.data || []
+
   return (
     <AdminLayout 
       user={user} 
@@ -39,6 +45,8 @@ export default async function ConfigurationPage() {
       <ConfigurationContent
         initialPricing={pricingData || { owner_admin_license: 50, staff_license: 25 }}
         licenseTypes={licenseTypes || []}
+        certificationTypes={certificationTypes}
+        staffRoles={staffRoles}
       />
     </AdminLayout>
   )

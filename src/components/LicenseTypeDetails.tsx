@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2, GripVertical, Users2 } from 'lucide-react'
+import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2, GripVertical, Users2, Copy } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { 
   createStep, 
@@ -16,6 +16,8 @@ import {
   deleteExpertStep
 } from '@/app/actions/license-requirements'
 import { updateLicenseType } from '@/app/actions/configuration'
+import ExpertProcessComingSoonModal from '@/components/ExpertProcessComingSoonModal'
+import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, copySteps, copyDocuments } from '@/app/actions/license-requirements'
 
 interface LicenseType {
   id: string
@@ -71,6 +73,20 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [showExpertForm, setShowExpertForm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Copy form states
+  const [showCopyStepsForm, setShowCopyStepsForm] = useState(false)
+  const [showCopyDocumentsForm, setShowCopyDocumentsForm] = useState(false)
+  const [showExpertComingSoonModal, setShowExpertComingSoonModal] = useState(false)
+  
+  // Copy form data
+  const [availableLicenseRequirements, setAvailableLicenseRequirements] = useState<Array<{id: string, state: string, license_type: string}>>([])
+  const [selectedSourceRequirementId, setSelectedSourceRequirementId] = useState<string>('')
+  const [availableSteps, setAvailableSteps] = useState<Step[]>([])
+  const [availableDocuments, setAvailableDocuments] = useState<Document[]>([])
+  const [selectedStepIds, setSelectedStepIds] = useState<Set<string>>(new Set())
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set())
+  const [isLoadingCopyData, setIsLoadingCopyData] = useState(false)
   
   // Edit states
   const [editingStep, setEditingStep] = useState<string | null>(null)
@@ -554,6 +570,178 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     }
   }
 
+  // Copy Steps handlers
+  const handleShowCopyStepsForm = async () => {
+    setShowCopyStepsForm(true)
+    setSelectedSourceRequirementId('')
+    setAvailableSteps([])
+    setSelectedStepIds(new Set())
+    setError(null)
+    
+    // Load available license requirements
+    setIsLoadingCopyData(true)
+    try {
+      const result = await getAllLicenseRequirements()
+      if (result.error) {
+        setError(result.error)
+      } else {
+        // Filter out current license requirement
+        const filtered = result.data?.filter(req => req.id !== requirementId) || []
+        setAvailableLicenseRequirements(filtered)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load license requirements')
+    } finally {
+      setIsLoadingCopyData(false)
+    }
+  }
+
+  const handleSourceRequirementChangeForSteps = async (requirementId: string) => {
+    setSelectedSourceRequirementId(requirementId)
+    setSelectedStepIds(new Set())
+    
+    if (!requirementId) {
+      setAvailableSteps([])
+      return
+    }
+    
+    setIsLoadingCopyData(true)
+    try {
+      const result = await getStepsFromRequirement(requirementId)
+      if (result.error) {
+        setError(result.error)
+        setAvailableSteps([])
+      } else {
+        setAvailableSteps(result.data || [])
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load steps')
+      setAvailableSteps([])
+    } finally {
+      setIsLoadingCopyData(false)
+    }
+  }
+
+  const toggleStepSelection = (stepId: string) => {
+    const newSelected = new Set(selectedStepIds)
+    if (newSelected.has(stepId)) {
+      newSelected.delete(stepId)
+    } else {
+      newSelected.add(stepId)
+    }
+    setSelectedStepIds(newSelected)
+  }
+
+  const handleCopySteps = async () => {
+    if (!requirementId || selectedStepIds.size === 0) return
+    
+    setIsSubmitting(true)
+    setError(null)
+    
+    try {
+      const result = await copySteps(requirementId, Array.from(selectedStepIds))
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setShowCopyStepsForm(false)
+        setSelectedSourceRequirementId('')
+        setAvailableSteps([])
+        setSelectedStepIds(new Set())
+        await loadData()
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to copy steps')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Copy Documents handlers
+  const handleShowCopyDocumentsForm = async () => {
+    setShowCopyDocumentsForm(true)
+    setSelectedSourceRequirementId('')
+    setAvailableDocuments([])
+    setSelectedDocumentIds(new Set())
+    setError(null)
+    
+    // Load available license requirements
+    setIsLoadingCopyData(true)
+    try {
+      const result = await getAllLicenseRequirements()
+      if (result.error) {
+        setError(result.error)
+      } else {
+        // Filter out current license requirement
+        const filtered = result.data?.filter(req => req.id !== requirementId) || []
+        setAvailableLicenseRequirements(filtered)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load license requirements')
+    } finally {
+      setIsLoadingCopyData(false)
+    }
+  }
+
+  const handleSourceRequirementChangeForDocuments = async (requirementId: string) => {
+    setSelectedSourceRequirementId(requirementId)
+    setSelectedDocumentIds(new Set())
+    
+    if (!requirementId) {
+      setAvailableDocuments([])
+      return
+    }
+    
+    setIsLoadingCopyData(true)
+    try {
+      const result = await getDocumentsFromRequirement(requirementId)
+      if (result.error) {
+        setError(result.error)
+        setAvailableDocuments([])
+      } else {
+        setAvailableDocuments(result.data || [])
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load documents')
+      setAvailableDocuments([])
+    } finally {
+      setIsLoadingCopyData(false)
+    }
+  }
+
+  const toggleDocumentSelection = (documentId: string) => {
+    const newSelected = new Set(selectedDocumentIds)
+    if (newSelected.has(documentId)) {
+      newSelected.delete(documentId)
+    } else {
+      newSelected.add(documentId)
+    }
+    setSelectedDocumentIds(newSelected)
+  }
+
+  const handleCopyDocuments = async () => {
+    if (!requirementId || selectedDocumentIds.size === 0) return
+    
+    setIsSubmitting(true)
+    setError(null)
+    
+    try {
+      const result = await copyDocuments(requirementId, Array.from(selectedDocumentIds))
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setShowCopyDocumentsForm(false)
+        setSelectedSourceRequirementId('')
+        setAvailableDocuments([])
+        setSelectedDocumentIds(new Set())
+        await loadData()
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to copy documents')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   if (!licenseType) {
     return (
       <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 md:p-6 flex items-center justify-center min-h-[300px]">
@@ -568,10 +756,10 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 md:p-6">
       {/* Header */}
-      <div className="mb-6">
+      {/* <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900">{licenseType.name}</h2>
         <p className="text-sm text-gray-600 mt-1">{licenseType.description}</p>
-      </div>
+      </div> */}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
@@ -584,7 +772,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            Overview
+            General Info
           </button>
           <button
             onClick={() => setActiveTab('steps')}
@@ -778,17 +966,121 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Licensing Steps</h3>
-              <button
-                onClick={() => {
-                  setShowStepForm(!showStepForm)
-                  setError(null)
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Step
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleShowCopyStepsForm}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy from Another License
+                </button>
+                <button
+                  onClick={() => {
+                    setShowStepForm(!showStepForm)
+                    setError(null)
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Step
+                </button>
+              </div>
             </div>
+
+            {showCopyStepsForm && (
+              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Copy Steps from Another License</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select License Type to Copy From
+                    </label>
+                    <select
+                      value={selectedSourceRequirementId}
+                      onChange={(e) => handleSourceRequirementChangeForSteps(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isLoadingCopyData}
+                    >
+                      <option value="">Select a license type...</option>
+                      {availableLicenseRequirements.map((req) => (
+                        <option key={req.id} value={req.id}>
+                          {req.state} - {req.license_type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedSourceRequirementId && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Steps to Copy ({selectedStepIds.size} selected)
+                      </label>
+                      <div className="border border-gray-300 rounded-lg max-h-[300px] overflow-y-auto bg-white">
+                        {isLoadingCopyData ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                          </div>
+                        ) : availableSteps.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <p>No steps available for this license type</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-gray-200">
+                            {availableSteps.map((step) => (
+                              <label
+                                key={step.id}
+                                className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedStepIds.has(step.id)}
+                                  onChange={() => toggleStepSelection(step.id)}
+                                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {step.step_order}. {step.step_name}
+                                    </span>
+                                  </div>
+                                  {step.description && (
+                                    <p className="text-sm text-gray-600">{step.description}</p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={handleCopySteps}
+                      disabled={isSubmitting || selectedStepIds.size === 0 || isLoadingCopyData}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy {selectedStepIds.size} {selectedStepIds.size === 1 ? 'Step' : 'Steps'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCopyStepsForm(false)
+                        setSelectedSourceRequirementId('')
+                        setAvailableSteps([])
+                        setSelectedStepIds(new Set())
+                        setError(null)
+                      }}
+                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {showStepForm && (
               <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
@@ -917,17 +1209,126 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Required Documents</h3>
-              <button
-                onClick={() => {
-                  setShowDocumentForm(!showDocumentForm)
-                  setError(null)
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Document
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleShowCopyDocumentsForm}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy from Another License
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDocumentForm(!showDocumentForm)
+                    setError(null)
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Document
+                </button>
+              </div>
             </div>
+
+            {showCopyDocumentsForm && (
+              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Copy Documents from Another License</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select License Type to Copy From
+                    </label>
+                    <select
+                      value={selectedSourceRequirementId}
+                      onChange={(e) => handleSourceRequirementChangeForDocuments(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isLoadingCopyData}
+                    >
+                      <option value="">Select a license type...</option>
+                      {availableLicenseRequirements.map((req) => (
+                        <option key={req.id} value={req.id}>
+                          {req.state} - {req.license_type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedSourceRequirementId && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Documents to Copy ({selectedDocumentIds.size} selected)
+                      </label>
+                      <div className="border border-gray-300 rounded-lg max-h-[300px] overflow-y-auto bg-white">
+                        {isLoadingCopyData ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                          </div>
+                        ) : availableDocuments.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <p>No documents available for this license type</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-gray-200">
+                            {availableDocuments.map((doc) => (
+                              <label
+                                key={doc.id}
+                                className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDocumentIds.has(doc.id)}
+                                  onChange={() => toggleDocumentSelection(doc.id)}
+                                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {doc.document_name}
+                                    </span>
+                                    {doc.is_required && (
+                                      <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">
+                                        Required
+                                      </span>
+                                    )}
+                                  </div>
+                                  {doc.description && (
+                                    <p className="text-sm text-gray-600">{doc.description}</p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={handleCopyDocuments}
+                      disabled={isSubmitting || selectedDocumentIds.size === 0 || isLoadingCopyData}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy {selectedDocumentIds.size} {selectedDocumentIds.size === 1 ? 'Document' : 'Documents'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCopyDocumentsForm(false)
+                        setSelectedSourceRequirementId('')
+                        setAvailableDocuments([])
+                        setSelectedDocumentIds(new Set())
+                        setError(null)
+                      }}
+                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {showDocumentForm && (
               <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
@@ -1056,16 +1457,25 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Expert Process Steps</h3>
-              <button
-                onClick={() => {
-                  setShowExpertForm(!showExpertForm)
-                  setError(null)
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Step
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowExpertComingSoonModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy from Another License
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExpertForm(!showExpertForm)
+                    setError(null)
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Step
+                </button>
+              </div>
             </div>
 
             {showExpertForm && (
@@ -1304,6 +1714,12 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
         <CheckCircle2 className="w-4 h-4" />
         <span>Changes are saved automatically</span>
       </div>
+
+      {/* Expert Process Coming Soon Modal */}
+      <ExpertProcessComingSoonModal
+        isOpen={showExpertComingSoonModal}
+        onClose={() => setShowExpertComingSoonModal(false)}
+      />
     </div>
   )
 }

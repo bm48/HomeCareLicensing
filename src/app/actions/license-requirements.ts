@@ -275,3 +275,150 @@ export async function getLicenseRequirementId(state: string, licenseTypeName: st
   const requirementId = await getOrCreateLicenseRequirement(state, licenseTypeName)
   return { error: null, data: requirementId }
 }
+
+// Get all license requirements for copying
+export async function getAllLicenseRequirements() {
+  const supabase = await createClient()
+  
+  const { data: requirements, error } = await supabase
+    .from('license_requirements')
+    .select('id, state, license_type')
+    .order('state', { ascending: true })
+    .order('license_type', { ascending: true })
+  
+  if (error) {
+    return { error: error.message, data: null }
+  }
+  
+  return { error: null, data: requirements || [] }
+}
+
+// Get steps from a license requirement
+export async function getStepsFromRequirement(requirementId: string) {
+  const supabase = await createClient()
+  
+  const { data: steps, error } = await supabase
+    .from('license_requirement_steps')
+    .select('*')
+    .eq('license_requirement_id', requirementId)
+    .eq('is_expert_step', false)
+    .order('step_order', { ascending: true })
+  
+  if (error) {
+    return { error: error.message, data: null }
+  }
+  
+  return { error: null, data: steps || [] }
+}
+
+// Get documents from a license requirement
+export async function getDocumentsFromRequirement(requirementId: string) {
+  const supabase = await createClient()
+  
+  const { data: documents, error } = await supabase
+    .from('license_requirement_documents')
+    .select('*')
+    .eq('license_requirement_id', requirementId)
+    .order('document_name', { ascending: true })
+  
+  if (error) {
+    return { error: error.message, data: null }
+  }
+  
+  return { error: null, data: documents || [] }
+}
+
+// Copy steps from one requirement to another
+export async function copySteps(targetRequirementId: string, sourceStepIds: string[]) {
+  const supabase = await createClient()
+  
+  if (sourceStepIds.length === 0) {
+    return { error: 'No steps selected', data: null }
+  }
+  
+  // Get source steps
+  const { data: sourceSteps, error: fetchError } = await supabase
+    .from('license_requirement_steps')
+    .select('*')
+    .in('id', sourceStepIds)
+    .eq('is_expert_step', false)
+  
+  if (fetchError || !sourceSteps || sourceSteps.length === 0) {
+    return { error: fetchError?.message || 'Failed to fetch source steps', data: null }
+  }
+  
+  // Get the highest step_order in target requirement
+  const { data: existingSteps } = await supabase
+    .from('license_requirement_steps')
+    .select('step_order')
+    .eq('license_requirement_id', targetRequirementId)
+    .eq('is_expert_step', false)
+    .order('step_order', { ascending: false })
+    .limit(1)
+  
+  let nextOrder = existingSteps && existingSteps.length > 0 
+    ? existingSteps[0].step_order + 1 
+    : 1
+  
+  // Insert copied steps
+  const stepsToInsert = sourceSteps.map((step) => ({
+    license_requirement_id: targetRequirementId,
+    step_name: step.step_name,
+    step_order: nextOrder++,
+    description: step.description,
+    is_expert_step: false,
+    // Note: estimated_days column doesn't exist in the database schema
+  }))
+  
+  const { data: copiedSteps, error: insertError } = await supabase
+    .from('license_requirement_steps')
+    .insert(stepsToInsert)
+    .select()
+  
+  if (insertError) {
+    return { error: insertError.message, data: null }
+  }
+  
+  revalidatePath('/admin/license-requirements')
+  return { error: null, data: copiedSteps }
+}
+
+// Copy documents from one requirement to another
+export async function copyDocuments(targetRequirementId: string, sourceDocumentIds: string[]) {
+  const supabase = await createClient()
+  
+  if (sourceDocumentIds.length === 0) {
+    return { error: 'No documents selected', data: null }
+  }
+  
+  // Get source documents
+  const { data: sourceDocuments, error: fetchError } = await supabase
+    .from('license_requirement_documents')
+    .select('*')
+    .in('id', sourceDocumentIds)
+  
+  if (fetchError || !sourceDocuments || sourceDocuments.length === 0) {
+    return { error: fetchError?.message || 'Failed to fetch source documents', data: null }
+  }
+  
+  // Insert copied documents
+  const documentsToInsert = sourceDocuments.map((doc) => ({
+    license_requirement_id: targetRequirementId,
+    document_name: doc.document_name,
+    document_type: doc.document_type,
+    description: doc.description,
+    is_required: doc.is_required,
+  }))
+  
+  const { data: copiedDocuments, error: insertError } = await supabase
+    .from('license_requirement_documents')
+    .insert(documentsToInsert)
+    .select()
+  
+  if (insertError) {
+    return { error: insertError.message, data: null }
+  }
+  
+  revalidatePath('/admin/license-requirements')
+  return { error: null, data: copiedDocuments }
+}

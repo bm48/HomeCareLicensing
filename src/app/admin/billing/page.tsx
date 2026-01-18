@@ -115,13 +115,11 @@ export default async function BillingPage({
     licenseTypeFeeMap[key] = cost
   })
 
-  // Get pricing table for license rates
-  const { data: pricingData } = await supabase
-    .from('pricing')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // Get pricing that was effective for the selected month
+  // This ensures billing history is preserved when pricing changes
+  const { getPricingForMonth } = await import('@/app/actions/pricing')
+  const pricingResult = await getPricingForMonth(selectedYear, selectedMonth)
+  const pricingData = pricingResult.data
 
   const ownerLicenseRate = pricingData?.owner_admin_license || 0
   const staffLicenseRate = pricingData?.staff_license || 0

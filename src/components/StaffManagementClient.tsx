@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Users, 
@@ -54,6 +54,7 @@ interface StaffManagementClientProps {
   activeStaff: number
   expiringLicenses: number
   staffWithExpiringLicenses: (StaffMember & { expiringLicensesCount?: number })[]
+  staffRoleNames: string[]
 }
 
 export default function StaffManagementClient({
@@ -62,7 +63,8 @@ export default function StaffManagementClient({
   totalStaff,
   activeStaff,
   expiringLicenses,
-  staffWithExpiringLicenses,
+  staffWithExpiringLicenses, 
+  staffRoleNames,
 }: StaffManagementClientProps) {
   const router = useRouter()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -261,9 +263,11 @@ export default function StaffManagementClient({
               className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">All Roles</option>
-              <option value="Registered Nurse">Registered Nurse</option>
-              <option value="Licensed Practical Nurse">Licensed Practical Nurse</option>
-              <option value="Certified Nursing Assistant">Certified Nursing Assistant</option>
+              {
+                staffRoleNames.map((roleName) => (
+                  <option key={roleName} value={roleName}>{roleName}</option>
+                ))
+              }
             </select>
             <select 
               value={selectedStatus}
@@ -436,6 +440,7 @@ export default function StaffManagementClient({
         onSuccess={() => {
           setIsAddModalOpen(false)
         }}
+        staffRoleNames={staffRoleNames}
       />
 
       {selectedStaff && (
