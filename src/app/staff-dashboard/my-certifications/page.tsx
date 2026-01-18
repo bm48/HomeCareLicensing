@@ -9,6 +9,9 @@ import { getCertifications, getCertificationTypes } from '@/app/actions/certific
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Edit, Eye, Award, Loader2 } from 'lucide-react'
 
+import { useCallback } from 'react';
+
+
 interface Certification {
   id: string
   type: string
@@ -36,11 +39,8 @@ export default function MyCertificationsPage() {
   const [profile, setProfile] = useState<any>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
   const loadData = async () => {
+    
     try {
       const supabase = createClient()
       
@@ -86,6 +86,12 @@ export default function MyCertificationsPage() {
       setIsLoading(false)
     }
   }
+
+  
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
 
   const handleAddSuccess = () => {
     loadData()
