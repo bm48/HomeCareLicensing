@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { X, Copy, Loader2 } from 'lucide-react'
 import { getAllLicenseRequirements, getDocumentsFromRequirement, copyDocuments } from '@/app/actions/license-requirements'
-
+import { useRouter } from 'next/navigation'
 interface Document {
   id: string
   document_name: string
@@ -37,18 +37,10 @@ export default function CopyDocumentsModal({
   const [isLoading, setIsLoading] = useState(false)
   const [isCopying, setIsCopying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
-  useEffect(() => {
-    if (isOpen) {
-      loadLicenseRequirements()
-      setSelectedRequirementId('')
-      setAvailableDocuments([])
-      setSelectedDocumentIds(new Set())
-      setError(null)
-    }
-  }, [isOpen])
 
-  const loadLicenseRequirements = async () => {
+  const loadLicenseRequirements = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await getAllLicenseRequirements()
@@ -64,7 +56,17 @@ export default function CopyDocumentsModal({
     } finally {
       setIsLoading(false)
     }
-  }
+  },[router])
+  
+  useEffect(() => {
+    if (isOpen) {
+      loadLicenseRequirements()
+      setSelectedRequirementId('')
+      setAvailableDocuments([])
+      setSelectedDocumentIds(new Set())
+      setError(null)
+    }
+  }, [isOpen, loadLicenseRequirements])
 
   const handleRequirementChange = async (requirementId: string) => {
     setSelectedRequirementId(requirementId)

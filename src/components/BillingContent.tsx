@@ -123,7 +123,7 @@ export default function BillingContent({
         }
       }
     }
-  }, [initialMonth, initialYear]) // Only depend on props, not state
+  }, [selectedMonth, selectedYear]) // Only depend on props, not state
 
   // Sync with URL params and reset loading state when navigation completes
   // Using a ref to track if we're currently navigating to prevent loops
