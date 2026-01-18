@@ -37,6 +37,7 @@ interface LicenseTypeDetailsProps {
 
 type TabType = 'general' | 'steps' | 'documents' | 'expert'
 
+
 interface Step {
   id: string
   step_name: string
