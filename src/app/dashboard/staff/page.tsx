@@ -47,6 +47,12 @@ export default async function StaffPage() {
   
   const { data: staffMembers } = await staffQuery
 
+
+  const { data: staffRoles } = await supabase
+    .from('staff_roles')
+    .select('*')
+
+    const staffRoleNames = staffRoles?.map(role=> role.name) || [];
   // Get all staff licenses from applications table
   const { data: allStaffLicensesData } = await supabase
     .from('applications')
@@ -108,6 +114,7 @@ export default async function StaffPage() {
         activeStaff={activeStaff}
         expiringLicenses={expiringLicenses}
         staffWithExpiringLicenses={staffWithExpiringLicenses}
+        staffRoleNames={staffRoleNames}
       />
     </DashboardLayout>
   )

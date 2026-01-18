@@ -24,25 +24,15 @@ const staffMemberSchema = z.object({
 
 type StaffMemberFormData = z.infer<typeof staffMemberSchema>
 
-const ROLE_OPTIONS = [
-  'Registered Nurse',
-  'Licensed Practical Nurse',
-  'Certified Nursing Assistant',
-  'Home Health Aide',
-  'Physical Therapist',
-  'Occupational Therapist',
-  'Speech Therapist',
-  'Medical Social Worker',
-  'Other',
-]
 
 interface AddStaffMemberModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess?: () => void
+  staffRoleNames: string[]
 }
 
-export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddStaffMemberModalProps) {
+export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffRoleNames }: AddStaffMemberModalProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -299,7 +289,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess }: AddS
               disabled={isLoading}
             >
               <option value="">Select a role</option>
-              {ROLE_OPTIONS.map((role) => (
+              {staffRoleNames.map((role) => (
                 <option key={role} value={role}>
                   {role}
                 </option>

@@ -6,3 +6,8 @@ DROP POLICY IF EXISTS "Staff members can view own record" ON staff_members;
 CREATE POLICY "Staff members can view own record"
   ON staff_members FOR SELECT
   USING (user_id = auth.uid());
+
+  DROP POLICY IF EXISTS "Company owner can view own record" ON staff_members;
+CREATE POLICY "Company owner can view own record"
+  ON staff_members FOR SELECT
+  USING (company_owner_id = auth.uid());

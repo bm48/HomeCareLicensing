@@ -1,0 +1,241 @@
+import { redirect } from 'next/navigation'
+import { getSession } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import StaffLayout from '@/components/StaffLayout'
+import Link from 'next/link'
+import { getCertification } from '@/app/actions/certifications'
+import { 
+  ArrowLeft,
+  Award,
+  Calendar,
+  MapPin,
+  FileText,
+  Building,
+  CheckCircle2,
+  Clock,
+  XCircle
+} from 'lucide-react'
+
+export default async function CertificationDetailPage({
+  params
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const session = await getSession()
+
+  if (!session) {
+    redirect('/login')
+  }
+
+  const { id } = await params
+  const supabase = await createClient()
+  
+  // Get user profile
+  const { data: profile, error: profileError } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .single()
+
+  if (profileError || !profile) {
+    redirect('/login?error=Unable to load user profile')
+  }
+
+  // Verify user has staff_member role
+  if (profile.role !== 'staff_member') {
+    redirect('/login?error=Access denied. Staff member role required.')
+  }
+
+  // Get unread notifications count
+  const { count: unreadNotifications } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', session.user.id)
+    .eq('is_read', false)
+
+  // Get certification
+  const result = await getCertification(id)
+
+  if (result.error || !result.data) {
+    redirect('/staff-dashboard/my-certifications?error=Certification not found')
+  }
+
+  const certification = result.data
+
+  const formatDate = (date: string | null) => {
+    if (!date) return 'N/A'
+    const d = new Date(date)
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  }
+
+  const getStatusBadge = (status: string, expirationDate: string) => {
+    const today = new Date()
+    const expiry = new Date(expirationDate)
+    const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (status === 'Expired' || daysUntilExpiry <= 0) {
+      return (
+        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1">
+          <XCircle className="w-4 h-4" />
+          Expired
+        </span>
+      )
+    } else if (daysUntilExpiry <= 90) {
+      return (
+        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 flex items-center gap-1">
+          <Clock className="w-4 h-4" />
+          Expiring Soon
+        </span>
+      )
+    } else {
+      return (
+        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 flex items-center gap-1">
+          <CheckCircle2 className="w-4 h-4" />
+          Active
+        </span>
+      )
+    }
+  }
+
+  return (
+    <StaffLayout 
+      user={session.user} 
+      profile={profile} 
+      unreadNotifications={unreadNotifications || 0}
+    >
+      <div className="space-y-6">
+        {/* Back Button */}
+        <Link
+          href="/staff-dashboard/my-certifications"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Certifications
+        </Link>
+
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+              {certification.type}
+            </h1>
+            <p className="text-gray-600 text-base md:text-lg">
+              Certification Details
+            </p>
+          </div>
+          {getStatusBadge(certification.status, certification.expiration_date)}
+        </div>
+
+        {/* Main Content Card */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Certification Information */}
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-blue-600" />
+                  Certification Information
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Certification Type</p>
+                    <p className="text-base font-medium text-gray-900">{certification.type}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">License/Certification Number</p>
+                    <p className="text-base font-medium text-gray-900">{certification.license_number}</p>
+                  </div>
+                  {certification.state && (
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1 flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        State
+                      </p>
+                      <p className="text-base font-medium text-gray-900">{certification.state}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1 flex items-center gap-1">
+                      <Building className="w-4 h-4" />
+                      Issuing Authority
+                    </p>
+                    <p className="text-base font-medium text-gray-900">{certification.issuing_authority}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Dates and Status */}
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-blue-600" />
+                  Important Dates
+                </h2>
+                <div className="space-y-4">
+                  {certification.issue_date && (
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Issue Date</p>
+                      <p className="text-base font-medium text-gray-900">
+                        {formatDate(certification.issue_date)}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Expiration Date</p>
+                    <p className="text-base font-medium text-gray-900">
+                      {formatDate(certification.expiration_date)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Status</p>
+                    <div className="mt-1">
+                      {getStatusBadge(certification.status, certification.expiration_date)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Document Section */}
+          {/* {certification.document_url && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                Certification Document
+              </h2>
+              <a
+                href={certification.document_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                View Document
+              </a>
+            </div>
+          )} */}
+
+          {/* Metadata */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
+              <div>
+                <p className="mb-1">Created</p>
+                <p className="font-medium text-gray-900">
+                  {formatDate(certification.created_at)}
+                </p>
+              </div>
+              <div>
+                <p className="mb-1">Last Updated</p>
+                <p className="font-medium text-gray-900">
+                  {formatDate(certification.updated_at)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </StaffLayout>
+  )
+}

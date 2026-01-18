@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Settings, DollarSign, Search, Edit, Check, X, Pencil } from 'lucide-react'
 import { updatePricing, updateLicenseType } from '@/app/actions/configuration'
+import SystemListsManagement from '@/components/SystemListsManagement'
 
 interface Pricing {
   owner_admin_license: number
@@ -20,9 +21,29 @@ interface LicenseType {
   processing_time_display: string
 }
 
+interface CertificationType {
+  id: number
+  certification_type: string
+  created_at?: string
+}
+
+interface IssuingAuthority {
+  id: number
+  name: string
+  created_at?: string
+}
+
+interface StaffRole {
+  id: number
+  name: string
+  created_at?: string
+}
+
 interface ConfigurationContentProps {
   initialPricing: Pricing
   licenseTypes: LicenseType[]
+  certificationTypes: CertificationType[]
+  staffRoles: StaffRole[]
 }
 
 interface EditingLicenseType {
@@ -35,7 +56,9 @@ interface EditingLicenseType {
 
 export default function ConfigurationContent({
   initialPricing,
-  licenseTypes: initialLicenseTypes
+  licenseTypes: initialLicenseTypes,
+  certificationTypes,
+  staffRoles
 }: ConfigurationContentProps) {
   const router = useRouter()
   const [pricing, setPricing] = useState(initialPricing)
@@ -432,6 +455,12 @@ export default function ConfigurationContent({
           </div>
         )}
       </div>
+
+      {/* System Lists Management Section */}
+      <SystemListsManagement
+        initialCertificationTypes={certificationTypes}
+        initialStaffRoles={staffRoles}
+      />
     </div>
   )
 }

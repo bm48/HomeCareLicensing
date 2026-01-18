@@ -57,7 +57,7 @@ export default function StaffLayout({
 
   const menuItems = [
     { href: '/staff-dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/staff-dashboard/my-licenses', label: 'My Licenses', icon: FileText },
+    { href: '/staff-dashboard/my-certifications', label: 'My Certifications', icon: FileText },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
