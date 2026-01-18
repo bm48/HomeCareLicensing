@@ -56,7 +56,7 @@ export default function CopyDocumentsModal({
     } finally {
       setIsLoading(false)
     }
-  },[router, targetRequirementId])
+  },[targetRequirementId])
   
   useEffect(() => {
     if (isOpen) {

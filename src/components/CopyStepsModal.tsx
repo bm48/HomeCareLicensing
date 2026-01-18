@@ -57,7 +57,7 @@ export default function CopyStepsModal({
     } finally {
       setIsLoading(false)
     }
-  }, [router, targetRequirementId])
+  }, [targetRequirementId])
   
   useEffect(() => {
     if (isOpen) {
