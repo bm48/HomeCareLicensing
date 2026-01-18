@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import StaffLayout from '@/components/StaffLayout'
 import AddCertificationModal from '@/components/AddCertificationModal'
@@ -9,7 +9,6 @@ import { getCertifications, getCertificationTypes } from '@/app/actions/certific
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Edit, Eye, Award, Loader2 } from 'lucide-react'
 
-import { useCallback } from 'react';
 
 
 interface Certification {
@@ -39,7 +38,7 @@ export default function MyCertificationsPage() {
   const [profile, setProfile] = useState<any>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
-  const loadData = async () => {
+  const loadData = useCallback( async () => {
     
     try {
       const supabase = createClient()
@@ -85,7 +84,7 @@ export default function MyCertificationsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [router])
 
   
   useEffect(() => {
