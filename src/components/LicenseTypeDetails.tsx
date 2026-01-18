@@ -53,6 +53,7 @@ interface Document {
   is_required: boolean
 }
 
+
 export default function LicenseTypeDetails({ licenseType, selectedState }: LicenseTypeDetailsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('general')
   const prevLicenseTypeRef = useRef<LicenseType | null>(null)
