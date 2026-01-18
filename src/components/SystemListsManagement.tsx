@@ -268,7 +268,7 @@ export default function SystemListsManagement({
                 key={item[itemKey]}
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                {isEditing ? (
+                { isEditing && editingItem ? (
                   <>
                     <input
                       type="text"
