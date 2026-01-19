@@ -237,6 +237,7 @@ export default function ExpertMessagesPage() {
         .eq('user_id', currentUser.id)
         .single()
 
+
       if (!expertRecord) return
 
       // Find or create conversation
@@ -250,6 +251,7 @@ export default function ExpertMessagesPage() {
         .is('admin_id', null)
         .maybeSingle()
 
+        console.log("existingConv: ",existingConv)
       if (existingConv) {
         conversationId = existingConv.id
       } else {
@@ -559,6 +561,12 @@ export default function ExpertMessagesPage() {
                     <textarea
                       value={messageContent}
                       onChange={(e) => setMessageContent(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendMessage()
+                        }
+                      }}
                       placeholder="Type your message..."
                       rows={4}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"

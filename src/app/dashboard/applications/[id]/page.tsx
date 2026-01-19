@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import DashboardLayout from '@/components/DashboardLayout'
-import ApplicationDetailContent from '@/components/ApplicationDetailContent'
+import ApplicationDetailWrapper from '@/components/ApplicationDetailWrapper'
 
 export default async function ApplicationDetailPage({
   params
@@ -52,12 +51,13 @@ export default async function ApplicationDetailPage({
     .order('created_at', { ascending: false })
 
   return (
-    <DashboardLayout user={session.user} profile={profile} unreadNotifications={unreadNotifications || 0}>
-      <ApplicationDetailContent 
-        application={application}
-        documents={documents || []}
-      />
-    </DashboardLayout>
+    <ApplicationDetailWrapper
+      application={application}
+      documents={documents || []}
+      user={session.user}
+      profile={profile}
+      unreadNotifications={unreadNotifications || 0}
+    />
   )
 }
 

@@ -16,7 +16,9 @@ import {
   Menu,
   X,
   MessageSquare,
-  BarChart3
+  BarChart3,
+  Grid3x3,
+  CheckSquare
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
@@ -34,19 +36,30 @@ interface DashboardLayoutProps {
     role?: string | null
   } | null
   unreadNotifications?: number
+  application?: {
+    id: string
+    state: string
+    progress_percentage: number | null
+  } | null
+  activeLicenseTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant'
+  onLicenseTabChange?: (tab: 'overview' | 'checklist' | 'documents' | 'ai-assistant') => void
 }
 
 export default function DashboardLayout({ 
   children, 
   user, 
   profile,
-  unreadNotifications = 0 
+  unreadNotifications = 0,
+  application = null,
+  activeLicenseTab = 'overview',
+  onLicenseTabChange
 }: DashboardLayoutProps) {
   const pathname = usePathname()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [currentPath, setCurrentPath] = useState(pathname)
+  const isApplicationDetailPage = pathname?.startsWith('/dashboard/applications/') && pathname !== '/dashboard/applications'
 
   // Track pathname changes to show/hide loading
   useEffect(() => {
@@ -201,6 +214,58 @@ export default function DashboardLayout({
                 })}
               </nav>
             </div>
+
+            {/* Current License Status - Only show on application detail page */}
+            {isApplicationDetailPage && application && !sidebarCollapsed && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="text-blue-600 text-sm font-medium mb-2">Current License</div>
+                <div className="text-2xl font-bold text-gray-900 mb-3">
+                  {application.state.length > 2 ? application.state.substring(0, 2).toUpperCase() : application.state.toUpperCase()}
+                </div>
+                <div className="text-sm font-medium text-gray-700 mb-2">Progress</div>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                  <div
+                    className="bg-gray-900 h-2 rounded-full transition-all"
+                    style={{ width: `${application.progress_percentage || 0}%` }}
+                  />
+                </div>
+                <div className="text-sm text-gray-600">{application.progress_percentage || 0}% Complete</div>
+              </div>
+            )}
+
+            {/* License Management - Only show on application detail page */}
+            {isApplicationDetailPage && !sidebarCollapsed && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-3">
+                  License Management
+                </div>
+                <nav className="space-y-1">
+                  {[
+                    { id: 'overview', label: 'Overview', icon: Grid3x3 },
+                    { id: 'checklist', label: 'Checklist', icon: CheckSquare },
+                    { id: 'documents', label: 'Documents', icon: FileText },
+                    { id: 'ai-assistant', label: 'AI Assistant', icon: MessageSquare },
+                  ].map((item) => {
+                    const Icon = item.icon
+                    const isActive = activeLicenseTab === item.id
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => onLicenseTabChange?.(item.id as typeof activeLicenseTab)}
+                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
+                          isActive
+                            ? 'bg-gray-100 text-gray-900 font-semibold'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5 flex-shrink-0" />
+                        <span>{item.label}</span>
+                      </button>
+                    )
+                  })}
+                </nav>
+              </div>
+            )}
 
             <div className="mt-auto pt-4 border-t border-gray-200">
               <form action={signOut}>
