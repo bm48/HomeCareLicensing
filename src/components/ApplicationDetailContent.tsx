@@ -911,7 +911,7 @@ export default function ApplicationDetailContent({
               {/* Welcome Header */}
               <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome Back</h1>
-                <p className="text-gray-600">Here's your licensing progress for {application.state}</p>
+                <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
               </div>
 
               {/* Summary Cards */}
