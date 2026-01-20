@@ -391,7 +391,11 @@ export default function AdminLicensesContent({
         <div className="space-y-4">
           {filteredAll.length > 0 ? (
             filteredAll.map((application) => (
-              <div key={application.id} className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
+              <div 
+                key={application.id} 
+                onClick={() => router.push(`/admin/licenses/applications/${application.id}`)}
+                className="bg-white rounded-xl shadow-md border border-gray-100 p-6 cursor-pointer hover:shadow-lg transition-shadow"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1">
                     <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">

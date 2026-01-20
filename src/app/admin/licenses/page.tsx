@@ -32,9 +32,9 @@ export default async function AdminLicensesPage() {
     .in('status', ['in_progress', 'under_review', 'needs_revision', 'approved', 'rejected'])
     .order('created_at', { ascending: false })
 
-  // Get unique owner IDs from both application sets
-  const requestedOwnerIds = requestedApplicationsData?.map(app => app.company_owner_id) || []
-  const allOwnerIds = allApplicationsData?.map(app => app.company_owner_id) || []
+  // Get unique owner IDs from both application sets, filtering out null values
+  const requestedOwnerIds = requestedApplicationsData?.map(app => app.company_owner_id).filter(id => id !== null) || []
+  const allOwnerIds = allApplicationsData?.map(app => app.company_owner_id).filter(id => id !== null) || []
   const ownerIds = Array.from(new Set(requestedOwnerIds.concat(allOwnerIds)))
 
   // Fetch owner profiles for all unique owner IDs
