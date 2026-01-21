@@ -234,7 +234,7 @@ export default function DashboardLayout({
             )}
 
             {/* License Management - Only show on application detail page */}
-            {isApplicationDetailPage && !sidebarCollapsed && (
+            {/* {isApplicationDetailPage && !sidebarCollapsed && (
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-3">
                   License Management
@@ -265,7 +265,7 @@ export default function DashboardLayout({
                   })}
                 </nav>
               </div>
-            )}
+            )} */}
 
             <div className="mt-auto pt-4 border-t border-gray-200">
               <form action={signOut}>

@@ -90,7 +90,7 @@ export default function StaffLayout({
     <div className="min-h-screen bg-gray-50">
       {isLoading && <LoadingSpinner />}
       {/* Top Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
         <div className="flex items-center justify-between px-4 md:px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="relative w-20 h-12 md:w-28 md:h-16">
@@ -128,9 +128,13 @@ export default function StaffLayout({
 
       <div className="flex">
         {/* Sidebar - Desktop */}
-        <aside className={`hidden md:block bg-white shadow-lg transition-all duration-300 ${
-          sidebarCollapsed ? 'w-16' : 'w-64'
-        } min-h-[calc(100vh-73px)]`}>
+        <aside className={`
+          bg-white shadow-lg transition-all duration-300 
+          fixed top-[73px] left-0 bottom-0 z-40
+          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${sidebarCollapsed ? 'w-16' : 'w-64'}
+          overflow-y-auto
+        `}>
           <div className="p-4 h-full flex flex-col">
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -182,10 +186,11 @@ export default function StaffLayout({
         </aside>
 
         {/* Mobile Sidebar */}
-        {mobileMenuOpen && (
+        {/* {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
             <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setMobileMenuOpen(false)} />
-            <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white shadow-xl z-50">
+            <aside className="bg-white shadow-lg transition-all duration-300 
+          fixed top-[73px] left-0 bottom-0 z-40 'translate-x-0'">
               <div className="p-4">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Menu</span>
@@ -236,7 +241,7 @@ export default function StaffLayout({
               </div>
             </aside>
           </div>
-        )}
+        )} */}
 
         {/* Main Content */}
         <main className="flex-1 p-4 md:p-6">

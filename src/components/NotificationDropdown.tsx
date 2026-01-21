@@ -104,6 +104,7 @@ export default function NotificationDropdown({
 
   // Optimized: Single query with aggregation using query builder
   const fetchApplicationsWithUnread = useCallback(async () => {
+    console.log('fetchApplicationsWithUnread')
     if (!userRole) return
     
     setIsLoading(true)
@@ -119,7 +120,7 @@ export default function NotificationDropdown({
           .select('application_id')
           .not('application_id', 'is', null)
           .limit(100) // Reasonable limit
-        
+        console.log('conversations', conversations)
         const uniqueAppIds = new Set(conversations?.map(c => c.application_id).filter(Boolean) || [])
         applicationIds = Array.from(uniqueAppIds) as string[]
       } else if (userRole === 'company_owner') {
@@ -127,12 +128,14 @@ export default function NotificationDropdown({
           .from('applications')
           .select('id')
           .eq('company_owner_id', userId)
+        console.log('apps', apps)
         applicationIds = apps?.map(a => a.id) || []
       } else if (userRole === 'expert') {
         const { data: apps } = await supabase
           .from('applications')
           .select('id')
           .eq('assigned_expert_id', userId)
+        console.log('apps', apps)
         applicationIds = apps?.map(a => a.id) || []
       } else {
         // Staff members don't have access to conversations
@@ -160,7 +163,7 @@ export default function NotificationDropdown({
           applications!inner(id, application_name, state)
         `)
         .in('application_id', applicationIds)
-
+      console.log('conversations', conversations)
       if (convError) {
         console.error('Error fetching conversations:', convError)
         setApplications([])
@@ -180,6 +183,16 @@ export default function NotificationDropdown({
 
       // Step 3: Get unread counts using RPC function (user ID not in is_read array)
       const conversationIds = conversations.map(c => c.id)
+      
+      // Validate inputs before calling RPC
+      if (!userId || !Array.isArray(conversationIds) || conversationIds.length === 0) {
+        console.warn('Invalid inputs for RPC call in fetchApplicationsWithUnread:', { userId, conversationIds: conversationIds.length })
+        setApplications([])
+        setUnreadCount(0)
+        setIsLoading(false)
+        return
+      }
+      
       const { data: unreadCounts, error: countError } = await supabase
         .rpc('count_unread_messages_for_user', {
           conversation_ids: conversationIds,
@@ -187,7 +200,15 @@ export default function NotificationDropdown({
         })
 
       if (countError) {
-        console.error('Error counting unread messages:', countError)
+        console.error('Error counting unread messages in fetchApplicationsWithUnread:', {
+          error: countError,
+          message: countError.message,
+          details: countError.details,
+          hint: countError.hint,
+          code: countError.code,
+          conversationIds: conversationIds.length,
+          userId
+        })
         setApplications([])
         setUnreadCount(0)
         setIsLoading(false)
@@ -234,6 +255,7 @@ export default function NotificationDropdown({
 
       setApplications(appNotifications)
       const totalUnread = appNotifications.reduce((sum, app) => sum + app.unread_count, 0)
+      console.log('totalUnread', totalUnread)
       setUnreadCount(totalUnread)
       lastFetchRef.current = Date.now()
     } catch (err) {
@@ -248,6 +270,7 @@ export default function NotificationDropdown({
   // Quick badge count refresh function
   const refreshBadgeCount = useCallback(async () => {
     try {
+      console.log('Refreshing badge count for:', { userRole, userId })
       let conversationIds: string[] = []
       
       if (userRole === 'admin') {
@@ -304,6 +327,13 @@ export default function NotificationDropdown({
         return
       }
 
+      // Validate inputs before calling RPC
+      if (!userId || !Array.isArray(conversationIds) || conversationIds.length === 0) {
+        console.warn('Invalid inputs for RPC call:', { userId, conversationIds: conversationIds.length })
+        setUnreadCount(0)
+        return
+      }
+
       // Use RPC function to count unread messages (user ID not in is_read array)
       const { data: count, error: countError } = await supabase
         .rpc('get_total_unread_count_for_user', {
@@ -312,9 +342,19 @@ export default function NotificationDropdown({
         })
 
       if (countError) {
-        console.error('Error counting unread messages:', countError)
-        setUnreadCount(0)
+        console.error('Error counting unread messages:', {
+          error: countError,
+          message: countError.message,
+          details: countError.details,
+          hint: countError.hint,
+          code: countError.code,
+          conversationIds: conversationIds.length,
+          userId
+        })
+        // Don't set to 0 on error - keep previous count to avoid flickering
+        // setUnreadCount(0)
       } else {
+        console.log('Badge count updated:', { count, conversationIds: conversationIds.length })
         setUnreadCount(count || 0)
       }
     } catch (err) {
@@ -329,14 +369,22 @@ export default function NotificationDropdown({
     }
 
     fetchTimeoutRef.current = setTimeout(async () => {
+      // Add a delay to ensure database transaction is fully committed before querying
+      // This prevents race conditions where the query runs before the message is visible
+      await new Promise(resolve => setTimeout(resolve, 400))
+      
       // Always refresh badge count when message arrives (even if dropdown is open)
       await refreshBadgeCount()
       
       // If dropdown is open, also refresh the full list if cache expired
+      // Add a small delay to ensure database transaction is committed before fetching
       if (isOpen) {
         const now = Date.now()
         if (now - lastFetchRef.current > CACHE_TTL) {
-          fetchApplicationsWithUnread()
+          // Wait a bit longer to ensure the new message is committed to the database
+          setTimeout(() => {
+            fetchApplicationsWithUnread()
+          }, 500)
         }
       }
     }, DEBOUNCE_MS)
@@ -346,18 +394,37 @@ export default function NotificationDropdown({
   useEffect(() => {
     if (!userId || !userRole) return
 
+    // Use unique channel name per user to avoid conflicts
+    const channelName = `notification-messages-${userId}`
+    
     const channel = supabase
-      .channel('notification-messages')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'messages',
-          filter: `sender_id=neq.${userId}`
+          table: 'messages'
+          // Remove filter - we'll check in the callback to ensure reliability
         },
-        () => {
-          // Immediately refresh badge when new message arrives
+        async (payload) => {
+          const newMessage = payload.new as any
+          
+          // Skip if message is from current user
+          if (!newMessage || newMessage.sender_id === userId) {
+            return
+          }
+          
+          // Add a small delay to ensure database transaction is fully committed
+          // This prevents race conditions where the query runs before the message is visible
+          await new Promise(resolve => setTimeout(resolve, 300))
+          
+          // Refresh badge count
+          console.log('Real-time INSERT event received, refreshing badge:', {
+            messageId: newMessage.id,
+            senderId: newMessage.sender_id,
+            conversationId: newMessage.conversation_id
+          })
           debouncedRefreshBadge()
         }
       )
@@ -366,22 +433,38 @@ export default function NotificationDropdown({
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'messages',
-          filter: `sender_id=neq.${userId}`
+          table: 'messages'
+          // Remove filter - we'll check in the callback
         },
-        () => {
-          // Refresh badge when message is updated (e.g., marked as read)
-          debouncedRefreshBadge()
+        async (payload) => {
+          const updatedMessage = payload.new as any
+          
+          // Only refresh if message is from another user (not our own messages being marked as read)
+          if (updatedMessage && updatedMessage.sender_id !== userId) {
+            // Add a small delay to ensure the update is committed
+            await new Promise(resolve => setTimeout(resolve, 200))
+            
+            console.log('Real-time UPDATE event received, refreshing badge:', {
+              messageId: updatedMessage.id,
+              senderId: updatedMessage.sender_id
+            })
+            debouncedRefreshBadge()
+          }
         }
       )
       .subscribe((status) => {
+        console.log('Real-time subscription status:', status, { userRole, userId })
         if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to real-time updates')
           // Refresh badge count when subscription is established
           refreshBadgeCount()
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Real-time subscription error for channel:', channelName)
         }
       })
 
     return () => {
+      console.log('Cleaning up real-time subscription')
       supabase.removeChannel(channel)
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current)

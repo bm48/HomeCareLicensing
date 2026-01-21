@@ -392,17 +392,11 @@ export default function ApplicationDetailContent({
             )
           })
 
-          // Mark as read if not sent by current user (add user ID to is_read array)
-          if (newMessage.sender_id !== currentUserId) {
-            const isRead = newMessage.is_read
-            const isReadByUser = Array.isArray(isRead) && isRead.includes(currentUserId)
-            if (!isReadByUser) {
-              await supabase.rpc('mark_message_as_read_by_user', {
-                message_id: newMessage.id,
-                user_id: currentUserId
-              })
-            }
-          }
+          // DO NOT mark as read automatically when message arrives via real-time
+          // Messages should only be marked as read when:
+          // 1. User initially loads the conversation (handled in setupConversation)
+          // 2. User manually views/interacts with the conversation
+          // This ensures the notification badge updates correctly for unread messages
 
           // Scroll to bottom
           setTimeout(() => {
@@ -650,7 +644,7 @@ export default function ApplicationDetailContent({
   return (
     <div className="space-y-6">
       {activeTab === 'overview' && (
-            <div className="space-y-6">
+      <div className="space-y-6">
               {/* Welcome Header */}
               <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome Back</h1>
@@ -667,8 +661,8 @@ export default function ApplicationDetailContent({
                       className="bg-gray-900 h-2 rounded-full transition-all"
                       style={{ width: `${application.progress_percentage || 0}%` }}
                     />
-                  </div>
-                </div>
+            </div>
+          </div>
 
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                   <div className="flex items-center justify-between mb-2">
@@ -676,15 +670,15 @@ export default function ApplicationDetailContent({
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
                   </div>
                   <div className="text-3xl font-bold text-gray-900">{completedSteps} of {totalSteps}</div>
-                </div>
+        </div>
 
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm font-medium text-gray-600">Pending Tasks</div>
                     <Clock className="w-5 h-5 text-orange-600" />
-                  </div>
+            </div>
                   <div className="text-3xl font-bold text-gray-900">{pendingTasks} Items remaining</div>
-                </div>
+          </div>
 
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                   <div className="flex items-center justify-between mb-2">
@@ -692,8 +686,8 @@ export default function ApplicationDetailContent({
                     <FileText className="w-5 h-5 text-purple-600" />
                   </div>
                   <div className="text-3xl font-bold text-gray-900">{completedDocuments} of {totalDocuments} ready</div>
-                </div>
-              </div>
+            </div>
+          </div>
 
               {/* Next Steps and Documents */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -713,7 +707,7 @@ export default function ApplicationDetailContent({
                   ) : steps.filter(s => !s.is_completed).length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <p className="text-sm">All steps completed!</p>
-                    </div>
+            </div>
                   ) : (
                     <div className="space-y-3">
                       {steps
@@ -731,16 +725,16 @@ export default function ApplicationDetailContent({
                                 <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
                                   Licensing
                                 </span>
-                              </div>
-                            </div>
-                          </div>
+            </div>
+          </div>
+        </div>
                         ))}
                     </div>
                   )}
                   <button className="w-full mt-4 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium">
                     Continue Checklist
                   </button>
-                </div>
+          </div>
 
                 {/* Documents */}
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -751,12 +745,12 @@ export default function ApplicationDetailContent({
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
-                  {documents.length === 0 ? (
+          {documents.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <p className="text-sm">No documents yet</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
+            </div>
+          ) : (
+            <div className="space-y-3">
                       {documents.slice(0, 2).map((doc) => (
                         <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                           <div className="flex items-center gap-3 flex-1">
@@ -767,11 +761,11 @@ export default function ApplicationDetailContent({
                                 {doc.document_type || 'Document'}
                               </div>
                             </div>
-                          </div>
+                    </div>
                           <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
                             completed
-                          </span>
-                        </div>
+                        </span>
+                      </div>
                       ))}
                     </div>
                   )}
@@ -793,7 +787,7 @@ export default function ApplicationDetailContent({
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
                   <div className="space-y-3">
-                    <button 
+                    <button
                       onClick={() => handleTabChange('ai-assistant')}
                       className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
                     >
@@ -1065,10 +1059,10 @@ export default function ApplicationDetailContent({
                           </div>
                         )
                       })}
-                    </div>
-                  )}
-                </div>
-              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
               {/* Action Buttons */}
               <div className="flex gap-4">

@@ -363,17 +363,11 @@ export default function AdminApplicationDetailContent({
             )
           })
 
-          // Mark as read if not sent by admin (add admin user ID to is_read array)
-          if (newMessage.sender_id !== adminUserId) {
-            const isRead = newMessage.is_read
-            const isReadByUser = Array.isArray(isRead) && isRead.includes(adminUserId)
-            if (!isReadByUser) {
-              await supabase.rpc('mark_message_as_read_by_user', {
-                message_id: newMessage.id,
-                user_id: adminUserId
-              })
-            }
-          }
+          // DO NOT mark as read automatically when message arrives via real-time
+          // Messages should only be marked as read when:
+          // 1. Admin initially loads the conversation (handled in setupConversation)
+          // 2. Admin manually views/interacts with the conversation
+          // This ensures the notification badge updates correctly for unread messages
 
           // Scroll to bottom
           setTimeout(() => {
