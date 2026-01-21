@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import StaffLayout from '@/components/StaffLayout'
 import AddCertificationModal from '@/components/AddCertificationModal'
 import EditCertificationModal from '@/components/EditCertificationModal'
@@ -27,6 +27,8 @@ interface Certification {
 
 export default function MyCertificationsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const action = searchParams.get('action')
   const [certifications, setCertifications] = useState<Certification[]>([])
   const [certificationTypes, setCertificationTypes] = useState<Array<{ id: number; certification_type: string }>>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -37,6 +39,12 @@ export default function MyCertificationsPage() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
+
+  useEffect(() => {
+    if (action === 'add') {
+      setIsModalOpen(true)
+    }
+  }, [action])
 
   const loadData = useCallback( async () => {
     

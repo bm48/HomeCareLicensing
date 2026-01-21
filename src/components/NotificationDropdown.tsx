@@ -1,17 +1,16 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { Bell, AlertCircle, FileText, CheckCircle2, Clock, Trash2 } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Bell, MessageSquare, Clock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
-interface Notification {
-  id: string
-  title: string
-  message: string
-  type: string
-  is_read: boolean
-  created_at: string
+interface ApplicationNotification {
+  application_id: string
+  application_name: string
+  state: string
+  unread_count: number
+  last_message_at: string
 }
 
 interface NotificationDropdownProps {
@@ -24,20 +23,48 @@ export default function NotificationDropdown({
   initialUnreadCount = 0 
 }: NotificationDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [applications, setApplications] = useState<ApplicationNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
   const [isLoading, setIsLoading] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
+  
+  // Cache and debounce refetch
+  const lastFetchRef = useRef<number>(0)
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const CACHE_TTL = 30000 // 30 seconds cache
+  const DEBOUNCE_MS = 500 // 500ms debounce for faster badge updates
 
-  // Fetch notifications when dropdown opens
+  // Get user role on mount
   useEffect(() => {
-    if (isOpen && userId) {
-      fetchNotifications()
+    console.log('userId', userId)
+    if (!userId) return
+    getUserRole()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  // Fetch initial badge count when userRole is available
+  useEffect(() => {
+    if (userRole && userId) {
+      refreshBadgeCount()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, userId])
+  }, [userRole, userId])
+
+  // Fetch applications when dropdown opens (with cache)
+  useEffect(() => {
+    if (isOpen && userId && userRole) {
+      const now = Date.now()
+      // Use cache if recent
+      if (now - lastFetchRef.current < CACHE_TTL && applications.length > 0) {
+        return
+      }
+      fetchApplicationsWithUnread()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, userId, userRole])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -56,146 +83,328 @@ export default function NotificationDropdown({
     }
   }, [isOpen])
 
-  const fetchNotifications = async () => {
+  const getUserRole = async () => {
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+      if (profile) {
+        setUserRole(profile.role)
+        return profile.role
+      }
+    } catch (err) {
+      console.error('Error fetching user role:', err)
+    }
+    return null
+  }
+
+
+  // Optimized: Single query with aggregation using query builder
+  const fetchApplicationsWithUnread = useCallback(async () => {
+    if (!userRole) return
+    
     setIsLoading(true)
     try {
-      // Fetch all notifications (read and unread) ordered by created_at desc
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20)
-
-      if (error) {
-        console.error('Error fetching notifications:', error)
+      // Step 1: Get application IDs based on role (single query)
+      let applicationIds: string[] = []
+      
+      if (userRole === 'admin') {
+        // For admins, we'll get conversations first and derive application IDs
+        // This is more efficient than fetching all applications
+        const { data: conversations } = await supabase
+          .from('conversations')
+          .select('application_id')
+          .not('application_id', 'is', null)
+          .limit(100) // Reasonable limit
+        
+        const uniqueAppIds = new Set(conversations?.map(c => c.application_id).filter(Boolean) || [])
+        applicationIds = Array.from(uniqueAppIds) as string[]
+      } else if (userRole === 'company_owner') {
+        const { data: apps } = await supabase
+          .from('applications')
+          .select('id')
+          .eq('company_owner_id', userId)
+        applicationIds = apps?.map(a => a.id) || []
+      } else if (userRole === 'expert') {
+        const { data: apps } = await supabase
+          .from('applications')
+          .select('id')
+          .eq('assigned_expert_id', userId)
+        applicationIds = apps?.map(a => a.id) || []
+      } else {
+        // Staff members don't have access to conversations
+        setApplications([])
+        setUnreadCount(0)
+        setIsLoading(false)
         return
       }
 
-      if (data) {
-        setNotifications(data)
-        const unread = data.filter(n => !n.is_read).length
-        setUnreadCount(unread)
+      if (applicationIds.length === 0) {
+        setApplications([])
+        setUnreadCount(0)
+        setIsLoading(false)
+        lastFetchRef.current = Date.now()
+        return
       }
+
+      // Step 2: Get conversations with application details (single query with JOIN)
+      const { data: conversations, error: convError } = await supabase
+        .from('conversations')
+        .select(`
+          id,
+          application_id,
+          last_message_at,
+          applications!inner(id, application_name, state)
+        `)
+        .in('application_id', applicationIds)
+
+      if (convError) {
+        console.error('Error fetching conversations:', convError)
+        setApplications([])
+        setUnreadCount(0)
+        setIsLoading(false)
+        lastFetchRef.current = Date.now()
+        return
+      }
+
+      if (!conversations || conversations.length === 0) {
+        setApplications([])
+        setUnreadCount(0)
+        setIsLoading(false)
+        lastFetchRef.current = Date.now()
+        return
+      }
+
+      // Step 3: Get unread counts using RPC function (user ID not in is_read array)
+      const conversationIds = conversations.map(c => c.id)
+      const { data: unreadCounts, error: countError } = await supabase
+        .rpc('count_unread_messages_for_user', {
+          conversation_ids: conversationIds,
+          user_id: userId
+        })
+
+      if (countError) {
+        console.error('Error counting unread messages:', countError)
+        setApplications([])
+        setUnreadCount(0)
+        setIsLoading(false)
+        return
+      }
+
+      // Step 4: Aggregate in memory (minimal processing)
+      const unreadCountsByConv: Record<string, number> = {}
+      unreadCounts?.forEach((row: { conversation_id: string; unread_count: number }) => {
+        unreadCountsByConv[row.conversation_id] = Number(row.unread_count)
+      })
+
+      // Step 5: Build result (single pass)
+      const appMap = new Map<string, ApplicationNotification>()
+      
+      conversations.forEach(conv => {
+        const appId = conv.application_id
+        if (!appId) return
+        
+        const app = (conv as any).applications
+        const unread = unreadCountsByConv[conv.id] || 0
+        
+        if (unread > 0) {
+          const existing = appMap.get(appId)
+          if (existing) {
+            existing.unread_count += unread
+            if (conv.last_message_at && (!existing.last_message_at || conv.last_message_at > existing.last_message_at)) {
+              existing.last_message_at = conv.last_message_at
+            }
+          } else {
+            appMap.set(appId, {
+              application_id: appId,
+              application_name: app.application_name || `Application ${app.state}`,
+              state: app.state,
+              unread_count: unread,
+              last_message_at: conv.last_message_at || ''
+            })
+          }
+        }
+      })
+
+      const appNotifications = Array.from(appMap.values())
+        .sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime())
+
+      setApplications(appNotifications)
+      const totalUnread = appNotifications.reduce((sum, app) => sum + app.unread_count, 0)
+      setUnreadCount(totalUnread)
+      lastFetchRef.current = Date.now()
     } catch (err) {
-      console.error('Error fetching notifications:', err)
+      console.error('Error fetching applications with unread:', err)
+      setApplications([])
+      setUnreadCount(0)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [userRole, userId, supabase])
 
-  const markAsRead = async (notificationId: string) => {
+  // Quick badge count refresh function
+  const refreshBadgeCount = useCallback(async () => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId)
+      let conversationIds: string[] = []
+      
+      if (userRole === 'admin') {
+        // For admins, get all conversations (RLS will filter automatically)
+        const { data: conversations } = await supabase
+          .from('conversations')
+          .select('id')
+          .limit(500) // Reasonable limit for admin
+        
+        conversationIds = conversations?.map(c => c.id) || []
+      } else if (userRole === 'company_owner') {
+        const { data } = await supabase
+          .from('applications')
+          .select('id')
+          .eq('company_owner_id', userId)
+        const applicationIds = data?.map(a => a.id) || []
+        
+        if (applicationIds.length === 0) {
+          setUnreadCount(0)
+          return
+        }
 
-      if (error) {
-        console.error('Error marking notification as read:', error)
+        const { data: conversations } = await supabase
+          .from('conversations')
+          .select('id')
+          .in('application_id', applicationIds)
+        
+        conversationIds = conversations?.map(c => c.id) || []
+      } else if (userRole === 'expert') {
+        const { data } = await supabase
+          .from('applications')
+          .select('id')
+          .eq('assigned_expert_id', userId)
+        const applicationIds = data?.map(a => a.id) || []
+        
+        if (applicationIds.length === 0) {
+          setUnreadCount(0)
+          return
+        }
+
+        const { data: conversations } = await supabase
+          .from('conversations')
+          .select('id')
+          .in('application_id', applicationIds)
+        
+        conversationIds = conversations?.map(c => c.id) || []
+      } else {
+        setUnreadCount(0)
         return
       }
 
-      // Update local state
-      setNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      if (conversationIds.length === 0) {
+        setUnreadCount(0)
+        return
+      }
+
+      // Use RPC function to count unread messages (user ID not in is_read array)
+      const { data: count, error: countError } = await supabase
+        .rpc('get_total_unread_count_for_user', {
+          conversation_ids: conversationIds,
+          user_id: userId
+        })
+
+      if (countError) {
+        console.error('Error counting unread messages:', countError)
+        setUnreadCount(0)
+      } else {
+        setUnreadCount(count || 0)
+      }
+    } catch (err) {
+      console.error('Error refreshing badge:', err)
+    }
+  }, [userRole, userId, supabase])
+
+  // Debounced refresh for badge count only
+  const debouncedRefreshBadge = useCallback(() => {
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current)
+    }
+
+    fetchTimeoutRef.current = setTimeout(async () => {
+      // Always refresh badge count when message arrives (even if dropdown is open)
+      await refreshBadgeCount()
+      
+      // If dropdown is open, also refresh the full list if cache expired
+      if (isOpen) {
+        const now = Date.now()
+        if (now - lastFetchRef.current > CACHE_TTL) {
+          fetchApplicationsWithUnread()
+        }
+      }
+    }, DEBOUNCE_MS)
+  }, [isOpen, refreshBadgeCount, fetchApplicationsWithUnread])
+
+  // Set up real-time subscription with debouncing (after functions are defined)
+  useEffect(() => {
+    if (!userId || !userRole) return
+
+    const channel = supabase
+      .channel('notification-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `sender_id=neq.${userId}`
+        },
+        () => {
+          // Immediately refresh badge when new message arrives
+          debouncedRefreshBadge()
+        }
       )
-      setUnreadCount(prev => Math.max(0, prev - 1))
-      
-      // Refresh the page to update unread count in header
-      router.refresh()
-    } catch (err) {
-      console.error('Error marking notification as read:', err)
-    }
-  }
-
-  const markAllAsRead = async () => {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', userId)
-        .eq('is_read', false)
-
-      if (error) {
-        console.error('Error marking all notifications as read:', error)
-        return
-      }
-
-      // Update local state
-      setNotifications(prev =>
-        prev.map(n => ({ ...n, is_read: true }))
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `sender_id=neq.${userId}`
+        },
+        () => {
+          // Refresh badge when message is updated (e.g., marked as read)
+          debouncedRefreshBadge()
+        }
       )
-      setUnreadCount(0)
-      
-      // Refresh the page to update unread count in header
-      router.refresh()
-    } catch (err) {
-      console.error('Error marking all notifications as read:', err)
-    }
-  }
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          // Refresh badge count when subscription is established
+          refreshBadgeCount()
+        }
+      })
 
-  const deleteNotification = async (notificationId: string, isUnread: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('id', notificationId)
-        .eq('user_id', userId)
-
-      if (error) {
-        console.error('Error deleting notification:', error)
-        return
+    return () => {
+      supabase.removeChannel(channel)
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current)
       }
-
-      // Update local state - remove the deleted notification
-      setNotifications(prev => prev.filter(n => n.id !== notificationId))
-      
-      // Update unread count if the deleted notification was unread
-      if (isUnread) {
-        setUnreadCount(prev => Math.max(0, prev - 1))
-      }
-      
-      // Refresh the page to update unread count in header
-      router.refresh()
-    } catch (err) {
-      console.error('Error deleting notification:', err)
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, userRole, debouncedRefreshBadge, refreshBadgeCount])
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'license_expiring':
-      case 'license_expired':
-      case 'staff_certification_expiring':
-        return AlertCircle
-      case 'document_approved':
-        return CheckCircle2
-      case 'application_update':
-      case 'document_rejected':
-        return FileText
-      default:
-        return Bell
-    }
-  }
-
-  const getNotificationColor = (type: string) => {
-    switch (type) {
-      case 'license_expiring':
-      case 'license_expired':
-      case 'staff_certification_expiring':
-        return 'text-orange-500'
-      case 'document_approved':
-        return 'text-green-500'
-      case 'application_update':
-      case 'document_rejected':
-        return 'text-blue-500'
-      default:
-        return 'text-purple-500'
+  const handleApplicationClick = (applicationId: string) => {
+    setIsOpen(false)
+    
+    // Navigate based on user role with fromNotification flag
+    if (userRole === 'admin') {
+      router.push(`/admin/licenses/applications/${applicationId}?fromNotification=true`)
+    } else if (userRole === 'company_owner') {
+      router.push(`/dashboard/applications/${applicationId}?fromNotification=true`)
+    } else if (userRole === 'expert') {
+      router.push(`/dashboard/expert/messages?fromNotification=true&applicationId=${applicationId}`)
     }
   }
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'No messages'
     const date = new Date(dateString)
     const now = new Date()
     const diffInMs = now.getTime() - date.getTime()
@@ -232,79 +441,62 @@ export default function NotificationDropdown({
         <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[500px] flex flex-col">
           {/* Header */}
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+            <h3 className="font-semibold text-gray-900">Messages</h3>
             {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Mark all as read
-              </button>
+              <span className="text-sm text-gray-600">
+                {unreadCount} unread
+              </span>
             )}
           </div>
 
-          {/* Notifications List */}
+          {/* Applications List */}
           <div className="overflow-y-auto flex-1">
             {isLoading ? (
               <div className="p-8 text-center text-gray-500">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-2 text-sm">Loading notifications...</p>
+                <p className="mt-2 text-sm">Loading messages...</p>
               </div>
-            ) : notifications.length > 0 ? (
+            ) : applications.length > 0 ? (
               <div className="divide-y divide-gray-100">
-                {notifications.map((notification) => {
-                  const Icon = getNotificationIcon(notification.type)
-                  return (
-                    <div
-                      key={notification.id}
-                      onClick={() => !notification.is_read && markAsRead(notification.id)}
-                      className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                        !notification.is_read ? 'bg-blue-50/50' : ''
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${getNotificationColor(notification.type)}`} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <div className={`font-medium text-sm ${!notification.is_read ? 'text-gray-900 font-semibold' : 'text-gray-700'}`}>
-                                {notification.title}
-                              </div>
-                              <div className="text-sm text-gray-600 mt-1 line-clamp-2">
-                                {notification.message}
-                              </div>
+                {applications.map((app) => (
+                  <div
+                    key={app.application_id}
+                    onClick={() => handleApplicationClick(app.application_id)}
+                    className="p-4 hover:bg-gray-50 transition-colors cursor-pointer bg-blue-50/50"
+                  >
+                    <div className="flex items-start gap-3">
+                      <MessageSquare className="w-5 h-5 mt-0.5 flex-shrink-0 text-blue-600" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="font-semibold text-sm text-gray-900">
+                              {app.application_name}
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {!notification.is_read && (
-                                <div className="w-2 h-2 bg-blue-600 rounded-full mt-1"></div>
-                              )}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  deleteNotification(notification.id, !notification.is_read)
-                                }}
-                                className="p-1 hover:bg-gray-200 rounded transition-colors text-gray-400 hover:text-red-600"
-                                aria-label="Delete notification"
-                                title="Delete notification"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                            <div className="text-sm text-gray-600 mt-1">
+                              {app.state} • {app.unread_count} unread {app.unread_count === 1 ? 'message' : 'messages'}
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
-                            <Clock className="w-3 h-3" />
-                            {formatDate(notification.created_at)}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {app.unread_count > 0 && (
+                              <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                {app.unread_count > 9 ? '9+' : app.unread_count}
+                              </span>
+                            )}
                           </div>
+                        </div>
+                        <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(app.last_message_at)}
                         </div>
                       </div>
                     </div>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="p-8 text-center text-gray-500">
-                <Bell className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p className="text-sm">No notifications</p>
+                <MessageSquare className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm">No unread messages</p>
               </div>
             )}
           </div>

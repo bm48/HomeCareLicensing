@@ -90,7 +90,8 @@ export default function ExpertDashboardLayout({
     <div className="min-h-screen bg-gray-50">
       {isLoading && <LoadingSpinner />}
       {/* Top Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
+      {/* <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg"> */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
         <div className="flex items-center justify-between px-4 sm:px-6 py-4">
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Mobile Menu Button */}
@@ -148,10 +149,10 @@ export default function ExpertDashboardLayout({
         {/* Sidebar */}
         <aside className={`
           bg-white shadow-lg transition-all duration-300 
-          fixed lg:static inset-y-0 left-0 z-50
+          fixed top-[73px] left-0 bottom-0 z-40
           ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           ${sidebarCollapsed ? 'w-16' : 'w-64'}
-          min-h-[calc(100vh-73px)] lg:min-h-[calc(100vh-73px)]
+          overflow-y-auto
         `}>
           <div className="p-4 h-full flex flex-col">
             <button
@@ -207,7 +208,9 @@ export default function ExpertDashboardLayout({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 sm:p-6 w-full lg:w-auto">
+        <main className={`flex-1 p-4 sm:p-6 w-full transition-all duration-300 ${
+          sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+        }`}>
           {children}
         </main>
       </div>

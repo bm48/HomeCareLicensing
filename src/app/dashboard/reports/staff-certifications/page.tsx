@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getStaffCertificationsReport } from '@/app/actions/reports'
 import { ArrowLeft, Download, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import DownloadCSVButton from '@/components/DownloadCSVButton'
+import DownloadCertificationButton from '@/components/DownloadCertificationButton'
 
 export default async function StaffCertificationsReportPage() {
   const session = await getSession()
@@ -126,8 +127,9 @@ export default async function StaffCertificationsReportPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">State</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Issuing Authority</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Issue Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Expiration</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Expiration</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -142,6 +144,13 @@ export default async function StaffCertificationsReportPage() {
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{row.issue_date}</td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{row.expiration}</td>
                         <td className="px-4 py-4 whitespace-nowrap">{getStatusBadge(row.status)}</td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <DownloadCertificationButton
+                            documentUrl={row.document_url}
+                            certificationName={row.certification}
+                            staffName={row.staff_name}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -92,6 +92,7 @@ export default async function AdminApplicationDetailPage({
         <AdminApplicationDetailContent
           application={applicationWithOwner}
           documents={documents || []}
+          adminUserId={user.id}
         />
       </div>
     </AdminLayout>

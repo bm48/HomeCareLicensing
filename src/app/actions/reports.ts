@@ -12,6 +12,8 @@ export interface StaffCertificationReportRow {
   issue_date: string
   expiration: string
   status: 'Active' | 'Expiring Soon' | 'Expired'
+  certification_id?: string
+  document_url?: string | null
 }
 
 export interface ExpiringCertificationReportRow {
@@ -21,6 +23,8 @@ export interface ExpiringCertificationReportRow {
   cert_number: string
   expiration: string
   status: 'Expiring Soon' | 'Expired'
+  certification_id?: string
+  document_url?: string | null
 }
 
 export interface StaffRosterReportRow {
@@ -116,7 +120,9 @@ export async function getStaffCertificationsReport() {
           ? new Date(cert.issue_date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
           : 'N/A',
         expiration: new Date(cert.expiration_date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-        status
+        status,
+        certification_id: cert.id,
+        document_url: cert.document_url
       }
     })
 
@@ -214,7 +220,9 @@ export async function getExpiringCertificationsReport() {
           certification: cert.type,
           cert_number: cert.license_number,
           expiration: new Date(cert.expiration_date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-          status
+          status,
+          certification_id: cert.id,
+          document_url: cert.document_url
         }
       })
 

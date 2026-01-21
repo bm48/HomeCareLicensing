@@ -2,10 +2,11 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ExpertDashboardLayout from '@/components/ExpertDashboardLayout'
+
 import { 
   MessageSquare, 
   Search, 
@@ -24,9 +25,14 @@ interface Client {
 
 interface Conversation {
   id: string
-  client_id: string
+  application_id: string
   last_message_at: string
-  client?: Client
+  application?: {
+    id: string
+    application_name: string
+    state: string
+    company_owner_id: string
+  }
   unread_count?: number
 }
 
@@ -36,11 +42,24 @@ interface Message {
   content: string
   sender_id: string
   created_at: string
-  is_read: boolean
+  is_read: string[] | boolean // Array of user IDs who have read the message, or boolean for backward compatibility
+  sender?: {
+    id: string
+    user_profiles?: {
+      id: string
+      full_name: string | null
+      role: string | null
+    } | null
+  }
+  is_own?: boolean
 }
 
 export default function ExpertMessagesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const fromNotification = searchParams?.get('fromNotification') === 'true'
+  const applicationIdFromNotification = searchParams?.get('applicationId')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -101,32 +120,41 @@ export default function ExpertMessagesPage() {
       
       setClients(clientsData || [])
 
-      // Get conversations
-      const { data: conversationsData } = await supabase
+      // Get applications assigned to this expert
+      const { data: applicationsData } = await supabase
+        .from('applications')
+        .select('id, application_name, state, company_owner_id')
+        .eq('assigned_expert_id', currentUser.id)
+        .order('last_updated_date', { ascending: false })
+
+      // Get conversations for these applications
+      const applicationIds = (applicationsData || []).map(app => app.id)
+      const { data: conversationsData } = applicationIds.length > 0 ? await supabase
         .from('conversations')
         .select(`
           *,
-          client:clients(*)
+          application:applications!inner(id, application_name, state, company_owner_id)
         `)
-        .eq('expert_id', expertRecord.id)
-        .order('last_message_at', { ascending: false, nullsFirst: false })
+        .in('application_id', applicationIds)
+        .order('last_message_at', { ascending: false, nullsFirst: false }) : { data: [] }
 
       // Get unread message counts for each conversation
-      const conversationsWithUnread = await Promise.all(
-        (conversationsData || []).map(async (conv) => {
-          const { count } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('conversation_id', conv.id)
-            .eq('is_read', false)
-            .neq('sender_id', currentUser.id)
-          
-          return {
-            ...conv,
-            unread_count: count || 0
-          }
-        })
-      )
+      const conversationIds = (conversationsData || []).map(c => c.id)
+      const { data: unreadCounts } = conversationIds.length > 0 ? await supabase
+        .rpc('count_unread_messages_for_user', {
+          conversation_ids: conversationIds,
+          user_id: currentUser.id
+        }) : { data: [] }
+
+      const unreadCountsByConv: Record<string, number> = {}
+      unreadCounts?.forEach((row: { conversation_id: string; unread_count: number }) => {
+        unreadCountsByConv[row.conversation_id] = Number(row.unread_count)
+      })
+
+      const conversationsWithUnread = (conversationsData || []).map(conv => ({
+        ...conv,
+        unread_count: unreadCountsByConv[conv.id] || 0
+      }))
 
       setConversations(conversationsWithUnread)
 
@@ -134,11 +162,13 @@ export default function ExpertMessagesPage() {
       const { data: allMessages } = await supabase
         .from('messages')
         .select('*')
-        .in('conversation_id', (conversationsData || []).map(c => c.id))
+        .in('conversation_id', conversationIds)
       
-      const unreadMessages = allMessages?.filter(m => 
-        !m.is_read && m.sender_id !== currentUser.id
-      ) || []
+      const unreadMessages = allMessages?.filter(m => {
+        if (m.sender_id === currentUser.id) return false
+        const isRead = m.is_read
+        return !Array.isArray(isRead) || !isRead.includes(currentUser.id)
+      }) || []
 
       setMessages(unreadMessages)
     } catch (error) {
@@ -152,11 +182,105 @@ export default function ExpertMessagesPage() {
     loadData()
   }, [loadData])
 
+  const loadMessages = useCallback(async (conversationId: string) => {
+    try {
+      const supabase = createClient()
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      if (!currentUser) return
+
+      const { data: messagesData } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+      
+      if (messagesData && messagesData.length > 0) {
+        // Get sender profiles
+        const senderIds = Array.from(new Set(messagesData.map(m => m.sender_id)))
+        const { data: userProfiles } = senderIds.length > 0 ? await supabase
+          .from('user_profiles')
+          .select('id, full_name, role')
+          .in('id', senderIds) : { data: [] }
+
+        const profilesById: Record<string, any> = {}
+        userProfiles?.forEach(p => {
+          profilesById[p.id] = p
+        })
+
+        const messagesWithSenders = messagesData.map(msg => ({
+          ...msg,
+          sender: {
+            id: msg.sender_id,
+            user_profiles: profilesById[msg.sender_id] || null
+          },
+          is_own: msg.sender_id === currentUser.id
+        }))
+
+        setMessages(messagesWithSenders)
+
+        // Mark messages as read by adding current user ID to is_read array
+        const unreadMessages = messagesWithSenders.filter(msg => 
+          msg.sender_id !== currentUser.id && 
+          (!msg.is_read || !Array.isArray(msg.is_read) || !msg.is_read.includes(currentUser.id))
+        )
+        
+        if (unreadMessages.length > 0) {
+          // Update each message to add current user ID to is_read array
+          for (const msg of unreadMessages) {
+            await supabase.rpc('mark_message_as_read_by_user', {
+              message_id: msg.id,
+              user_id: currentUser.id
+            })
+          }
+        }
+
+        // Scroll to bottom if coming from notification
+        if (fromNotification) {
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+          }, 300)
+        }
+      } else {
+        setMessages([])
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error)
+    }
+  }, [fromNotification])
+
   useEffect(() => {
     if (selectedConversation) {
       loadMessages(selectedConversation)
     }
-  }, [selectedConversation])
+  }, [selectedConversation, loadMessages])
+
+  // Auto-select conversation when coming from notification
+  useEffect(() => {
+    if (fromNotification && applicationIdFromNotification && conversations.length > 0 && !selectedConversation) {
+      // Find conversation for this application
+      const targetConv = conversations.find(conv => conv.application_id === applicationIdFromNotification)
+      if (targetConv) {
+        setSelectedConversation(targetConv.id)
+        // Find and set the client
+        if (targetConv.application?.company_owner_id) {
+          const client = clients.find(c => c.id === targetConv.application?.company_owner_id)
+          if (client) {
+            setSelectedClient(client.id)
+          }
+        }
+      }
+    }
+  }, [fromNotification, applicationIdFromNotification, conversations, selectedConversation, clients])
+
+  // Scroll to bottom when messages are loaded and coming from notification
+  useEffect(() => {
+    if (fromNotification && messages.length > 0 && messagesEndRef.current) {
+      // Delay to ensure DOM is ready
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+      }, 500)
+    }
+  }, [fromNotification, messages])
 
   // Set up real-time subscription for new messages
   useEffect(() => {
@@ -177,6 +301,22 @@ export default function ExpertMessagesPage() {
           // Get the new message
           const newMessage = payload.new as Message
           
+          // Get sender information
+          const { data: userProfile } = await supabase
+            .from('user_profiles')
+            .select('id, full_name, role')
+            .eq('id', newMessage.sender_id)
+            .maybeSingle()
+
+          const messageWithSender = {
+            ...newMessage,
+            sender: {
+              id: newMessage.sender_id,
+              user_profiles: userProfile || null
+            },
+            is_own: newMessage.sender_id === user.id
+          }
+          
           // Add new message to existing messages (avoid duplicates)
           setMessages(prevMessages => {
             // Check if message already exists (avoid duplicates)
@@ -184,18 +324,22 @@ export default function ExpertMessagesPage() {
             if (exists) return prevMessages
             
             // Add new message and sort by created_at
-            const updated = [...prevMessages, newMessage]
+            const updated = [...prevMessages, messageWithSender]
             return updated.sort((a, b) => 
               new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
             )
           })
 
-          // Mark as read if not sent by current user
-          if (newMessage.sender_id !== user.id && !newMessage.is_read) {
-            await supabase
-              .from('messages')
-              .update({ is_read: true })
-              .eq('id', newMessage.id)
+          // Mark as read if not sent by current user (add user ID to is_read array)
+          if (newMessage.sender_id !== user.id) {
+            const isRead = newMessage.is_read
+            const isReadByUser = Array.isArray(isRead) && isRead.includes(user.id)
+            if (!isReadByUser) {
+              await supabase.rpc('mark_message_as_read_by_user', {
+                message_id: newMessage.id,
+                user_id: user.id
+              })
+            }
           }
         }
       )
@@ -206,21 +350,6 @@ export default function ExpertMessagesPage() {
     }
   }, [selectedConversation, user])
 
-  const loadMessages = async (conversationId: string) => {
-    try {
-      const supabase = createClient()
-      const { data: messagesData } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-      
-      setMessages(messagesData || [])
-    } catch (error) {
-      console.error('Error loading messages:', error)
-    }
-  }
-
   const handleSendMessage = async () => {
     if (!messageContent.trim() || !selectedClient || sending) return
 
@@ -230,37 +359,51 @@ export default function ExpertMessagesPage() {
       const { data: { user: currentUser } } = await supabase.auth.getUser()
       if (!currentUser) return
 
-      // Get expert record
-      const { data: expertRecord } = await supabase
-        .from('licensing_experts')
-        .select('*')
-        .eq('user_id', currentUser.id)
+      // Get client to find company_owner_id
+      const { data: client } = await supabase
+        .from('clients')
+        .select('company_owner_id')
+        .eq('id', selectedClient)
         .single()
 
 
-      if (!expertRecord) return
+      if (!client) {
+        throw new Error('Client not found')
+      }
 
-      // Find or create conversation
+      // Find an application for this client where the expert is assigned
+      const { data: application } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('company_owner_id', client.company_owner_id)
+        .eq('assigned_expert_id', currentUser.id)
+        .order('last_updated_date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+
+      if (!application) {
+        throw new Error('No application found for this client. Please ensure you are assigned to an application.')
+      }
+
+      // Find or create conversation for this application
       let conversationId: string | null = null
       
+      console.log('application.id', application.id)
       const { data: existingConv } = await supabase
         .from('conversations')
         .select('*')
-        .eq('client_id', selectedClient)
-        .eq('expert_id', expertRecord.id)
-        .is('admin_id', null)
+        .eq('application_id', application.id)
         .maybeSingle()
 
-        console.log("existingConv: ",existingConv)
+
       if (existingConv) {
         conversationId = existingConv.id
       } else {
         const { data: newConv, error: convError } = await supabase
           .from('conversations')
           .insert({
-            client_id: selectedClient,
-            expert_id: expertRecord.id,
-            admin_id: null
+            application_id: application.id
           })
           .select()
           .single()
@@ -268,6 +411,7 @@ export default function ExpertMessagesPage() {
         if (convError) throw convError
         conversationId = newConv.id
       }
+
 
       // Send message
       const { error: messageError } = await supabase
@@ -278,23 +422,37 @@ export default function ExpertMessagesPage() {
           content: messageContent.trim()
         })
 
+
       if (messageError) throw messageError
 
+      // Get current user profile for optimistic update
+      const { data: currentUserProfile } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, role')
+        .eq('id', currentUser.id)
+        .single()
+
       // Clear message
+      const messageText = messageContent.trim()
       setMessageContent('')
       
       // Add the new message to the list immediately (optimistic update)
-      const newMessage: Message = {
+      const optimisticMessage: Message = {
         id: '', // Will be set by real-time subscription
         conversation_id: conversationId!,
         sender_id: currentUser.id,
-        content: messageContent.trim(),
-        is_read: true,
-        created_at: new Date().toISOString()
+        content: messageText,
+        is_read: [currentUser.id], // Sender has read their own message
+        created_at: new Date().toISOString(),
+        sender: {
+          id: currentUser.id,
+          user_profiles: currentUserProfile || null
+        },
+        is_own: true
       }
       
       // Update messages optimistically
-      setMessages(prev => [...prev, newMessage])
+      setMessages(prev => [...prev, optimisticMessage])
       
       // Update conversation list if needed
       if (conversationId && !selectedConversation) {
@@ -319,7 +477,85 @@ export default function ExpertMessagesPage() {
 
   const formatTime = (date: string) => {
     const d = new Date(date)
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    const month = d.toLocaleDateString('en-US', { month: 'short' })
+    const day = d.getDate()
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    return `${month} ${day}, ${time}`
+  }
+
+  const getSenderName = (message: Message) => {
+    if (message.is_own) {
+      return 'Expert'
+    }
+    if (message.sender?.user_profiles?.full_name) {
+      return message.sender.user_profiles.full_name
+    }
+    if (message.sender?.user_profiles?.role === 'admin') {
+      return 'Administrator'
+    }
+    if (message.sender?.user_profiles?.role === 'company_owner') {
+      return 'Business Owner'
+    }
+    if (message.sender?.user_profiles?.role === 'expert') {
+      return 'Expert'
+    }
+    return 'User'
+  }
+
+  const getSenderRole = (message: Message) => {
+    if (message.is_own) {
+      return 'Expert'
+    }
+    if (message.sender?.user_profiles?.role === 'admin') {
+      return 'Admin'
+    }
+    if (message.sender?.user_profiles?.role === 'company_owner') {
+      return 'Owner'
+    }
+    if (message.sender?.user_profiles?.role === 'expert') {
+      return 'Expert'
+    }
+    return 'User'
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
+  const getAvatarColor = (name: string, role: string) => {
+    const colors = [
+      'bg-purple-500',
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-orange-500',
+      'bg-pink-500',
+      'bg-indigo-500',
+      'bg-teal-500',
+      'bg-red-500'
+    ]
+    let hash = 0
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return colors[Math.abs(hash) % colors.length]
+  }
+
+  const getRoleTagColor = (role: string) => {
+    if (role === 'Expert') {
+      return 'bg-purple-100 text-purple-700 border-purple-200'
+    }
+    if (role === 'Admin') {
+      return 'bg-green-100 text-green-700 border-green-200'
+    }
+    if (role === 'Owner') {
+      return 'bg-blue-100 text-blue-700 border-blue-200'
+    }
+    return 'bg-gray-100 text-gray-700 border-gray-200'
   }
 
   if (loading) {
@@ -333,7 +569,12 @@ export default function ExpertMessagesPage() {
   }
 
   const totalMessages = messages.length
-  const unreadMessages = messages.filter(m => !m.is_read).length
+  const currentUserId = user?.id
+  const unreadMessages = messages.filter(m => {
+    if (m.sender_id === currentUserId) return false
+    const isRead = m.is_read
+    return !Array.isArray(isRead) || !isRead.includes(currentUserId)
+  }).length
   const activeConversations = conversations.length
 
   return (
@@ -404,7 +645,14 @@ export default function ExpertMessagesPage() {
                     key={conv.id}
                     onClick={() => {
                       setSelectedConversation(conv.id)
-                      setSelectedClient(conv.client_id)
+                      // Find client from application
+                      if (conv.application?.company_owner_id) {
+                        const client = clients.find(c => c.id === selectedClient)
+                        if (!client) {
+                          // Try to find client by company_owner_id
+                          // For now, just set the conversation
+                        }
+                      }
                     }}
                     className={`p-3 rounded-lg cursor-pointer transition-colors ${
                       selectedConversation === conv.id
@@ -414,8 +662,13 @@ export default function ExpertMessagesPage() {
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="font-semibold text-gray-900">
-                        {conv.client?.company_name || 'Unknown Client'}
+                        {conv.application?.application_name || 'Unknown Application'}
                       </div>
+                      {conv.application?.state && (
+                        <div className="text-xs text-gray-500">
+                          {conv.application.state}
+                        </div>
+                      )}
                       {conv.unread_count && conv.unread_count > 0 && (
                         <span className="bg-blue-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                           {conv.unread_count}
@@ -528,31 +781,47 @@ export default function ExpertMessagesPage() {
 
                   {/* Messages Display */}
                   {selectedConversation && messages.length > 0 && (
-                    <div className="border border-gray-200 rounded-lg p-4 max-h-[300px] overflow-y-auto space-y-3">
+                    <div className="border border-gray-200 rounded-lg p-4 max-h-[300px] overflow-y-auto space-y-4">
                       {messages.map((msg) => {
-                        const isOwn = msg.sender_id === user?.id
+                        const senderName = getSenderName(msg)
+                        const senderRole = getSenderRole(msg)
+                        const initials = getInitials(senderName)
+                        const roleTagColor = getRoleTagColor(senderRole)
+                        const avatarColor = getAvatarColor(senderName, senderRole)
+                        
                         return (
                           <div
                             key={msg.id}
-                            className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                            className="flex items-start gap-3"
                           >
-                            <div
-                              className={`max-w-[80%] p-3 rounded-lg ${
-                                isOwn
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-100 text-gray-900'
-                              }`}
-                            >
-                              <div className="text-sm">{msg.content}</div>
-                              <div className={`text-xs mt-1 ${
-                                isOwn ? 'text-blue-100' : 'text-gray-500'
-                              }`}>
-                                {formatTime(msg.created_at)}
+                            {/* Avatar */}
+                            <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}>
+                              {initials}
+                            </div>
+                            
+                            {/* Message Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {senderName}
+                                </span>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded border ${roleTagColor}`}>
+                                  {senderRole}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {formatTime(msg.created_at)}
+                                </span>
+                              </div>
+                              <div className="bg-white border border-gray-200 rounded-lg p-3">
+                                <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                                  {msg.content}
+                                </p>
                               </div>
                             </div>
                           </div>
                         )
                       })}
+                      <div ref={messagesEndRef} />
                     </div>
                   )}
 

@@ -17,17 +17,26 @@ export default function StaffActionsDropdown({
   onManageLicenses,
 }: StaffActionsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current && 
+        !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false)
       }
     }
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside)
+      // Calculate position when dropdown opens
+      updateDropdownPosition()
     }
 
     return () => {
@@ -35,15 +44,50 @@ export default function StaffActionsDropdown({
     }
   }, [isOpen])
 
+  useEffect(() => {
+    // Update position on scroll or resize
+    const handleUpdatePosition = () => {
+      if (isOpen) {
+        updateDropdownPosition()
+      }
+    }
+
+    window.addEventListener('scroll', handleUpdatePosition, true)
+    window.addEventListener('resize', handleUpdatePosition)
+
+    return () => {
+      window.removeEventListener('scroll', handleUpdatePosition, true)
+      window.removeEventListener('resize', handleUpdatePosition)
+    }
+  }, [isOpen])
+
+  const updateDropdownPosition = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + 8, // 8px = mt-2 equivalent (fixed is relative to viewport)
+        right: window.innerWidth - rect.right,
+      })
+    }
+  }
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      updateDropdownPosition()
+    }
+    setIsOpen(!isOpen)
+  }
+
   const handleAction = (action: () => void) => {
     action()
     setIsOpen(false)
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        ref={buttonRef}
+        onClick={handleToggle}
         className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative"
         aria-label="More options"
       >
@@ -51,7 +95,14 @@ export default function StaffActionsDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 z-50 py-2">
+        <div
+          ref={dropdownRef}
+          className="fixed w-56 bg-white rounded-xl shadow-lg border border-gray-200 z-[9999] py-2"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            right: `${dropdownPosition.right}px`,
+          }}
+        >
           <button
             onClick={() => handleAction(onViewDetails)}
             className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
@@ -75,7 +126,7 @@ export default function StaffActionsDropdown({
           </button>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

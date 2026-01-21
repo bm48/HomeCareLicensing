@@ -259,7 +259,7 @@ export default async function StaffDashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <h2 className="text-xl md:text-2xl font-bold text-gray-900">All Licenses & Certifications</h2>
             <Link
-              href="/staff-dashboard/my-licenses?action=add"
+              href="/staff-dashboard/my-certifications?action=add"
               className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors text-sm md:text-base"
             >
               <Plus className="w-4 h-4 md:w-5 md:h-5" />
@@ -351,7 +351,7 @@ export default async function StaffDashboardPage() {
                         {/* ACTIONS */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           <Link
-                            href={`/staff-dashboard/my-licenses/${license.id}`}
+                            href={`/staff-dashboard/my-certifications/${license.id}`}
                             className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
                           >
                             View Details

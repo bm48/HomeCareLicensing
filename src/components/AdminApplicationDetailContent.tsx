@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   FileText,
@@ -15,7 +16,8 @@ import {
   AlertCircle,
   Loader2,
   Mail,
-  Users
+  Users,
+  Send
 } from 'lucide-react'
 
 interface Application {
@@ -64,15 +66,25 @@ interface ApplicationStep {
 interface AdminApplicationDetailContentProps {
   application: Application
   documents: Document[]
+  adminUserId: string
 }
 
 export default function AdminApplicationDetailContent({
   application,
-  documents: initialDocuments
+  documents: initialDocuments,
+  adminUserId
 }: AdminApplicationDetailContentProps) {
+  const searchParams = useSearchParams()
+  const fromNotification = searchParams?.get('fromNotification') === 'true'
   const [documents, setDocuments] = useState<Document[]>(initialDocuments)
   const [steps, setSteps] = useState<ApplicationStep[]>([])
   const [isLoadingSteps, setIsLoadingSteps] = useState(false)
+  const [messages, setMessages] = useState<any[]>([])
+  const [messageContent, setMessageContent] = useState('')
+  const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
   const formatDate = (date: string | Date | null) => {
@@ -203,6 +215,315 @@ export default function AdminApplicationDetailContent({
   useEffect(() => {
     fetchSteps()
   }, [fetchSteps])
+
+  // Set up conversation for application-based group chat
+  useEffect(() => {
+    if (!application.id || !adminUserId) return
+
+    const setupConversation = async () => {
+      setIsLoadingConversation(true)
+      try {
+        // Find or create conversation for this application
+        let convId = conversationId
+
+        if (!convId) {
+          // Try to find existing conversation for this application
+          const { data: existingConv } = await supabase
+            .from('conversations')
+            .select('id')
+            .eq('application_id', application.id)
+            .maybeSingle()
+
+          if (existingConv) {
+            convId = existingConv.id
+            setConversationId(convId)
+          } else {
+            // Create new conversation for this application
+            const { data: newConv, error: convError } = await supabase
+              .from('conversations')
+              .insert({
+                application_id: application.id
+              })
+              .select()
+              .single()
+
+            if (convError) {
+              console.error('Error creating conversation:', convError)
+              setIsLoadingConversation(false)
+              return
+            }
+
+            convId = newConv.id
+            setConversationId(convId)
+          }
+        }
+
+        // Load messages
+        const { data: messagesData, error: messagesError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', convId)
+          .order('created_at', { ascending: true })
+
+        if (messagesError) {
+          console.error('Error loading messages:', messagesError)
+          setMessages([])
+        } else {
+          // Get sender profiles
+          const senderIds = Array.from(new Set((messagesData || []).map(m => m.sender_id)))
+          const { data: userProfiles } = senderIds.length > 0 ? await supabase
+            .from('user_profiles')
+            .select('id, full_name, role')
+            .in('id', senderIds) : { data: [] }
+
+          const profilesById: Record<string, any> = {}
+          userProfiles?.forEach(p => {
+            profilesById[p.id] = p
+          })
+
+          const messagesWithSenders = (messagesData || []).map(msg => ({
+            ...msg,
+            sender: {
+              id: msg.sender_id,
+              user_profiles: profilesById[msg.sender_id] || null
+            },
+            is_own: msg.sender_id === adminUserId
+          }))
+
+          setMessages(messagesWithSenders)
+
+        // Mark messages as read by adding admin user ID to is_read array
+        const unreadMessages = messagesWithSenders.filter(msg => 
+          msg.sender_id !== adminUserId && 
+          (!msg.is_read || !Array.isArray(msg.is_read) || !msg.is_read.includes(adminUserId))
+        )
+        
+        if (unreadMessages.length > 0) {
+          // Update each message to add admin user ID to is_read array
+          for (const msg of unreadMessages) {
+            await supabase.rpc('mark_message_as_read_by_user', {
+              message_id: msg.id,
+              user_id: adminUserId
+            })
+          }
+        }
+        }
+      } catch (error) {
+        console.error('Error setting up conversation:', error)
+        setMessages([])
+      } finally {
+        setIsLoadingConversation(false)
+      }
+    }
+
+    setupConversation()
+  }, [application.id, adminUserId, supabase, conversationId])
+
+  // Set up real-time subscription for new messages
+  useEffect(() => {
+    if (!conversationId || !adminUserId) return
+
+    const channel = supabase
+      .channel(`messages:${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        async (payload) => {
+          const newMessage = payload.new as any
+
+          // Get sender information
+          const { data: userProfile } = await supabase
+            .from('user_profiles')
+            .select('id, full_name, role')
+            .eq('id', newMessage.sender_id)
+            .maybeSingle()
+
+          const messageWithSender = {
+            ...newMessage,
+            sender: {
+              id: newMessage.sender_id,
+              user_profiles: userProfile || null
+            },
+            is_own: newMessage.sender_id === adminUserId
+          }
+
+          // Add new message (avoid duplicates)
+          setMessages(prevMessages => {
+            const exists = prevMessages.some(m => m.id === newMessage.id)
+            if (exists) return prevMessages
+
+            const updated = [...prevMessages, messageWithSender]
+            return updated.sort((a, b) =>
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            )
+          })
+
+          // Mark as read if not sent by admin (add admin user ID to is_read array)
+          if (newMessage.sender_id !== adminUserId) {
+            const isRead = newMessage.is_read
+            const isReadByUser = Array.isArray(isRead) && isRead.includes(adminUserId)
+            if (!isReadByUser) {
+              await supabase.rpc('mark_message_as_read_by_user', {
+                message_id: newMessage.id,
+                user_id: adminUserId
+              })
+            }
+          }
+
+          // Scroll to bottom
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+          }, 100)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [conversationId, adminUserId, supabase])
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      // If coming from notification, scroll immediately after a short delay to ensure DOM is ready
+      const delay = fromNotification ? 500 : 0
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: fromNotification ? 'auto' : 'smooth' })
+      }, delay)
+    }
+  }, [messages, fromNotification])
+
+  const handleSendMessage = async () => {
+    if (!messageContent.trim() || isSendingMessage || !conversationId || !adminUserId) return
+
+    setIsSendingMessage(true)
+    try {
+      // Get current user profile for optimistic update
+      const { data: currentUserProfile } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, role')
+        .eq('id', adminUserId)
+        .single()
+
+      // Send message
+      const { data: newMessage, error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: adminUserId,
+          content: messageContent.trim()
+        })
+        .select()
+        .single()
+
+      if (messageError) throw messageError
+
+      // Update conversation's last_message_at
+      await supabase
+        .from('conversations')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', conversationId)
+
+      // Add message optimistically
+      if (newMessage) {
+        const optimisticMessage = {
+          ...newMessage,
+          is_read: Array.isArray(newMessage.is_read) ? newMessage.is_read : [adminUserId], // Ensure array format
+          sender: {
+            id: adminUserId,
+            user_profiles: currentUserProfile || null
+          },
+          is_own: true
+        }
+        setMessages(prev => [...prev, optimisticMessage])
+      }
+
+      // Clear message
+      setMessageContent('')
+    } catch (error: any) {
+      console.error('Error sending message:', error)
+      alert(error.message || 'Failed to send message. Please try again.')
+    } finally {
+      setIsSendingMessage(false)
+    }
+  }
+
+  const formatMessageTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const month = date.toLocaleDateString('en-US', { month: 'short' })
+    const day = date.getDate()
+    const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    return `${month} ${day}, ${time}`
+  }
+
+  const getSenderName = (message: any) => {
+    if (message.is_own) {
+      return 'Admin'
+    }
+    if (message.sender?.user_profiles?.full_name) {
+      return message.sender.user_profiles.full_name
+    }
+    return 'Client'
+  }
+
+  const getSenderRole = (message: any) => {
+    if (message.is_own) {
+      return 'Admin'
+    }
+    if (message.sender?.user_profiles?.role === 'expert') {
+      return 'Expert'
+    }
+    if (message.sender?.user_profiles?.role === 'admin') {
+      return 'Admin'
+    }
+    return 'Owner'
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
+  const getAvatarColor = (name: string, role: string) => {
+    const colors = [
+      'bg-purple-500',
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-orange-500',
+      'bg-pink-500',
+      'bg-indigo-500',
+      'bg-teal-500',
+      'bg-red-500'
+    ]
+    let hash = 0
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return colors[Math.abs(hash) % colors.length]
+  }
+
+  const getRoleTagColor = (role: string) => {
+    if (role === 'Expert') {
+      return 'bg-purple-100 text-purple-700 border-purple-200'
+    }
+    if (role === 'Admin') {
+      return 'bg-green-100 text-green-700 border-green-200'
+    }
+    if (role === 'Owner') {
+      return 'bg-blue-100 text-blue-700 border-blue-200'
+    }
+    return 'bg-gray-100 text-gray-700 border-gray-200'
+  }
 
   const handleDownload = async (documentUrl: string, documentName: string) => {
     try {
@@ -447,6 +768,105 @@ export default function AdminApplicationDetailContent({
             ))}
           </div>
         )}
+      </div>
+
+      {/* Application Messages */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Application Messages</h2>
+          <p className="text-sm text-gray-600">Communicate with your team about this application</p>
+        </div>
+        <div className="p-6">
+          {/* Messages List */}
+          <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
+            {isLoadingConversation ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">No messages yet</p>
+                <p className="text-xs mt-1">Start a conversation with the client</p>
+              </div>
+            ) : (
+              <>
+                {messages.map((message) => {
+                  const senderName = getSenderName(message)
+                  const senderRole = getSenderRole(message)
+                  const initials = getInitials(senderName)
+                  const roleTagColor = getRoleTagColor(senderRole)
+                  const avatarColor = getAvatarColor(senderName, senderRole)
+                  
+                  return (
+                    <div
+                      key={message.id}
+                      className="flex items-start gap-3"
+                    >
+                      {/* Avatar */}
+                      <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}>
+                        {initials}
+                      </div>
+                      
+                      {/* Message Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-gray-900">
+                            {senderName}
+                          </span>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded border ${roleTagColor}`}>
+                            {senderRole}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatMessageTime(message.created_at)}
+                          </span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-lg p-3">
+                          <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                            {message.content}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+
+          {/* Message Input */}
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex gap-3">
+              <textarea
+                value={messageContent}
+                onChange={(e) => setMessageContent(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSendMessage()
+                  }
+                }}
+                placeholder="Type your message..."
+                rows={2}
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!messageContent.trim() || isSendingMessage || !conversationId}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                {isSendingMessage ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Press Enter to send, Shift+Enter for new line
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )

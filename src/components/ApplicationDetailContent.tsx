@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   FileText,
@@ -63,8 +63,10 @@ export default function ApplicationDetailContent({
   onTabChange
 }: ApplicationDetailContentProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [internalActiveTab, setInternalActiveTab] = useState<TabType>('overview')
   const activeTab = externalActiveTab ?? internalActiveTab
+  const fromNotification = searchParams?.get('fromNotification') === 'true'
   
   const handleTabChange = (tab: TabType) => {
     if (onTabChange) {
@@ -83,11 +85,8 @@ export default function ApplicationDetailContent({
   const [messageContent, setMessageContent] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
-  const [assignedExpert, setAssignedExpert] = useState<any>(null)
   const [isLoadingConversation, setIsLoadingConversation] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [clientId, setClientId] = useState<string | null>(null)
-  const [expertRecordId, setExpertRecordId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
@@ -231,10 +230,10 @@ export default function ApplicationDetailContent({
     getCurrentUser()
   }, [supabase])
 
-  // Fetch or create conversation with assigned expert
+  // Fetch or create conversation for application-based group chat
   useEffect(() => {
     const setupConversation = async () => {
-      if (!application.assigned_expert_id || !currentUserId) {
+      if (!application.id || !currentUserId) {
         setMessages([])
         setConversationId(null)
         return
@@ -242,239 +241,58 @@ export default function ApplicationDetailContent({
 
       setIsLoadingConversation(true)
       try {
-         // Get client_id from company_owner_id
-         const { data: client, error: clientError } = await supabase
-           .from('clients')
-           .select('id')
-           .eq('company_owner_id', application.company_owner_id)
-           .maybeSingle()
+        // Find or create conversation for this application
+        let convId = conversationId
 
-         if (clientError) {
-           console.error('Error fetching client:', clientError)
-           setMessages([])
-           setConversationId(null)
-           setClientId(null)
-           setIsLoadingConversation(false)
-           return
-         }
-
-         if (!client) {
-           console.warn('Client record not found for company_owner_id:', application.company_owner_id)
-           setMessages([])
-           setConversationId(null)
-           setClientId(null)
-           setIsLoadingConversation(false)
-           return
-         }
-
-        setClientId(client.id)
-
-        // Get expert record (licensing_experts.id) from user_id
-        const { data: expertRecord, error: expertError } = await supabase
-          .from('licensing_experts')
-          .select('id, first_name, last_name')
-          .eq('user_id', application.assigned_expert_id)
-          .maybeSingle()
-
-        console.log("expertRecord*********: ",expertRecord)
-
-        if (expertError) {
-          console.error('Error fetching expert:', expertError)
-          setMessages([])
-          setConversationId(null)
-          setIsLoadingConversation(false)
-          return
-        }
-
-        if (!expertRecord) {
-          console.warn('Expert record not found for assigned_expert_id:', application.assigned_expert_id)
-          setMessages([])
-          setConversationId(null)
-          setExpertRecordId(null)
-          setIsLoadingConversation(false)
-          return
-        }
-
-        setExpertRecordId(expertRecord.id)
-        setAssignedExpert({
-          id: expertRecord.id,
-          user_id: application.assigned_expert_id,
-          first_name: expertRecord.first_name,
-          last_name: expertRecord.last_name
-        })
-
-        // Find or create conversation
-        // First, try to find any conversation with messages for this client/expert pair
-        const { data: allConvsForPair } = await supabase
-          .from('conversations')
-          .select('id, client_id, expert_id')
-          .eq('client_id', client.id)
-          .eq('expert_id', expertRecord.id)
-          .is('admin_id', null)
-
-        console.log('All conversations for client/expert pair:', allConvsForPair)
-
-        // Check if any of these conversations have messages
-        let convWithMessages = null
-        if (allConvsForPair && allConvsForPair.length > 0) {
-          const convIds = allConvsForPair.map(c => c.id)
-          const { data: messagesInConvs } = await supabase
-            .from('messages')
-            .select('conversation_id')
-            .in('conversation_id', convIds)
-            .limit(1)
-
-          if (messagesInConvs && messagesInConvs.length > 0) {
-            convWithMessages = messagesInConvs[0].conversation_id
-            console.log('Found conversation with messages:', convWithMessages)
-          }
-        }
-
-        const { data: existingConv, error: convLookupError } = await supabase
-          .from('conversations')
-          .select('id')
-          .eq('client_id', client.id)
-          .eq('expert_id', expertRecord.id)
-          .is('admin_id', null)
-          .maybeSingle()
-
-        if (convLookupError) {
-          console.error('Error looking up conversation:', convLookupError)
-        }
-
-        let convId: string
-        if (convWithMessages) {
-          // Use the conversation that has messages
-          convId = convWithMessages
-          console.log('Using conversation with messages:', convId)
-        } else if (existingConv) {
-          convId = existingConv.id
-          console.log('Found existing conversation:', convId)
-        } else {
-          // Create new conversation
-          const { data: newConv, error: convError } = await supabase
+        if (!convId) {
+          // Try to find existing conversation for this application
+          const { data: existingConv } = await supabase
             .from('conversations')
-            .insert({
-              client_id: client.id,
-              expert_id: expertRecord.id,
-              admin_id: null
-            })
-            .select()
-            .single()
+            .select('id')
+            .eq('application_id', application.id)
+            .maybeSingle()
 
-          if (convError) {
-            console.error('Error creating conversation:', convError)
-            setMessages([])
-            setConversationId(null)
-            setIsLoadingConversation(false)
-            return
+          if (existingConv) {
+            convId = existingConv.id
+            setConversationId(convId)
+          } else {
+            // Create new conversation for this application
+            const { data: newConv, error: convError } = await supabase
+              .from('conversations')
+              .insert({
+                application_id: application.id
+              })
+              .select()
+              .single()
+              console.log('newConv', newConv)
+
+            if (convError) {
+              console.error('Error creating conversation:', convError)
+              setMessages([])
+              setConversationId(null)
+              setIsLoadingConversation(false)
+              return
+            }
+            convId = newConv.id
+            setConversationId(convId)
           }
-          convId = newConv.id
-          console.log('Created new conversation:', convId)
         }
-
-        setConversationId(convId)
 
         // Load existing messages
-        console.log('Loading messages for conversation:', convId, 'client_id:', client.id, 'expert_id:', expertRecord.id)
         const { data: messagesData, error: messagesError } = await supabase
           .from('messages')
           .select('*')
           .eq('conversation_id', convId)
           .order('created_at', { ascending: true })
 
-        console.log('Messages query result:', { 
-          messagesData, 
-          messagesError, 
-          count: messagesData?.length || 0,
-          conversationId: convId
-        })
-
-        // If no messages found, check if there are any messages in other conversations for this client/expert pair
-        if ((!messagesData || messagesData.length === 0) && existingConv) {
-          console.log('No messages in current conversation, checking all conversations for this client/expert...')
-          const { data: allConversations } = await supabase
-            .from('conversations')
-            .select('id')
-            .eq('client_id', client.id)
-            .eq('expert_id', expertRecord.id)
-            .is('admin_id', null)
-
-          if (allConversations && allConversations.length > 0) {
-            const conversationIds = allConversations.map(c => c.id)
-            console.log('Found', conversationIds.length, 'conversations, checking for messages...')
-            
-            const { data: allMessages } = await supabase
-              .from('messages')
-              .select('*')
-              .in('conversation_id', conversationIds)
-              .order('created_at', { ascending: true })
-
-            if (allMessages && allMessages.length > 0) {
-              console.log('Found', allMessages.length, 'messages in other conversations, using conversation:', allConversations[0].id)
-              // Use the first conversation that has messages
-              const activeConvId = allMessages[0].conversation_id
-              setConversationId(activeConvId)
-              
-              // Re-query messages for the correct conversation
-              const { data: correctMessages } = await supabase
-                .from('messages')
-                .select('*')
-                .eq('conversation_id', activeConvId)
-                .order('created_at', { ascending: true })
-              
-              if (correctMessages) {
-                // Process these messages instead
-                const senderIds = Array.from(new Set(correctMessages.map(m => m.sender_id)))
-                const { data: userProfiles } = senderIds.length > 0 ? await supabase
-                  .from('user_profiles')
-                  .select('id, full_name, role')
-                  .in('id', senderIds) : { data: [] }
-
-                const profilesById: Record<string, any> = {}
-                userProfiles?.forEach(p => {
-                  profilesById[p.id] = p
-                })
-
-                const { data: expertProfile } = await supabase
-                  .from('user_profiles')
-                  .select('id, full_name, role')
-                  .eq('id', application.assigned_expert_id)
-                  .maybeSingle()
-
-                if (expertProfile) {
-                  profilesById[application.assigned_expert_id] = expertProfile
-                }
-
-                const messagesWithSenders = correctMessages.map(msg => ({
-                  ...msg,
-                  sender: {
-                    id: msg.sender_id,
-                    user_profiles: profilesById[msg.sender_id] || null
-                  },
-                  is_own: msg.sender_id === currentUserId
-                }))
-
-                console.log('Setting messages from fallback:', messagesWithSenders.length)
-                setMessages(messagesWithSenders)
-                setIsLoadingConversation(false)
-                return
-              }
-            }
-          }
-        }
-
         if (messagesError) {
           console.error('Error loading messages:', messagesError)
           setMessages([])
         } else if (!messagesData || messagesData.length === 0) {
-          console.log('No messages found for conversation:', convId)
           setMessages([])
         } else {
-          console.log('Processing', messagesData.length, 'messages')
           // Get sender profiles
           const senderIds = Array.from(new Set(messagesData.map(m => m.sender_id)))
-          console.log('Sender IDs:', senderIds)
           
           const { data: userProfiles, error: profilesError } = senderIds.length > 0 ? await supabase
             .from('user_profiles')
@@ -490,17 +308,6 @@ export default function ApplicationDetailContent({
             profilesById[p.id] = p
           })
 
-          // Get expert profile if needed
-          const { data: expertProfile } = await supabase
-            .from('user_profiles')
-            .select('id, full_name, role')
-            .eq('id', application.assigned_expert_id)
-            .maybeSingle()
-
-          if (expertProfile) {
-            profilesById[application.assigned_expert_id] = expertProfile
-          }
-
           const messagesWithSenders = messagesData.map(msg => ({
             ...msg,
             sender: {
@@ -510,15 +317,24 @@ export default function ApplicationDetailContent({
             is_own: msg.sender_id === currentUserId
           }))
 
-          console.log('Setting messages:', messagesWithSenders.length, 'messages')
           setMessages(messagesWithSenders)
 
-          // Mark messages as read
-          await supabase
-            .from('messages')
-            .update({ is_read: true })
-            .eq('conversation_id', convId)
-            .neq('sender_id', currentUserId)
+          // Mark messages as read by adding current user ID to is_read array
+          // Use RPC function to add user ID to array for all unread messages
+          const unreadMessages = messagesWithSenders.filter(msg => 
+            msg.sender_id !== currentUserId && 
+            (!msg.is_read || !Array.isArray(msg.is_read) || !msg.is_read.includes(currentUserId))
+          )
+          
+          if (unreadMessages.length > 0) {
+            // Update each message to add current user ID to is_read array
+            for (const msg of unreadMessages) {
+              await supabase.rpc('mark_message_as_read_by_user', {
+                message_id: msg.id,
+                user_id: currentUserId
+              })
+            }
+          }
         }
       } catch (error) {
         console.error('Error setting up conversation:', error)
@@ -530,7 +346,7 @@ export default function ApplicationDetailContent({
     }
 
     setupConversation()
-  }, [application.id, application.assigned_expert_id, application.company_owner_id, currentUserId, supabase])
+  }, [application.id, currentUserId, supabase, conversationId])
 
   // Set up real-time subscription for new messages
   useEffect(() => {
@@ -576,12 +392,16 @@ export default function ApplicationDetailContent({
             )
           })
 
-          // Mark as read if not sent by current user
-          if (newMessage.sender_id !== currentUserId && !newMessage.is_read) {
-            await supabase
-              .from('messages')
-              .update({ is_read: true })
-              .eq('id', newMessage.id)
+          // Mark as read if not sent by current user (add user ID to is_read array)
+          if (newMessage.sender_id !== currentUserId) {
+            const isRead = newMessage.is_read
+            const isReadByUser = Array.isArray(isRead) && isRead.includes(currentUserId)
+            if (!isReadByUser) {
+              await supabase.rpc('mark_message_as_read_by_user', {
+                message_id: newMessage.id,
+                user_id: currentUserId
+              })
+            }
           }
 
           // Scroll to bottom
@@ -599,135 +419,56 @@ export default function ApplicationDetailContent({
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (messages.length > 0) {
+      // If coming from notification, scroll immediately after a short delay to ensure DOM is ready
+      const delay = fromNotification ? 500 : 0
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: fromNotification ? 'auto' : 'smooth' })
+      }, delay)
+    }
+  }, [messages, fromNotification])
+
 
   const handleSendMessage = async () => {
-    if (!messageContent.trim() || isSendingMessage || !currentUserId || !application.assigned_expert_id) return
+    console.log('sending..........')
+    if (!messageContent.trim() || isSendingMessage || !currentUserId || !application.id) return
 
     setIsSendingMessage(true)
     try {
       let convId = conversationId
 
       // If no conversation exists, create one
-      console.log("convId: ",convId)
+
       if (!convId) {
-        // Get client_id if not already set
-        let client_id_val = clientId
-        if (!client_id_val) {
-          const { data: client, error: clientError } = await supabase
-            .from('clients')
-            .select('id')
-            .eq('company_owner_id', application.company_owner_id)
-            .maybeSingle()
-
-          if (clientError) {
-            console.error('Error fetching client:', clientError)
-            throw new Error('Error accessing client information. Please try again.')
-          }
-
-          if (!client) {
-            // Client record doesn't exist - this is required for messaging
-            console.error('Client record not found for company_owner_id:', application.company_owner_id)
-            throw new Error('Your client account is not set up. Please contact support to complete your account setup before sending messages.')
-          }
-
-          client_id_val = client.id
-          setClientId(client_id_val)
-        }
-
-        // First, try to find existing conversation (company owners can access conversations)
-        // This avoids needing to query licensing_experts which company owners can't access
+        // Try to find existing conversation for this application
         const { data: existingConv } = await supabase
           .from('conversations')
-          .select('id, expert_id')
-          .eq('client_id', client_id_val)
-          .is('admin_id', null)
+          .select('id')
+          .eq('application_id', application.id)
           .maybeSingle()
 
-        console.log("existingConv: ",existingConv)
-
-        let expert_id_val = expertRecordId
 
         if (existingConv) {
-          // Use existing conversation
           convId = existingConv.id
-          expert_id_val = existingConv.expert_id
-          if (expert_id_val && !expertRecordId) {
-            setExpertRecordId(expert_id_val)
-          }
+          setConversationId(convId)
         } else {
-          // No existing conversation, need to get expert_id to create one
-          // For company owners, we can't query licensing_experts due to RLS
-          // But we can try to find expert_id from conversations that might exist
-          // OR we need to get it from the client record's expert_id (which is user_id, not licensing_experts.id)
-          
-          // Try to get expert record (this will fail for company owners due to RLS, but try anyway)
-          if (!expert_id_val) {
-            const { data: expertRecord, error: expertError } = await supabase
-              .from('licensing_experts')
-              .select('id, first_name, last_name')
-              .eq('user_id', application.assigned_expert_id)
-              .maybeSingle()
-            console.log("expertRecord: ",expertRecord, "expertError: ", expertError)
+          // Create new conversation for this application
+          console.log('application.id', application.id)
+          const { data: newConv, error: convError } = await supabase
+            .from('conversations')
+            .insert({
+              application_id: application.id
+            })
+            .select()
+            .single()
 
-            if (expertError) {
-              console.error('Error fetching expert record (likely RLS):', expertError)
-              // Company owners can't read licensing_experts, so we need a different approach
-              // Check if there are any conversations with messages that we can use
-              const { data: convsWithMessages } = await supabase
-                .from('conversations')
-                .select('id, expert_id')
-                .eq('client_id', client_id_val)
-                .is('admin_id', null)
-                .limit(1)
 
-              if (convsWithMessages && convsWithMessages.length > 0) {
-                // Use this conversation
-                convId = convsWithMessages[0].id
-                expert_id_val = convsWithMessages[0].expert_id
-                setConversationId(convId)
-                if (expert_id_val) {
-                  setExpertRecordId(expert_id_val)
-                }
-              } else {
-                throw new Error('Unable to access expert information. Please contact support or wait for the expert to send the first message.')
-              }
-            } else if (expertRecord) {
-              expert_id_val = expertRecord.id
-              setExpertRecordId(expert_id_val)
-              setAssignedExpert({
-                id: expertRecord.id,
-                user_id: application.assigned_expert_id,
-                first_name: expertRecord.first_name,
-                last_name: expertRecord.last_name
-              })
-            } else {
-              throw new Error('Expert record not found. Please contact support.')
-            }
+          if (convError) {
+            throw new Error('Failed to create conversation. Please try again.')
           }
-
-          // Only create conversation if we don't have one yet
-          if (!convId && expert_id_val) {
-            // Create new conversation
-            const { data: newConv, error: convError } = await supabase
-              .from('conversations')
-              .insert({
-                client_id: client_id_val,
-                expert_id: expert_id_val,
-                admin_id: null
-              })
-              .select()
-              .single()
-
-            if (convError) {
-              throw new Error('Failed to create conversation. Please try again.')
-            }
-            convId = newConv.id
-          }
+          convId = newConv.id
+          setConversationId(convId)
         }
-
-        setConversationId(convId)
       }
 
       // Get current user profile for optimistic update
@@ -737,10 +478,8 @@ export default function ApplicationDetailContent({
         .eq('id', currentUserId)
         .single()
 
+
       // Send message
-      console.log("convId: ",convId)
-      console.log("currentUserId: ",currentUserId)
-      console.log("messageContent: ",messageContent)
       const { data: newMessage, error: messageError } = await supabase
         .from('messages')
         .insert({
@@ -763,6 +502,7 @@ export default function ApplicationDetailContent({
       if (newMessage) {
         const optimisticMessage = {
           ...newMessage,
+          is_read: Array.isArray(newMessage.is_read) ? newMessage.is_read : [currentUserId], // Ensure array format
           sender: {
             id: currentUserId,
             user_profiles: currentUserProfile || null
@@ -797,10 +537,13 @@ export default function ApplicationDetailContent({
     if (message.sender?.user_profiles?.full_name) {
       return message.sender.user_profiles.full_name
     }
-    if (assignedExpert) {
-      return `${assignedExpert.first_name} ${assignedExpert.last_name}`
+    if (message.sender?.user_profiles?.role === 'expert') {
+      return 'Expert'
     }
-    return 'Expert'
+    if (message.sender?.user_profiles?.role === 'admin') {
+      return 'Admin'
+    }
+    return 'User'
   }
 
   const getSenderRole = (message: any) => {
@@ -1114,11 +857,6 @@ export default function ApplicationDetailContent({
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
                       </div>
-                    ) : !application.assigned_expert_id ? (
-                      <div className="text-center py-8 text-gray-500">
-                        <p className="text-sm">No expert assigned to this application</p>
-                        <p className="text-xs mt-1">Please wait for an expert to be assigned</p>
-                      </div>
                     ) : messages.length === 0 ? (
                       <div className="text-center py-8 text-gray-500">
                         <p className="text-sm">No messages yet</p>
@@ -1188,7 +926,7 @@ export default function ApplicationDetailContent({
                       />
                       <button
                         onClick={handleSendMessage}
-                        disabled={!messageContent.trim() || isSendingMessage || !application.assigned_expert_id}
+                        disabled={!messageContent.trim() || isSendingMessage || !conversationId}
                         className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                       >
                         {isSendingMessage ? (

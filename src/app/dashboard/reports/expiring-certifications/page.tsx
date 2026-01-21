@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getExpiringCertificationsReport } from '@/app/actions/reports'
 import { ArrowLeft, Download, Clock, XCircle } from 'lucide-react'
 import DownloadCSVButton from '@/components/DownloadCSVButton'
+import DownloadCertificationButton from '@/components/DownloadCertificationButton'
 
 export default async function ExpiringCertificationsReportPage() {
   const session = await getSession()
@@ -109,6 +110,7 @@ export default async function ExpiringCertificationsReportPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Cert Number</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Expiration</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -120,6 +122,13 @@ export default async function ExpiringCertificationsReportPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{row.cert_number}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{row.expiration}</td>
                       <td className="px-4 py-4 whitespace-nowrap">{getStatusBadge(row.status)}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <DownloadCertificationButton
+                          documentUrl={row.document_url}
+                          certificationName={row.certification}
+                          staffName={row.staff_name}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
