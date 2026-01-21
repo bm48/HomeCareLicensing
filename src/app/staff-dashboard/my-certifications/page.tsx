@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StaffLayout from '@/components/StaffLayout'
 import AddCertificationModal from '@/components/AddCertificationModal'
@@ -25,7 +25,7 @@ interface Certification {
   updated_at: string
 }
 
-export default function MyCertificationsPage() {
+function MyCertificationsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const action = searchParams.get('action')
@@ -316,5 +316,20 @@ export default function MyCertificationsPage() {
         />
       )}
     </StaffLayout>
+  )
+}
+
+export default function MyCertificationsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <MyCertificationsContent />
+    </Suspense>
   )
 }
