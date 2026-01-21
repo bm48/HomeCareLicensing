@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ExpertDashboardLayout from '@/components/ExpertDashboardLayout'
@@ -54,7 +54,7 @@ interface Message {
   is_own?: boolean
 }
 
-export default function ExpertMessagesPage() {
+function ExpertMessagesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const fromNotification = searchParams?.get('fromNotification') === 'true'
@@ -858,3 +858,19 @@ export default function ExpertMessagesPage() {
   )
 }
 
+export default function ExpertMessagesPage() {
+  return (
+    <Suspense fallback={
+      <ExpertDashboardLayout user={null} profile={null}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </ExpertDashboardLayout>
+    }>
+      <ExpertMessagesContent />
+    </Suspense>
+  )
+}
