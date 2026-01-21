@@ -514,7 +514,7 @@ export default function NotificationDropdown({
         <Bell className="w-5 h-5 sm:w-6 sm:h-6 cursor-pointer hover:text-blue-200 transition-colors" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {unreadCount > 9 ? 0 : unreadCount}
           </span>
         )}
       </button>
@@ -562,7 +562,7 @@ export default function NotificationDropdown({
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {app.unread_count > 0 && (
                               <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                {app.unread_count > 9 ? '9+' : app.unread_count}
+                                {app.unread_count > 9 ? 0 : app.unread_count}
                               </span>
                             )}
                           </div>

@@ -31,16 +31,21 @@ export default async function ApplicationDetailPage({
     .eq('user_id', session.user.id)
     .eq('is_read', false)
 
-  // Get application
+  // Get application - allow both owners and assigned experts to view
   const { data: application } = await supabase
     .from('applications')
     .select('*')
     .eq('id', id)
-    .eq('company_owner_id', session.user.id)
+    .or(`company_owner_id.eq.${session.user.id},assigned_expert_id.eq.${session.user.id}`)
     .single()
 
   if (!application) {
-    redirect('/dashboard/licenses')
+    // Check if user is expert and redirect to expert dashboard, otherwise regular dashboard
+    if (profile?.role === 'expert') {
+      redirect('/dashboard/expert/clients')
+    } else {
+      redirect('/dashboard/licenses')
+    }
   }
 
   // Get application documents
