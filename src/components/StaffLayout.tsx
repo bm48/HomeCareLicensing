@@ -61,7 +61,6 @@ export default function StaffLayout({
   const menuItems = [
     { href: '/staff-dashboard', label: 'Home', icon: Home },
     { href: '/staff-dashboard/my-certifications', label: 'My Certifications', icon: Award },
-    { href: '/staff-dashboard/profile', label: 'My Profile', icon: User },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
