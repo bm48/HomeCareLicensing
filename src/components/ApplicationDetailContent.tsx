@@ -13,7 +13,8 @@ import {
   CheckSquare,
   MessageSquare,
   Send,
-  Bot
+  Bot,
+  Users
 } from 'lucide-react'
 
 interface Application {
@@ -55,6 +56,7 @@ interface ApplicationDetailContentProps {
 }
 
 type TabType = 'overview' | 'checklist' | 'documents' | 'ai-assistant'
+type OverviewTabType = 'next-steps' | 'documents' | 'quick-actions' | 'state-info' | 'messages'
 
 export default function ApplicationDetailContent({
   application,
@@ -65,6 +67,7 @@ export default function ApplicationDetailContent({
   const router = useRouter()
   const searchParams = useSearchParams()
   const [internalActiveTab, setInternalActiveTab] = useState<TabType>('overview')
+  const [overviewTab, setOverviewTab] = useState<OverviewTabType>('next-steps')
   const activeTab = externalActiveTab ?? internalActiveTab
   const fromNotification = searchParams?.get('fromNotification') === 'true'
   
@@ -87,6 +90,8 @@ export default function ApplicationDetailContent({
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isLoadingConversation, setIsLoadingConversation] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [expertProfile, setExpertProfile] = useState<{ full_name: string | null } | null>(null)
+  const [isLoadingExpert, setIsLoadingExpert] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
@@ -229,6 +234,41 @@ export default function ApplicationDetailContent({
     }
     getCurrentUser()
   }, [supabase])
+
+  // Fetch assigned expert profile - get full_name from user_profiles table
+  useEffect(() => {
+    const fetchExpertProfile = async () => {
+      if (!application.assigned_expert_id) {
+        setExpertProfile(null)
+        return
+      }
+
+      setIsLoadingExpert(true)
+      try {
+        // Fetch expert's full_name from user_profiles table using assigned_expert_id
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('full_name')
+          .eq('id', application.assigned_expert_id)
+          .maybeSingle()
+
+        if (error) {
+          console.error('Error fetching expert profile:', error)
+          setExpertProfile(null)
+        } else {
+          // Store expert profile with full_name
+          setExpertProfile(data)
+        }
+      } catch (error) {
+        console.error('Error fetching expert profile:', error)
+        setExpertProfile(null)
+      } finally {
+        setIsLoadingExpert(false)
+      }
+    }
+
+    fetchExpertProfile()
+  }, [application.assigned_expert_id, supabase])
 
   // Fetch or create conversation for application-based group chat
   useEffect(() => {
@@ -446,12 +486,27 @@ export default function ApplicationDetailContent({
           convId = existingConv.id
           setConversationId(convId)
         } else {
-          // Create new conversation for this application
-          console.log('application.id', application.id)
+          
+          
+          // Try to get client_id from the application's company_owner_id
+          let clientId: string | null = null
+          if (application.company_owner_id) {
+            const { data: client } = await supabase
+              .from('clients')
+              .select('id')
+              .eq('company_owner_id', application.company_owner_id)
+              .maybeSingle()
+            
+            if (client) {
+              clientId = client.id
+            }
+          }
+          
           const { data: newConv, error: convError } = await supabase
             .from('conversations')
             .insert({
-              application_id: application.id
+              application_id: application.id,
+              ...(clientId && { client_id: clientId })
             })
             .select()
             .single()
@@ -644,62 +699,106 @@ export default function ApplicationDetailContent({
   return (
     <div className="space-y-6">
       {activeTab === 'overview' && (
-      <div className="space-y-6">
-              {/* Welcome Header */}
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome Back</h1>
-                <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
+        <div className="space-y-6">
+          {/* Welcome Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">{application.application_name}</h1>
+            <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
+          </div>
+
+          {/* Assigned Expert Section */}
+          {application.assigned_expert_id && (
+            <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  <Users className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-blue-900 mb-1">Your Assigned Licensing Expert</div>
+                  {isLoadingExpert ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                      <span className="text-sm text-gray-600">Loading...</span>
+                    </div>
+                  ) : expertProfile?.full_name ? (
+                    <div className="text-sm text-gray-900">{expertProfile.full_name}</div>
+                  ) : (
+                    <div className="text-sm text-gray-500">Expert information unavailable</div>
+                  )}
+                </div>
               </div>
+            </div>
+          )}
 
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="text-sm font-medium text-gray-600 mb-2">Overall Progress</div>
-                  <div className="text-3xl font-bold text-gray-900 mb-2">{application.progress_percentage || 0}%</div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-gray-900 h-2 rounded-full transition-all"
-                      style={{ width: `${application.progress_percentage || 0}%` }}
-                    />
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="text-sm font-medium text-gray-600 mb-2">Overall Progress</div>
+              <div className="text-3xl font-bold text-gray-900 mb-2">{application.progress_percentage || 0}%</div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-gray-900 h-2 rounded-full transition-all"
+                  style={{ width: `${application.progress_percentage || 0}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-gray-600">Completed Steps</div>
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              </div>
+              <div className="text-3xl font-bold text-gray-900">{completedSteps} of {totalSteps}</div>
+            </div>
+
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-gray-600">Pending Tasks</div>
+                <Clock className="w-5 h-5 text-orange-600" />
+              </div>
+              <div className="text-3xl font-bold text-gray-900">{pendingTasks} Items remaining</div>
+            </div>
+
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-gray-600">Documents</div>
+                <FileText className="w-5 h-5 text-purple-600" />
+              </div>
+              <div className="text-3xl font-bold text-gray-900">{completedDocuments} of {totalDocuments} ready</div>
             </div>
           </div>
 
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm font-medium text-gray-600">Completed Steps</div>
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div className="text-3xl font-bold text-gray-900">{completedSteps} of {totalSteps}</div>
-        </div>
-
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm font-medium text-gray-600">Pending Tasks</div>
-                    <Clock className="w-5 h-5 text-orange-600" />
+          {/* Tab Navigation */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="border-b border-gray-200">
+              <nav className="flex space-x-1 px-6" aria-label="Tabs">
+                {[
+                  { id: 'next-steps' as OverviewTabType, label: 'Next Steps' },
+                  { id: 'documents' as OverviewTabType, label: 'Documents' },
+                  { id: 'quick-actions' as OverviewTabType, label: 'Quick Actions' },
+                  { id: 'state-info' as OverviewTabType, label: 'State Info' },
+                  { id: 'messages' as OverviewTabType, label: 'Messages' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setOverviewTab(tab.id)}
+                    className={`py-4 px-4 border-b-2 font-medium text-sm transition-colors ${
+                      overviewTab === tab.id
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
             </div>
-                  <div className="text-3xl font-bold text-gray-900">{pendingTasks} Items remaining</div>
-          </div>
 
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm font-medium text-gray-600">Documents</div>
-                    <FileText className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div className="text-3xl font-bold text-gray-900">{completedDocuments} of {totalDocuments} ready</div>
-            </div>
-          </div>
-
-              {/* Next Steps and Documents */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Next Steps */}
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">Next Steps</h2>
-                    <button className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                      View All
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
+            {/* Tab Content */}
+            <div className="p-6">
+              {/* Next Steps Tab */}
+              {overviewTab === 'next-steps' && (
+                <div className="bg-white rounded-xl">
                   {isLoadingSteps ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
@@ -707,12 +806,11 @@ export default function ApplicationDetailContent({
                   ) : steps.filter(s => !s.is_completed).length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <p className="text-sm">All steps completed!</p>
-            </div>
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {steps
                         .filter(s => !s.is_completed)
-                        .slice(0, 3)
                         .map((step) => (
                           <div key={step.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg">
                             <div className="w-5 h-5 border-2 border-gray-300 rounded-full mt-0.5 flex-shrink-0" />
@@ -725,85 +823,94 @@ export default function ApplicationDetailContent({
                                 <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
                                   Licensing
                                 </span>
-            </div>
-          </div>
-        </div>
+                              </div>
+                            </div>
+                          </div>
                         ))}
                     </div>
                   )}
-                  <button className="w-full mt-4 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium">
+                  <button 
+                    onClick={() => handleTabChange('checklist')}
+                    className="w-full mt-4 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                  >
                     Continue Checklist
                   </button>
-          </div>
+                </div>
+              )}
 
-                {/* Documents */}
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">Documents</h2>
-                    <button className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                      View All
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-          {documents.length === 0 ? (
+              {/* Documents Tab */}
+              {overviewTab === 'documents' && (
+                <div className="space-y-4">
+                  {documents.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <p className="text-sm">No documents yet</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-                      {documents.slice(0, 2).map((doc) => (
-                        <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                          <div className="flex items-center gap-3 flex-1">
-                            <FileText className="w-5 h-5 text-gray-400" />
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-900 text-sm">{doc.document_name}</div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                {doc.document_type || 'Document'}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {documents.map((doc) => {
+                        const status = getDocumentStatus(doc.status)
+                        return (
+                          <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                            <div className="flex items-center gap-3 flex-1">
+                              <FileText className="w-5 h-5 text-gray-400" />
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900 text-sm">{doc.document_name}</div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {doc.document_type || 'Document'}
+                                </div>
                               </div>
                             </div>
-                    </div>
-                          <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                            completed
-                        </span>
-                      </div>
-                      ))}
+                            <div className="flex items-center gap-3">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                status === 'completed'
+                                  ? 'bg-green-100 text-green-700'
+                                  : status === 'pending'
+                                  ? 'bg-orange-100 text-orange-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {status}
+                              </span>
+                              <button
+                                onClick={() => handleDownload(doc.document_url, doc.document_name)}
+                                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2"
+                              >
+                                <Download className="w-4 h-4" />
+                                Download
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                   <div className="flex gap-3 mt-4">
                     <button className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
                       Generate Docs
                     </button>
-                    <button className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center justify-center gap-2">
+                    <button 
+                      onClick={handleDownloadAll}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                    >
                       <Download className="w-4 h-4" />
                       Download Packet
                     </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Quick Actions and State-Specific Requirements */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Quick Actions */}
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => handleTabChange('ai-assistant')}
-                      className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <CheckSquare className="w-5 h-5 text-gray-600" />
-                      <span className="font-medium text-gray-900">Ask AI Assistant</span>
-                    </button>
-                    <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left">
-                      <Download className="w-5 h-5 text-gray-600" />
-                      <span className="font-medium text-gray-900">Export Progress Report</span>
-                    </button>
-                  </div>
+              {/* Quick Actions Tab */}
+              {overviewTab === 'quick-actions' && (
+                <div className="space-y-3">
+                  <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                    <Download className="w-5 h-5 text-gray-600" />
+                    <span className="font-medium text-gray-900">Export Progress Report</span>
+                  </button>
                 </div>
+              )}
 
-                {/* State-Specific Requirements */}
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">State-Specific Requirements</h2>
+              {/* State Info Tab */}
+              {overviewTab === 'state-info' && (
+                <div>
                   {isLoadingLicenseType ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
@@ -836,15 +943,11 @@ export default function ApplicationDetailContent({
                     </div>
                   )}
                 </div>
-              </div>
+              )}
 
-              {/* Application Messages */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-6 border-b border-gray-200">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-1">Application Messages</h2>
-                  <p className="text-sm text-gray-600">Communicate with your team about this application</p>
-                </div>
-                <div className="p-6">
+              {/* Messages Tab */}
+              {overviewTab === 'messages' && (
+                <div>
                   {/* Messages List */}
                   <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
                     {isLoadingConversation ? (
@@ -864,11 +967,12 @@ export default function ApplicationDetailContent({
                           const initials = getInitials(senderName)
                           const roleTagColor = getRoleTagColor(senderRole)
                           const avatarColor = getAvatarColor(senderName, senderRole)
+                          const isOwnMessage = message.is_own
                           
                           return (
                             <div
                               key={message.id}
-                              className="flex items-start gap-3"
+                              className={`flex items-start gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
                             >
                               {/* Avatar */}
                               <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}>
@@ -876,8 +980,8 @@ export default function ApplicationDetailContent({
                               </div>
                               
                               {/* Message Content */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
+                              <div className={`flex-1 min-w-0 ${isOwnMessage ? 'flex flex-col items-end' : ''}`}>
+                                <div className={`flex items-center gap-2 mb-1 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                                   <span className="text-sm font-semibold text-gray-900">
                                     {senderName}
                                   </span>
@@ -888,8 +992,14 @@ export default function ApplicationDetailContent({
                                     {formatMessageTime(message.created_at)}
                                   </span>
                                 </div>
-                                <div className="bg-white border border-gray-200 rounded-lg p-3">
-                                  <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                                <div className={`rounded-lg p-3 ${
+                                  isOwnMessage 
+                                    ? 'bg-blue-600 text-white border-blue-600' 
+                                    : 'bg-white'
+                                }`}>
+                                  <p className={`text-sm whitespace-pre-wrap ${
+                                    isOwnMessage ? 'text-white' : 'text-gray-900'
+                                  }`}>
                                     {message.content}
                                   </p>
                                 </div>
@@ -935,9 +1045,11 @@ export default function ApplicationDetailContent({
                     </p>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
+        </div>
+      )}
 
       {activeTab === 'checklist' && (
             <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 text-center">

@@ -32,6 +32,7 @@ function LoginPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login')
+  const [isMounted, setIsMounted] = useState(false)
 
   const {
     register,
@@ -46,8 +47,16 @@ function LoginPageContent() {
     },
   })
 
+  // Track when component is mounted to prevent hydration mismatches
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   // Read messages and credentials from query parameters
   useEffect(() => {
+    // Only run after component is mounted to prevent hydration mismatches
+    if (!isMounted) return
+
     const message = searchParams.get('message')
     const errorParam = searchParams.get('error')
     const emailParam = searchParams.get('email')
@@ -62,13 +71,11 @@ function LoginPageContent() {
     }
     
     // Pre-fill password from sessionStorage if available (from signup)
-    if (typeof window !== 'undefined') {
-      const signupPassword = sessionStorage.getItem('signup_password')
-      if (signupPassword) {
-        setValue('password', signupPassword)
-        // Clear password from sessionStorage after use
-        sessionStorage.removeItem('signup_password')
-      }
+    const signupPassword = sessionStorage.getItem('signup_password')
+    if (signupPassword) {
+      setValue('password', signupPassword)
+      // Clear password from sessionStorage after use
+      sessionStorage.removeItem('signup_password')
     }
     
     if (message) {
@@ -86,7 +93,7 @@ function LoginPageContent() {
       url.searchParams.delete('error')
       window.history.replaceState({}, '', url)
     }
-  }, [searchParams, setValue])
+  }, [isMounted, searchParams, setValue])
 
   const rememberMe = watch('rememberMe')
 
@@ -310,6 +317,7 @@ function LoginPageContent() {
                       {...register('email')}
                       placeholder="you@example.com"
                       className="block w-full pl-12 pr-4 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all"
+                      suppressHydrationWarning
                     />
                   </div>
                   {errors.email && (

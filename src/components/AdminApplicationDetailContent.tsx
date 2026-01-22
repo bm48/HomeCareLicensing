@@ -239,10 +239,25 @@ export default function AdminApplicationDetailContent({
             setConversationId(convId)
           } else {
             // Create new conversation for this application
+            // Try to get client_id from the application's company_owner_id
+            let clientId: string | null = null
+            if (application.company_owner_id) {
+              const { data: client } = await supabase
+                .from('clients')
+                .select('id')
+                .eq('company_owner_id', application.company_owner_id)
+                .maybeSingle()
+              
+              if (client) {
+                clientId = client.id
+              }
+            }
+            
             const { data: newConv, error: convError } = await supabase
               .from('conversations')
               .insert({
-                application_id: application.id
+                application_id: application.id,
+                ...(clientId && { client_id: clientId })
               })
               .select()
               .single()
@@ -540,6 +555,9 @@ export default function AdminApplicationDetailContent({
   const completedSteps = steps.filter(s => s.is_completed).length
   const totalSteps = steps.length
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'steps' | 'documents' | 'messages'>('steps')
+
   return (
     <div className="space-y-6">
       {/* Application Header */}
@@ -673,193 +691,242 @@ export default function AdminApplicationDetailContent({
         </div>
       </div>
 
-      {/* Application Steps */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Application Steps</h2>
-        {isLoadingSteps ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-          </div>
-        ) : steps.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p className="text-sm">No steps found for this application</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {steps.map((step) => (
-              <div
-                key={step.id}
-                className={`flex items-start gap-3 p-4 border rounded-lg ${
-                  step.is_completed
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-gray-50 border-gray-200'
-                }`}
-              >
-                <div className="mt-1">
-                  {step.is_completed ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
-                  {step.description && (
-                    <div className="text-sm text-gray-600 mb-2">{step.description}</div>
-                  )}
-                  <div className="text-xs text-gray-500">
-                    Step {step.step_order} of {totalSteps}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Documents */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Application Documents</h2>
-        {documents.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-            <p className="text-sm">No documents uploaded yet</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {documents.map((doc) => (
-              <div
-                key={doc.id}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3 flex-1">
-                  <FileText className="w-5 h-5 text-gray-400" />
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">{doc.document_name}</div>
-                    <div className="text-sm text-gray-500">
-                      Uploaded {formatDate(doc.created_at)}
-                      {doc.document_type && ` • ${doc.document_type}`}
-                    </div>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    doc.status === 'approved' || doc.status === 'completed'
-                      ? 'bg-green-100 text-green-700'
-                      : doc.status === 'pending'
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleDownload(doc.document_url, doc.document_name)}
-                  className="ml-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Download
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Application Messages */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Application Messages</h2>
-          <p className="text-sm text-gray-600">Communicate with your team about this application</p>
+      {/* Tabs Section */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-100">
+        {/* Tab Navigation */}
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px">
+            <button
+              onClick={() => setActiveTab('steps')}
+              className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'steps'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            > Steps
+            </button>
+            <button
+              onClick={() => setActiveTab('documents')}
+              className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'documents'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >Documents
+            </button>
+            <button
+              onClick={() => setActiveTab('messages')}
+              className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'messages'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >Messages
+            </button>
+          </nav>
         </div>
+
+        {/* Tab Content */}
         <div className="p-6">
-          {/* Messages List */}
-          <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
-            {isLoadingConversation ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <p className="text-sm">No messages yet</p>
-                <p className="text-xs mt-1">Start a conversation with the client</p>
-              </div>
-            ) : (
-              <>
-                {messages.map((message) => {
-                  const senderName = getSenderName(message)
-                  const senderRole = getSenderRole(message)
-                  const initials = getInitials(senderName)
-                  const roleTagColor = getRoleTagColor(senderRole)
-                  const avatarColor = getAvatarColor(senderName, senderRole)
-                  
-                  return (
+          {/* Application Steps Tab */}
+          {activeTab === 'steps' && (
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Application Steps</h2>
+              {isLoadingSteps ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                </div>
+              ) : steps.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="text-sm">No steps found for this application</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {steps.map((step) => (
                     <div
-                      key={message.id}
-                      className="flex items-start gap-3"
+                      key={step.id}
+                      className={`flex items-start gap-3 p-4 border rounded-lg ${
+                        step.is_completed
+                          ? 'bg-green-50 border-green-200'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}
                     >
-                      {/* Avatar */}
-                      <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}>
-                        {initials}
+                      <div className="mt-1">
+                        {step.is_completed ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                        )}
                       </div>
-                      
-                      {/* Message Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-semibold text-gray-900">
-                            {senderName}
-                          </span>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded border ${roleTagColor}`}>
-                            {senderRole}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {formatMessageTime(message.created_at)}
-                          </span>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-lg p-3">
-                          <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                            {message.content}
-                          </p>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
+                        {step.description && (
+                          <div className="text-sm text-gray-600 mb-2">{step.description}</div>
+                        )}
+                        <div className="text-xs text-gray-500">
+                          Step {step.step_order} of {totalSteps}
                         </div>
                       </div>
                     </div>
-                  )
-                })}
-                <div ref={messagesEndRef} />
-              </>
-            )}
-          </div>
-
-          {/* Message Input */}
-          <div className="border-t border-gray-200 pt-4">
-            <div className="flex gap-3">
-              <textarea
-                value={messageContent}
-                onChange={(e) => setMessageContent(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSendMessage()
-                  }
-                }}
-                placeholder="Type your message..."
-                rows={2}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!messageContent.trim() || isSendingMessage || !conversationId}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-              >
-                {isSendingMessage ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Send className="w-5 h-5" />
-                )}
-              </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Press Enter to send, Shift+Enter for new line
-            </p>
-          </div>
+          )}
+
+          {/* Documents Tab */}
+          {activeTab === 'documents' && (
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Application Documents</h2>
+              {documents.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No documents uploaded yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <FileText className="w-5 h-5 text-gray-400" />
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{doc.document_name}</div>
+                          <div className="text-sm text-gray-500">
+                            Uploaded {formatDate(doc.created_at)}
+                            {doc.document_type && ` • ${doc.document_type}`}
+                          </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          doc.status === 'approved' || doc.status === 'completed'
+                            ? 'bg-green-100 text-green-700'
+                            : doc.status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDownload(doc.document_url, doc.document_name)}
+                        className="ml-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Messages Tab */}
+          {activeTab === 'messages' && (
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Application Messages</h2>
+              <p className="text-sm text-gray-600 mb-6">Communicate with your team about this application</p>
+              
+              {/* Messages List */}
+              <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
+                {isLoadingConversation ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No messages yet</p>
+                    <p className="text-xs mt-1">Start a conversation with the client</p>
+                  </div>
+                ) : (
+                  <>
+                    {messages.map((message) => {
+                      const senderName = getSenderName(message)
+                      const senderRole = getSenderRole(message)
+                      const initials = getInitials(senderName)
+                      const roleTagColor = getRoleTagColor(senderRole)
+                      const avatarColor = getAvatarColor(senderName, senderRole)
+                      const isOwnMessage = message.is_own
+                      
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex items-start gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
+                        >
+                          {/* Avatar */}
+                          <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}>
+                            {initials}
+                          </div>
+                          
+                          {/* Message Content */}
+                          <div className={`flex-1 min-w-0 ${isOwnMessage ? 'flex flex-col items-end' : ''}`}>
+                            <div className={`flex items-center gap-2 mb-1 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                              <span className="text-sm font-semibold text-gray-900">
+                                {senderName}
+                              </span>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded border ${roleTagColor}`}>
+                                {senderRole}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {formatMessageTime(message.created_at)}
+                              </span>
+                            </div>
+                            <div className={`rounded-lg p-3 max-w-[80%] ${
+                              isOwnMessage 
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-white'
+                            }`}>
+                              <p className={`text-sm whitespace-pre-wrap ${
+                                isOwnMessage ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                {message.content}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <div ref={messagesEndRef} />
+                  </>
+                )}
+              </div>
+
+              {/* Message Input */}
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex gap-3">
+                  <textarea
+                    value={messageContent}
+                    onChange={(e) => setMessageContent(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      }
+                    }}
+                    placeholder="Type your message..."
+                    rows={2}
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!messageContent.trim() || isSendingMessage || !conversationId}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    {isSendingMessage ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Press Enter to send, Shift+Enter for new line
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
