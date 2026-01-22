@@ -59,7 +59,7 @@ export default function StaffLayout({
   }
 
   const menuItems = [
-    { href: '/staff-dashboard', label: 'Home', icon: Home },
+    { href: '/staff-dashboard', label: 'Dashboard', icon: Home },
     { href: '/staff-dashboard/my-certifications', label: 'My Certifications', icon: Award },
   ]
 

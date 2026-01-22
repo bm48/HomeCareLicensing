@@ -39,7 +39,6 @@ export default function NotificationDropdown({
 
   // Get user role on mount
   useEffect(() => {
-    console.log('userId', userId)
     if (!userId) return
     getUserRole()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,7 +103,6 @@ export default function NotificationDropdown({
 
   // Optimized: Single query with aggregation using query builder
   const fetchApplicationsWithUnread = useCallback(async () => {
-    console.log('fetchApplicationsWithUnread')
     if (!userRole) return
     
     setIsLoading(true)
@@ -120,7 +118,6 @@ export default function NotificationDropdown({
           .select('application_id')
           .not('application_id', 'is', null)
           .limit(100) // Reasonable limit
-        console.log('conversations', conversations)
         const uniqueAppIds = new Set(conversations?.map(c => c.application_id).filter(Boolean) || [])
         applicationIds = Array.from(uniqueAppIds) as string[]
       } else if (userRole === 'company_owner') {
@@ -128,14 +125,12 @@ export default function NotificationDropdown({
           .from('applications')
           .select('id')
           .eq('company_owner_id', userId)
-        console.log('apps', apps)
         applicationIds = apps?.map(a => a.id) || []
       } else if (userRole === 'expert') {
         const { data: apps } = await supabase
           .from('applications')
           .select('id')
           .eq('assigned_expert_id', userId)
-        console.log('apps', apps)
         applicationIds = apps?.map(a => a.id) || []
       } else {
         // Staff members don't have access to conversations
@@ -163,7 +158,6 @@ export default function NotificationDropdown({
           applications!inner(id, application_name, state)
         `)
         .in('application_id', applicationIds)
-      console.log('conversations', conversations)
       if (convError) {
         console.error('Error fetching conversations:', convError)
         setApplications([])
@@ -255,7 +249,6 @@ export default function NotificationDropdown({
 
       setApplications(appNotifications)
       const totalUnread = appNotifications.reduce((sum, app) => sum + app.unread_count, 0)
-      console.log('totalUnread', totalUnread)
       setUnreadCount(totalUnread)
       lastFetchRef.current = Date.now()
     } catch (err) {
@@ -270,7 +263,6 @@ export default function NotificationDropdown({
   // Quick badge count refresh function
   const refreshBadgeCount = useCallback(async () => {
     try {
-      console.log('Refreshing badge count for:', { userRole, userId })
       let conversationIds: string[] = []
       
       if (userRole === 'admin') {
@@ -354,7 +346,6 @@ export default function NotificationDropdown({
         // Don't set to 0 on error - keep previous count to avoid flickering
         // setUnreadCount(0)
       } else {
-        console.log('Badge count updated:', { count, conversationIds: conversationIds.length })
         setUnreadCount(count || 0)
       }
     } catch (err) {
@@ -418,13 +409,7 @@ export default function NotificationDropdown({
           // Add a small delay to ensure database transaction is fully committed
           // This prevents race conditions where the query runs before the message is visible
           await new Promise(resolve => setTimeout(resolve, 300))
-          
-          // Refresh badge count
-          console.log('Real-time INSERT event received, refreshing badge:', {
-            messageId: newMessage.id,
-            senderId: newMessage.sender_id,
-            conversationId: newMessage.conversation_id
-          })
+
           debouncedRefreshBadge()
         }
       )
@@ -444,18 +429,12 @@ export default function NotificationDropdown({
             // Add a small delay to ensure the update is committed
             await new Promise(resolve => setTimeout(resolve, 200))
             
-            console.log('Real-time UPDATE event received, refreshing badge:', {
-              messageId: updatedMessage.id,
-              senderId: updatedMessage.sender_id
-            })
             debouncedRefreshBadge()
           }
         }
       )
       .subscribe((status) => {
-        console.log('Real-time subscription status:', status, { userRole, userId })
         if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to real-time updates')
           // Refresh badge count when subscription is established
           refreshBadgeCount()
         } else if (status === 'CHANNEL_ERROR') {
@@ -464,7 +443,6 @@ export default function NotificationDropdown({
       })
 
     return () => {
-      console.log('Cleaning up real-time subscription')
       supabase.removeChannel(channel)
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current)

@@ -15,6 +15,7 @@ import {
   Clock,
   XCircle
 } from 'lucide-react'
+import CertificationDocumentViewer from '@/components/CertificationDocumentViewer'
 
 export default async function CertificationDetailPage({
   params
@@ -53,14 +54,54 @@ export default async function CertificationDetailPage({
     .eq('user_id', session.user.id)
     .eq('is_read', false)
 
-  // Get certification
+  // Try to get certification first
   const result = await getCertification(id)
+  let certification = result.data
+  let isApplication = false
+  let application = null
 
+  // If not found as certification, try to get as application
   if (result.error || !result.data) {
-    redirect('/staff-dashboard/my-certifications?error=Certification not found')
-  }
+    // Get staff member record to check if this is an application
+    const { data: staffMember } = await supabase
+      .from('staff_members')
+      .select('id')
+      .eq('user_id', session.user.id)
+      .single()
 
-  const certification = result.data
+    if (staffMember) {
+      // Try to fetch as application
+      const { data: appData, error: appError } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('id', id)
+        .eq('staff_member_id', staffMember.id)
+        .single()
+
+      if (!appError && appData) {
+        isApplication = true
+        application = appData
+        // Map application to certification-like structure for display
+        certification = {
+          id: appData.id,
+          type: appData.application_name,
+          license_number: appData.license_number || 'N/A',
+          state: appData.state,
+          issue_date: appData.issue_date,
+          expiration_date: appData.expiry_date,
+          issuing_authority: appData.issuing_authority || 'N/A',
+          status: appData.status === 'approved' ? 'Active' : appData.status === 'rejected' ? 'Expired' : 'Active',
+          document_url: null,
+          created_at: appData.created_at,
+          updated_at: appData.updated_at || appData.created_at,
+        }
+      } else {
+        redirect('/staff-dashboard/my-certifications?error=Certification or license not found')
+      }
+    } else {
+      redirect('/staff-dashboard/my-certifications?error=Certification not found')
+    }
+  }
 
   const formatDate = (date: string | null) => {
     if (!date) return 'N/A'
@@ -68,8 +109,19 @@ export default async function CertificationDetailPage({
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   }
 
-  const getStatusBadge = (status: string, expirationDate: string) => {
+  const getStatusBadge = (status: string, expirationDate: string | null) => {
     const today = new Date()
+    
+    // Handle null expiration date
+    if (!expirationDate) {
+      return (
+        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 flex items-center gap-1">
+          <Clock className="w-4 h-4" />
+          No Expiry Date
+        </span>
+      )
+    }
+    
     const expiry = new Date(expirationDate)
     const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -103,14 +155,14 @@ export default async function CertificationDetailPage({
       profile={profile} 
       unreadNotifications={unreadNotifications || 0}
     >
-      <div className="space-y-6">
+      <div className="space-y-6 mt-20">
         {/* Back Button */}
         <Link
-          href="/staff-dashboard/my-certifications"
+          href={isApplication ? "/staff-dashboard" : "/staff-dashboard/my-certifications"}
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Certifications
+          {isApplication ? "Back to Dashboard" : "Back to Certifications"}
         </Link>
 
         {/* Header */}
@@ -199,23 +251,10 @@ export default async function CertificationDetailPage({
           </div>
 
           {/* Document Section */}
-          {/* {certification.document_url && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                Certification Document
-              </h2>
-              <a
-                href={certification.document_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <FileText className="w-4 h-4" />
-                View Document
-              </a>
-            </div>
-          )} */}
+          <CertificationDocumentViewer
+            documentUrl={certification.document_url}
+            certificationName={certification.type}
+          />
 
           {/* Metadata */}
           <div className="mt-6 pt-6 border-t border-gray-200">

@@ -177,7 +177,7 @@ function MyCertificationsContent() {
       profile={profile} 
       unreadNotifications={unreadNotifications}
     >
-      <div className="space-y-6">
+      <div className="space-y-6 mt-20">
         {/* Header */}
         <div>
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">My Certifications</h1>
