@@ -5,22 +5,24 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
-  LayoutDashboard, 
-  FileText, 
-  User, 
+  Users, 
+  MessageSquare, 
   LogOut, 
-  Bell, 
-  ChevronLeft
+  ChevronLeft,
+  Menu,
+  X
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
 import UserDropdown from './UserDropdown'
+import NotificationDropdown from './NotificationDropdown'
 
-interface StaffLayoutProps {
+interface ExpertDashboardLayoutProps {
   children: React.ReactNode
   user: {
+    id?: string
     email?: string | null
-  }
+  } | null
   profile: {
     full_name?: string | null
     role?: string | null
@@ -28,12 +30,12 @@ interface StaffLayoutProps {
   unreadNotifications?: number
 }
 
-export default function StaffLayout({ 
+export default function ExpertDashboardLayout({ 
   children, 
   user, 
   profile,
   unreadNotifications = 0 
-}: StaffLayoutProps) {
+}: ExpertDashboardLayoutProps) {
   const pathname = usePathname()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -56,8 +58,8 @@ export default function StaffLayout({
   }
 
   const menuItems = [
-    { href: '/staff-dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/staff-dashboard/my-certifications', label: 'My Certifications', icon: FileText },
+    { href: '/dashboard/expert/clients', label: 'My Clients', icon: Users },
+    { href: '/dashboard/expert/messages', label: 'Messages', icon: MessageSquare },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
@@ -76,58 +78,75 @@ export default function StaffLayout({
   }
 
   const getDisplayName = () => {
-    return profile?.full_name || user.email || 'User'
+    return profile?.full_name || user?.email || 'User'
   }
 
   const getRoleDisplay = () => {
-    if (!profile?.role) return 'Staff Member'
-    return profile.role.split('_').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ')
+    if (!profile?.role) return 'User'
+    return profile.role === 'expert' ? 'Licensing Expert' : 'Expert'
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {isLoading && <LoadingSpinner />}
       {/* Top Header */}
+      {/* <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg"> */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
-        <div className="flex items-center justify-between px-4 md:px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="relative w-20 h-12 md:w-28 md:h-16">
-              <Image
-                src="/cropped-HomeSights-NEWLOGO-1.png"
-                alt="Home Sights Consulting Logo"
-                fill
-                className="object-contain"
-                priority
-              />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="relative w-20 h-12 sm:w-40 sm:h-16">
+                <Image
+                  src="/cropped-HomeSights-NEWLOGO-1.png"
+                  alt="Home Sights Consulting Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-3 md:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {/* Notifications */}
-            <div className="relative">
-              <Bell className="w-5 h-5 md:w-6 md:h-6 cursor-pointer hover:text-blue-200 transition-colors" />
-              {unreadNotifications > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {unreadNotifications}
-                </span>
-              )}
-            </div>
+            {user?.id && (
+              <NotificationDropdown 
+                userId={user.id} 
+                initialUnreadCount={unreadNotifications || 0} 
+              />
+            )}
 
             {/* User Dropdown */}
-            <UserDropdown 
-              user={user} 
-              profile={profile} 
-              profileUrl="/staff-dashboard/profile"
-              changePasswordUrl="/change-password"
-            />
+            {user && (
+              <UserDropdown 
+                user={user} 
+                profile={profile} 
+                profileUrl="/dashboard/expert/profile"
+                changePasswordUrl="/change-password"
+              />
+            )}
           </div>
         </div>
       </header>
 
-      <div className="flex">
-        {/* Sidebar - Desktop */}
+      <div className="flex relative">
+        {/* Mobile Overlay */}
+        {mobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
         <aside className={`
           bg-white shadow-lg transition-all duration-300 
           fixed top-[73px] left-0 bottom-0 z-40
@@ -157,7 +176,10 @@ export default function StaffLayout({
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={() => handleLinkClick(item.href)}
+                    onClick={() => {
+                      handleLinkClick(item.href)
+                      setMobileMenuOpen(false)
+                    }}
                     className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
                       isActive
                         ? 'bg-blue-50 text-blue-700 font-semibold'
@@ -185,73 +207,10 @@ export default function StaffLayout({
           </div>
         </aside>
 
-        {/* Mobile Sidebar */}
-        {/* {mobileMenuOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setMobileMenuOpen(false)} />
-            <aside className="bg-white shadow-lg transition-all duration-300 
-          fixed top-[73px] left-0 bottom-0 z-40 'translate-x-0'">
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Menu</span>
-                  <button
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="p-2 hover:bg-gray-100 rounded-lg"
-                  >
-                    <ChevronLeft className="w-5 h-5 rotate-180" />
-                  </button>
-                </div>
-
-                <nav className="space-y-1">
-                  {menuItems.map((item) => {
-                    const isActive = pathname === item.href
-                    const Icon = item.icon
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => {
-                          handleLinkClick(item.href)
-                          setMobileMenuOpen(false)
-                        }}
-                        className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
-                          isActive
-                            ? 'bg-blue-50 text-blue-700 font-semibold'
-                            : 'text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        <Icon className="w-5 h-5 flex-shrink-0" />
-                        <span>{item.label}</span>
-                      </Link>
-                    )
-                  })}
-                </nav>
-
-                <div className="mt-8 pt-4 border-t border-gray-200">
-                  <form action={signOut}>
-                    <button
-                      type="submit"
-                      className="flex items-center gap-3 px-3 py-3 rounded-lg text-red-600 hover:bg-red-50 w-full transition-all"
-                    >
-                      <LogOut className="w-5 h-5 flex-shrink-0" />
-                      <span>Logout</span>
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </aside>
-          </div>
-        )} */}
-
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-6">
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="md:hidden mb-4 p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5 rotate-180" />
-          </button>
+        <main className={`flex-1 p-4 sm:p-6 w-full transition-all duration-300 ${
+          sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+        }`}>
           {children}
         </main>
       </div>
