@@ -48,7 +48,7 @@ export default function ApplicationDetailWrapper({
   profile,
   unreadNotifications = 0
 }: ApplicationDetailWrapperProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'checklist' | 'documents' | 'ai-assistant'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message'>('next-steps')
 
   return (
     <DashboardLayout
@@ -69,13 +69,14 @@ export default function ApplicationDetailWrapper({
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to My Licenses
+          Back to Licenses
         </Link>
       <ApplicationDetailContent
         application={application}
         documents={documents}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        showInlineTabs={true}
       />
     </DashboardLayout>
   )

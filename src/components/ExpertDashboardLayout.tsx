@@ -58,7 +58,7 @@ export default function ExpertDashboardLayout({
   }
 
   const menuItems = [
-    { href: '/dashboard/expert/clients', label: 'My Clients', icon: Users },
+    { href: '/dashboard/expert/clients', label: 'Licenses', icon: Users },
     { href: '/dashboard/expert/messages', label: 'Messages', icon: MessageSquare },
   ]
 

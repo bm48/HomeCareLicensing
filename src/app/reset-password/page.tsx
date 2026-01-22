@@ -305,12 +305,6 @@ function ResetPasswordPageContent() {
             </div>
             <span className="text-xs font-medium text-center">Auto Document Generation</span>
           </div>
-          <div className="flex flex-col items-center">
-            <div className="bg-white p-2 sm:p-3 rounded-xl shadow-sm mb-2">
-              <Bot className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
-            <span className="text-xs font-medium text-center">AI Assistant</span>
-          </div>
         </div>
       </div>
     </div>

@@ -13,7 +13,8 @@ import {
   CheckSquare,
   MessageSquare,
   Send,
-  Bot
+  Bot,
+  Users
 } from 'lucide-react'
 
 interface Application {
@@ -83,6 +84,8 @@ export default function ApplicationDetailContent({
   const [documentFilter, setDocumentFilter] = useState<'all' | 'pending' | 'drafts' | 'completed'>('all')
   const [licenseType, setLicenseType] = useState<any>(null)
   const [isLoadingLicenseType, setIsLoadingLicenseType] = useState(false)
+  const [expertProfile, setExpertProfile] = useState<{ id: string; full_name: string | null; email: string | null } | null>(null)
+  const [isLoadingExpert, setIsLoadingExpert] = useState(false)
   const [messages, setMessages] = useState<any[]>([])
   const [messageContent, setMessageContent] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
@@ -220,6 +223,35 @@ export default function ApplicationDetailContent({
 
     fetchLicenseType()
   }, [application.license_type_id, supabase])
+
+  // Fetch expert profile
+  useEffect(() => {
+    const fetchExpertProfile = async () => {
+      if (!application.assigned_expert_id) {
+        setExpertProfile(null)
+        return
+      }
+      
+      setIsLoadingExpert(true)
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('id, full_name, email')
+          .eq('id', application.assigned_expert_id)
+          .single()
+
+        if (error) throw error
+        setExpertProfile(data)
+      } catch (error) {
+        console.error('Error fetching expert profile:', error)
+        setExpertProfile(null)
+      } finally {
+        setIsLoadingExpert(false)
+      }
+    }
+
+    fetchExpertProfile()
+  }, [application.assigned_expert_id, supabase])
 
   // Get current user ID
   useEffect(() => {
@@ -651,6 +683,21 @@ export default function ApplicationDetailContent({
         <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
       </div>
 
+      {/* Assigned Expert Block */}
+      {expertProfile && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-blue-900 mb-1">Your Assigned Licensing Expert</div>
+              <div className="text-base font-medium text-gray-900">{expertProfile.full_name || 'Expert'}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -693,15 +740,14 @@ export default function ApplicationDetailContent({
 
   // Tab navigation UI
   const tabNavigation = showInlineTabs ? (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 -mt-2">
       <div className="border-b border-gray-200">
         <nav className="flex space-x-4 px-6" aria-label="Tabs">
           {[
             { id: 'next-steps', label: 'Next Steps' },
             { id: 'documents', label: 'Documents' },
-            { id: 'quick-actions', label: 'Quick Actions' },
-            { id: 'requirements', label: 'Requirements' },
-            { id: 'message', label: 'Message' },
+            { id: 'requirements', label: 'State Info' },
+            { id: 'message', label: 'Messages' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -826,16 +872,7 @@ export default function ApplicationDetailContent({
               {/* Quick Actions and State-Specific Requirements */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Quick Actions */}
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-                  <div className="space-y-3">
-                    
-                    <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left">
-                      <Download className="w-5 h-5 text-gray-600" />
-                      <span className="font-medium text-gray-900">Export Progress Report</span>
-                    </button>
-                  </div>
-                </div>
+                
 
                 {/* State-Specific Requirements */}
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -1126,16 +1163,6 @@ export default function ApplicationDetailContent({
             </div>
           )}
 
-      {activeTab === 'ai-assistant' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 text-center">
-                <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">AI Assistant</h2>
-                <p className="text-gray-600">AI Assistant content will be displayed here</p>
-              </div>
-            </div>
-          )}
-
       {/* New tabs for inline display */}
       {activeTab === 'next-steps' && (
         <div className="space-y-6">
@@ -1180,20 +1207,6 @@ export default function ApplicationDetailContent({
         </div>
       )}
 
-      {activeTab === 'quick-actions' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-            <div className="space-y-3">
-              
-              <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left">
-                <Download className="w-5 h-5 text-gray-600" />
-                <span className="font-medium text-gray-900">Export Progress Report</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {activeTab === 'requirements' && (
         <div className="space-y-6">
