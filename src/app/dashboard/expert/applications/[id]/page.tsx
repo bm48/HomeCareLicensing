@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import ExpertDashboardLayout from '@/components/ExpertDashboardLayout'
-import ApplicationDetailContent from '@/components/ApplicationDetailContent'
+import ExpertApplicationDetailWrapper from '@/components/ExpertApplicationDetailWrapper'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
@@ -65,7 +65,7 @@ export default async function ExpertApplicationDetailPage({
           <ArrowLeft className="w-4 h-4" />
           Back to My Clients
         </Link>
-        <ApplicationDetailContent
+        <ExpertApplicationDetailWrapper
           application={application}
           documents={documents || []}
         />

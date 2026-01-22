@@ -38,7 +38,7 @@ export default async function ExpertProfilePage() {
 
   return (
     <ExpertDashboardLayout user={session.user} profile={profile} unreadNotifications={unreadNotifications || 0}>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mt-20">
         {/* Main Profile Section */}
         <div className="lg:col-span-2">
           <ProfileTabs user={session.user} profile={profile} />

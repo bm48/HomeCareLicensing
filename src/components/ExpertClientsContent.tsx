@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { 
   Users, 
   Mail, 
@@ -10,7 +10,8 @@ import {
   FileText,
   Search,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react'
 
 interface Application {
@@ -57,7 +58,9 @@ export default function ExpertClientsContent({
   activeApplications,
   pendingReviews
 }: ExpertClientsContentProps) {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
+  const [loadingApplicationId, setLoadingApplicationId] = useState<string | null>(null)
 
   // Ensure applicationsByOwner and ownerProfiles are not null/undefined
   const applicationsByOwner = applicationsByOwnerProp || {}
@@ -142,7 +145,7 @@ export default function ExpertClientsContent({
       id: ownerId,
       full_name: profile?.full_name || appOwnerProfile?.full_name || null,
       email: profile?.email || appOwnerProfile?.email || 'Unknown',
-      created_at: profile?.created_at || appOwnerProfile?.created_at || new Date().toISOString()
+      created_at: profile?.created_at || appOwnerProfile?.created_at || null
     }
   })
 
@@ -156,7 +159,7 @@ export default function ExpertClientsContent({
   })
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 mt-20">
       {/* Page Header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">My Clients</h1>
@@ -174,6 +177,7 @@ export default function ExpertClientsContent({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+          suppressHydrationWarning
         />
       </div>
 
@@ -309,12 +313,23 @@ export default function ExpertClientsContent({
                           </div>
 
                           <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
-                            <Link
-                              href={`/dashboard/expert/applications/${application.id}`}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                            <button
+                              onClick={() => {
+                                setLoadingApplicationId(application.id)
+                                router.push(`/dashboard/expert/applications/${application.id}`)
+                              }}
+                              disabled={loadingApplicationId === application.id}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
                             >
-                              View Application Details
-                            </Link>
+                              {loadingApplicationId === application.id ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Loading...
+                                </>
+                              ) : (
+                                'View Application Details'
+                              )}
+                            </button>
                             {(application.status === 'under_review' || application.status === 'needs_revision') && (
                               <span className="flex items-center gap-1 text-sm text-yellow-700 font-medium">
                                 <AlertCircle className="w-4 h-4" />

@@ -50,21 +50,23 @@ interface Step {
 interface ApplicationDetailContentProps {
   application: Application
   documents: Document[]
-  activeTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant'
-  onTabChange?: (tab: 'overview' | 'checklist' | 'documents' | 'ai-assistant') => void
+  activeTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message'
+  onTabChange?: (tab: 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message') => void
+  showInlineTabs?: boolean // If true, show tabs under summary blocks instead of in sidebar
 }
 
-type TabType = 'overview' | 'checklist' | 'documents' | 'ai-assistant'
+type TabType = 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message'
 
 export default function ApplicationDetailContent({
   application,
   documents: initialDocuments,
   activeTab: externalActiveTab,
-  onTabChange
+  onTabChange,
+  showInlineTabs = false
 }: ApplicationDetailContentProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [internalActiveTab, setInternalActiveTab] = useState<TabType>('overview')
+  const [internalActiveTab, setInternalActiveTab] = useState<TabType>(showInlineTabs ? 'next-steps' : 'overview')
   const activeTab = externalActiveTab ?? internalActiveTab
   const fromNotification = searchParams?.get('fromNotification') === 'true'
   
@@ -640,18 +642,17 @@ export default function ApplicationDetailContent({
   }
 
 
-  return (
-    <div className="space-y-6">
-      {activeTab === 'overview' && (
-      <div className="space-y-6">
-              {/* Welcome Header */}
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome Back</h1>
-                <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
-              </div>
+  // Summary blocks - always shown
+  const summaryBlocks = (
+    <>
+      {/* Welcome Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">{application.application_name}</h1>
+        <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
+      </div>
 
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                   <div className="text-sm font-medium text-gray-600 mb-2">Overall Progress</div>
                   <div className="text-3xl font-bold text-gray-900 mb-2">{application.progress_percentage || 0}%</div>
@@ -687,7 +688,49 @@ export default function ApplicationDetailContent({
                   <div className="text-3xl font-bold text-gray-900">{completedDocuments} of {totalDocuments} ready</div>
             </div>
           </div>
+    </>
+  )
 
+  // Tab navigation UI
+  const tabNavigation = showInlineTabs ? (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="border-b border-gray-200">
+        <nav className="flex space-x-4 px-6" aria-label="Tabs">
+          {[
+            { id: 'next-steps', label: 'Next Steps' },
+            { id: 'documents', label: 'Documents' },
+            { id: 'quick-actions', label: 'Quick Actions' },
+            { id: 'requirements', label: 'Requirements' },
+            { id: 'message', label: 'Message' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id as TabType)}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+    </div>
+  ) : null
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Blocks - Always visible */}
+      {summaryBlocks}
+
+      {/* Tab Navigation - Only when showInlineTabs is true */}
+      {tabNavigation}
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+      <div className="space-y-6">
               {/* Next Steps and Documents */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Next Steps */}
@@ -786,13 +829,7 @@ export default function ApplicationDetailContent({
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
                   <div className="space-y-3">
-                    <button
-                      onClick={() => handleTabChange('ai-assistant')}
-                      className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <CheckSquare className="w-5 h-5 text-gray-600" />
-                      <span className="font-medium text-gray-900">Ask AI Assistant</span>
-                    </button>
+                    
                     <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left">
                       <Download className="w-5 h-5 text-gray-600" />
                       <span className="font-medium text-gray-900">Export Progress Report</span>
@@ -863,11 +900,12 @@ export default function ApplicationDetailContent({
                           const initials = getInitials(senderName)
                           const roleTagColor = getRoleTagColor(senderRole)
                           const avatarColor = getAvatarColor(senderName, senderRole)
+                          const isOwnMessage = message.is_own
                           
                           return (
                             <div
                               key={message.id}
-                              className="flex items-start gap-3"
+                              className={`flex items-start gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
                             >
                               {/* Avatar */}
                               <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}>
@@ -875,8 +913,8 @@ export default function ApplicationDetailContent({
                               </div>
                               
                               {/* Message Content */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
+                              <div className={`flex-1 min-w-0 ${isOwnMessage ? 'flex flex-col items-end' : ''}`}>
+                                <div className={`flex items-center gap-2 mb-1 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                                   <span className="text-sm font-semibold text-gray-900">
                                     {senderName}
                                   </span>
@@ -887,8 +925,14 @@ export default function ApplicationDetailContent({
                                     {formatMessageTime(message.created_at)}
                                   </span>
                                 </div>
-                                <div className="bg-white border border-gray-200 rounded-lg p-3">
-                                  <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                                <div className={`rounded-lg p-3 ${
+                                  isOwnMessage 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-white border border-gray-200'
+                                }`}>
+                                  <p className={`text-sm whitespace-pre-wrap ${
+                                    isOwnMessage ? 'text-white' : 'text-gray-900'
+                                  }`}>
                                     {message.content}
                                   </p>
                                 </div>
@@ -939,10 +983,12 @@ export default function ApplicationDetailContent({
           )}
 
       {activeTab === 'checklist' && (
-            <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 text-center">
-              <CheckSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Checklist</h2>
-              <p className="text-gray-600">Checklist content will be displayed here</p>
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 text-center">
+                <CheckSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Checklist</h2>
+                <p className="text-gray-600">Checklist content will be displayed here</p>
+              </div>
             </div>
           )}
 
@@ -1081,12 +1127,221 @@ export default function ApplicationDetailContent({
           )}
 
       {activeTab === 'ai-assistant' && (
-            <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 text-center">
-              <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">AI Assistant</h2>
-              <p className="text-gray-600">AI Assistant content will be displayed here</p>
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 text-center">
+                <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">AI Assistant</h2>
+                <p className="text-gray-600">AI Assistant content will be displayed here</p>
+              </div>
             </div>
           )}
+
+      {/* New tabs for inline display */}
+      {activeTab === 'next-steps' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Next Steps</h2>
+            </div>
+            {isLoadingSteps ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            ) : steps.filter(s => !s.is_completed).length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">All steps completed!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {steps
+                  .filter(s => !s.is_completed)
+                  .map((step) => (
+                    <div key={step.id} className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg">
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-full mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
+                        {step.description && (
+                          <div className="text-sm text-gray-600 mb-2">{step.description}</div>
+                        )}
+                        <div className="flex gap-2">
+                          <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
+                            Licensing
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+            <button className="w-full mt-4 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium">
+              Continue Checklist
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'quick-actions' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+            <div className="space-y-3">
+              
+              <button className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                <Download className="w-5 h-5 text-gray-600" />
+                <span className="font-medium text-gray-900">Export Progress Report</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'requirements' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">State-Specific Requirements</h2>
+            {isLoadingLicenseType ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            ) : licenseType ? (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-sm text-gray-600">Average Processing Time</span>
+                  <span className="font-semibold text-gray-900">{licenseType.processing_time_display || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-sm text-gray-600">Application Fee</span>
+                  <span className="font-semibold text-gray-900">{licenseType.cost_display || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Renewal Period</span>
+                  <span className="font-semibold text-gray-900">{licenseType.renewal_period_display || 'N/A'}</span>
+                </div>
+                <a 
+                  href="#" 
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium mt-4"
+                >
+                  Learn more about {application.state} requirements
+                  <ArrowRight className="w-4 h-4" />
+                </a>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">No license type information available</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'message' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Application Messages</h2>
+              <p className="text-sm text-gray-600">Communicate with your team about this application</p>
+            </div>
+            <div className="p-6">
+              {/* Messages List */}
+              <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
+                {isLoadingConversation ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No messages yet</p>
+                    <p className="text-xs mt-1">Start a conversation with your assigned expert</p>
+                  </div>
+                ) : (
+                  <>
+                    {messages.map((message) => {
+                      const senderName = getSenderName(message)
+                      const senderRole = getSenderRole(message)
+                      const initials = getInitials(senderName)
+                      const roleTagColor = getRoleTagColor(senderRole)
+                      const avatarColor = getAvatarColor(senderName, senderRole)
+                      const isOwnMessage = message.is_own
+                      
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex items-start gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
+                        >
+                          {/* Avatar */}
+                          <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}>
+                            {initials}
+                          </div>
+                          
+                          {/* Message Content */}
+                          <div className={`flex-1 min-w-0 ${isOwnMessage ? 'flex flex-col items-end' : ''}`}>
+                            <div className={`flex items-center gap-2 mb-1 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                              <span className="text-sm font-semibold text-gray-900">
+                                {senderName}
+                              </span>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded border ${roleTagColor}`}>
+                                {senderRole}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {formatMessageTime(message.created_at)}
+                              </span>
+                            </div>
+                            <div className={`rounded-lg p-3 ${
+                              isOwnMessage 
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-white'
+                            }`}>
+                              <p className={`text-sm whitespace-pre-wrap ${
+                                isOwnMessage ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                {message.content}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <div ref={messagesEndRef} />
+                  </>
+                )}
+              </div>
+
+              {/* Message Input */}
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex gap-3">
+                  <textarea
+                    value={messageContent}
+                    onChange={(e) => setMessageContent(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      }
+                    }}
+                    placeholder="Type your message..."
+                    rows={2}
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!messageContent.trim() || isSendingMessage || !conversationId}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    {isSendingMessage ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Press Enter to send, Shift+Enter for new line
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

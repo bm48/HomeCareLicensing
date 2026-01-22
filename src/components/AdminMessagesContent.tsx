@@ -352,18 +352,20 @@ export default function AdminMessagesContent({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1 gap-2">
-                          <h3 className="text-sm md:text-base font-semibold text-gray-900 truncate">
-                            {conv.client?.company_name}
-                          </h3>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <h3 className="text-sm md:text-base font-semibold text-gray-900 truncate">
+                              {conv.client?.company_name}
+                            </h3>
+                            {(conv.unread_count ?? 0) > 0 && (
+                              <span className="flex-shrink-0 w-5 h-5 bg-red-600 text-white text-xs font-semibold rounded-full flex items-center justify-center">
+                                {conv.unread_count}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <p className="text-xs md:text-sm text-gray-600 truncate">
                           with {expertName}
                         </p>
-                        {conv.unread_count && conv.unread_count > 0 && (
-                          <span className="inline-block mt-1 px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded-full">
-                            {conv.unread_count} new
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>

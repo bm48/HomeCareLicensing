@@ -579,7 +579,7 @@ function ExpertMessagesContent() {
 
   return (
     <ExpertDashboardLayout user={user} profile={profile}>
-      <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-4 sm:space-y-6 mt-20">
         {/* Page Header */}
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Messages</h1>

@@ -64,6 +64,7 @@ interface ProfileTabsProps {
 
 export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
   const router = useRouter()
+  // For experts, only show personal tab, so default to 'personal'
   const [activeTab, setActiveTab] = useState('personal')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -216,10 +217,15 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
     ).join(' ')
   }
 
-  const tabs = [
-    { id: 'personal', label: 'Personal Information', icon: User },
-    { id: 'company', label: 'Company Details', icon: Building },
-  ]
+  // For experts, only show Personal Information tab
+  const tabs = profile?.role === 'expert' 
+    ? [
+        { id: 'personal', label: 'Personal Information', icon: User },
+      ]
+    : [
+        { id: 'personal', label: 'Personal Information', icon: User },
+        { id: 'company', label: 'Company Details', icon: Building },
+      ]
 
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-100">
