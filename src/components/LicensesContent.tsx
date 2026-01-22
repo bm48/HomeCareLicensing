@@ -65,7 +65,7 @@ export default function LicensesContent({
 }: LicensesContentProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState<'requested' | 'applications' | 'licenses'>('licenses')
+  const [activeTab, setActiveTab] = useState<'requested' | 'applications' | 'licenses'>('requested')
   const [isStateModalOpen, setIsStateModalOpen] = useState(false)
   const [isLicenseTypeModalOpen, setIsLicenseTypeModalOpen] = useState(false)
   const [resubmittingId, setResubmittingId] = useState<string | null>(null)

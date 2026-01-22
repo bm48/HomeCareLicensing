@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import DashboardLayout from './DashboardLayout'
 import ApplicationDetailContent from './ApplicationDetailContent'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 
 interface Application {
   id: string
@@ -61,6 +63,14 @@ export default function ApplicationDetailWrapper({
       activeLicenseTab={activeTab}
       onLicenseTabChange={setActiveTab}
     >
+      
+      <Link
+          href="/dashboard/licenses"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to My Licenses
+        </Link>
       <ApplicationDetailContent
         application={application}
         documents={documents}
