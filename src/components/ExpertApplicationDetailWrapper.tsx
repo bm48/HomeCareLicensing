@@ -42,7 +42,6 @@ export default function ExpertApplicationDetailWrapper({
     fromNotification ? 'message' : 'next-steps'
   )
 
-  
   // Update tab if fromNotification changes
   useEffect(() => {
     if (fromNotification) {
