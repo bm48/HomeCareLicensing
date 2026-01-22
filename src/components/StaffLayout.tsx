@@ -5,8 +5,9 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
-  Users, 
-  MessageSquare, 
+  Home,
+  Award,
+  User,
   LogOut, 
   ChevronLeft,
   Menu,
@@ -17,7 +18,7 @@ import LoadingSpinner from './LoadingSpinner'
 import UserDropdown from './UserDropdown'
 import NotificationDropdown from './NotificationDropdown'
 
-interface ExpertDashboardLayoutProps {
+interface StaffLayoutProps {
   children: React.ReactNode
   user: {
     id?: string
@@ -30,12 +31,12 @@ interface ExpertDashboardLayoutProps {
   unreadNotifications?: number
 }
 
-export default function ExpertDashboardLayout({ 
+export default function StaffLayout({ 
   children, 
   user, 
   profile,
   unreadNotifications = 0 
-}: ExpertDashboardLayoutProps) {
+}: StaffLayoutProps) {
   const pathname = usePathname()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -58,8 +59,9 @@ export default function ExpertDashboardLayout({
   }
 
   const menuItems = [
-    { href: '/dashboard/expert/clients', label: 'My Clients', icon: Users },
-    { href: '/dashboard/expert/messages', label: 'Messages', icon: MessageSquare },
+    { href: '/staff-dashboard', label: 'Home', icon: Home },
+    { href: '/staff-dashboard/my-certifications', label: 'My Certifications', icon: Award },
+    { href: '/staff-dashboard/profile', label: 'My Profile', icon: User },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
@@ -83,7 +85,9 @@ export default function ExpertDashboardLayout({
 
   const getRoleDisplay = () => {
     if (!profile?.role) return 'User'
-    return profile.role === 'expert' ? 'Licensing Expert' : 'Expert'
+    return profile.role.split('_').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ')
   }
 
   return (
@@ -129,7 +133,7 @@ export default function ExpertDashboardLayout({
               <UserDropdown 
                 user={user} 
                 profile={profile} 
-                profileUrl="/dashboard/expert/profile"
+                profileUrl="/staff-dashboard/profile"
                 changePasswordUrl="/change-password"
               />
             )}

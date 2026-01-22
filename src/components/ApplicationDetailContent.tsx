@@ -424,7 +424,6 @@ export default function ApplicationDetailContent({
 
 
   const handleSendMessage = async () => {
-    console.log('sending..........')
     if (!messageContent.trim() || isSendingMessage || !currentUserId || !application.id) return
 
     setIsSendingMessage(true)
