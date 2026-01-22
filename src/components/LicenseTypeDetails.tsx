@@ -131,13 +131,51 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     return match || '0'
   }
 
+  // Extract processing time value preserving ranges (dashes)
+  const extractProcessingTime = (value: string): string => {
+    // Remove "days" and other text, but preserve numbers, dashes, and spaces
+    const cleaned = value.replace(/days?/gi, '').trim()
+    // Extract numbers, dashes, and spaces (for ranges like "45-90")
+    const match = cleaned.replace(/[^0-9.\-\s]/g, '').trim()
+    return match || ''
+  }
+
+  // Extract currency value preserving ranges (dashes)
+  const extractCurrency = (value: string): string => {
+    // Remove dollar signs and commas, but preserve numbers, dashes, and spaces
+    const cleaned = value.replace(/[$,]/g, '').trim()
+    // Extract numbers, dashes, and spaces (for ranges like "2500-4500")
+    const match = cleaned.replace(/[^0-9.\-\s]/g, '').trim()
+    return match || ''
+  }
+
   const formatProcessingTime = (value: string): string => {
+    // Check if it's a range (contains dash)
+    if (value.includes('-')) {
+      const parts = value.split('-').map(part => part.trim().replace(/[^0-9.]/g, ''))
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        return `${parts[0]}-${parts[1]} days`
+      }
+    }
     const num = extractNumber(value)
     if (!num || num === '0') return ''
     return `${num} days`
   }
 
   const formatCurrency = (value: string): string => {
+    // Check if it's a range (contains dash)
+    if (value.includes('-')) {
+      const parts = value.split('-').map(part => {
+        const num = part.trim().replace(/[^0-9.]/g, '')
+        if (!num) return ''
+        const numValue = parseFloat(num)
+        if (isNaN(numValue)) return ''
+        return numValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+      })
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        return `$${parts[0]}-$${parts[1]}`
+      }
+    }
     const num = extractNumber(value)
     if (!num || num === '0') return '$0'
     const numValue = parseFloat(num)
@@ -840,8 +878,8 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="text"
                       value={overviewFields.processingTime || licenseType.processing_time_display || ''}
                       onFocus={(e) => {
-                        const numericValue = extractNumber(e.target.value)
-                        setOverviewFields({ ...overviewFields, processingTime: numericValue })
+                        const rawValue = extractProcessingTime(e.target.value)
+                        setOverviewFields({ ...overviewFields, processingTime: rawValue })
                         e.target.select()
                       }}
                       onBlur={(e) => {
@@ -867,8 +905,8 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="text"
                       value={overviewFields.applicationFee || licenseType.cost_display || ''}
                       onFocus={(e) => {
-                        const numericValue = extractNumber(e.target.value)
-                        setOverviewFields({ ...overviewFields, applicationFee: numericValue })
+                        const rawValue = extractCurrency(e.target.value)
+                        setOverviewFields({ ...overviewFields, applicationFee: rawValue })
                         e.target.select()
                       }}
                       onBlur={(e) => {

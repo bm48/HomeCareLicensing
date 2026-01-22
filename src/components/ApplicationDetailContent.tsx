@@ -52,11 +52,11 @@ interface ApplicationDetailContentProps {
   application: Application
   documents: Document[]
   activeTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message'
-  onTabChange?: (tab: 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message') => void
+  onTabChange?: (tab:  'next-steps' | 'quick-actions' | 'requirements' | 'message') => void
   showInlineTabs?: boolean // If true, show tabs under summary blocks instead of in sidebar
 }
 
-type TabType = 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message'
+type TabType =  'next-steps' | 'quick-actions' | 'requirements' | 'message'
 
 export default function ApplicationDetailContent({
   application,
@@ -67,7 +67,7 @@ export default function ApplicationDetailContent({
 }: ApplicationDetailContentProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [internalActiveTab, setInternalActiveTab] = useState<TabType>(showInlineTabs ? 'next-steps' : 'overview')
+  const [internalActiveTab, setInternalActiveTab] = useState<TabType>(showInlineTabs ? 'next-steps' : 'message')
   const activeTab = externalActiveTab ?? internalActiveTab
   const fromNotification = searchParams?.get('fromNotification') === 'true'
   
@@ -298,7 +298,6 @@ export default function ApplicationDetailContent({
               })
               .select()
               .single()
-              console.log('newConv', newConv)
 
             if (convError) {
               console.error('Error creating conversation:', convError)
@@ -480,7 +479,6 @@ export default function ApplicationDetailContent({
           setConversationId(convId)
         } else {
           // Create new conversation for this application
-          console.log('application.id', application.id)
           const { data: newConv, error: convError } = await supabase
             .from('conversations')
             .insert({
@@ -813,9 +811,9 @@ export default function ApplicationDetailContent({
                                 <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
                                   Licensing
                                 </span>
-            </div>
-          </div>
-        </div>
+                              </div>
+                            </div>
+                          </div>
                         ))}
                     </div>
                   )}
@@ -1200,9 +1198,6 @@ export default function ApplicationDetailContent({
                   ))}
               </div>
             )}
-            <button className="w-full mt-4 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium">
-              Continue Checklist
-            </button>
           </div>
         </div>
       )}

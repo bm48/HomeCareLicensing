@@ -50,6 +50,19 @@ export default function ApplicationDetailWrapper({
 }: ApplicationDetailWrapperProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message'>('next-steps')
 
+  // Map activeTab to a valid license tab type for DashboardLayout
+  const getLicenseTab = (tab: typeof activeTab): 'overview' | 'checklist' | 'documents' | 'ai-assistant' => {
+    if (tab === 'overview' || tab === 'checklist' || tab === 'documents' || tab === 'ai-assistant') {
+      return tab
+    }
+    return 'overview' // Default fallback
+  }
+
+  // Handle tab change from DashboardLayout (only for license tabs)
+  const handleLicenseTabChange = (tab: 'overview' | 'checklist' | 'documents' | 'ai-assistant') => {
+    setActiveTab(tab)
+  }
+
   return (
     <DashboardLayout
       user={user}
@@ -60,8 +73,8 @@ export default function ApplicationDetailWrapper({
         state: application.state,
         progress_percentage: application.progress_percentage
       }}
-      activeLicenseTab={activeTab}
-      onLicenseTabChange={setActiveTab}
+      activeLicenseTab={getLicenseTab(activeTab)}
+      onLicenseTabChange={handleLicenseTabChange}
     >
       
       <Link

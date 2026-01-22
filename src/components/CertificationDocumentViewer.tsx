@@ -106,7 +106,7 @@ export default function CertificationDocumentViewer({
               <div className="p-8 text-center">
                 <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-3" />
                 <p className="text-sm text-gray-600 mb-1">Unable to load image preview</p>
-                <p className="text-xs text-gray-500">Click "View Full Image" or "Download" to access the file</p>
+                <p className="text-xs text-gray-500">Click &quot;View Full Image&quot; or &quot;Download&quot; to access the file</p>
               </div>
             )}
           </div>
@@ -120,8 +120,8 @@ export default function CertificationDocumentViewer({
               <p className="text-sm text-gray-600 mb-1">
                 {fileExtension.toUpperCase()} Document
               </p>
-              <p className="text-xs text-gray-500">
-                Click "View Document" to open in a new tab
+                <p className="text-xs text-gray-500">
+                Click &quot;View Document&quot; to open in a new tab
               </p>
             </div>
           </div>
