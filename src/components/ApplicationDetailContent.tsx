@@ -92,6 +92,7 @@ export default function ApplicationDetailContent({
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isLoadingConversation, setIsLoadingConversation] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
@@ -253,12 +254,21 @@ export default function ApplicationDetailContent({
     fetchExpertProfile()
   }, [application.assigned_expert_id, supabase])
 
-  // Get current user ID
+  // Get current user ID and role
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setCurrentUserId(user.id)
+        // Get user profile to determine role
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        if (profile) {
+          setCurrentUserRole(profile.role)
+        }
       }
     }
     getCurrentUser()
@@ -350,6 +360,7 @@ export default function ApplicationDetailContent({
             is_own: msg.sender_id === currentUserId
           }))
 
+          console.log('messagesWithSenders', messagesWithSenders)
           setMessages(messagesWithSenders)
 
           // Mark messages as read by adding current user ID to is_read array
@@ -556,14 +567,16 @@ export default function ApplicationDetailContent({
   }
 
   const getSenderName = (message: any) => {
-    if (message.is_own) {
-      return 'Business Owner'
-    }
+    // Use sender's actual profile information
     if (message.sender?.user_profiles?.full_name) {
       return message.sender.user_profiles.full_name
     }
+    // Fallback to role-based names if no full name
     if (message.sender?.user_profiles?.role === 'expert') {
       return 'Expert'
+    }
+    if (message.sender?.user_profiles?.role === 'company_owner') {
+      return 'Business Owner'
     }
     if (message.sender?.user_profiles?.role === 'admin') {
       return 'Admin'
@@ -572,16 +585,29 @@ export default function ApplicationDetailContent({
   }
 
   const getSenderRole = (message: any) => {
-    if (message.is_own) {
-      return 'Owner'
-    }
-    if (message.sender?.user_profiles?.role === 'expert') {
+    // Determine role based on sender's actual role from user_profiles
+    const senderRole = message.sender?.user_profiles?.role
+    
+    if (senderRole === 'expert') {
       return 'Expert'
     }
-    if (message.sender?.user_profiles?.role === 'admin') {
+    if (senderRole === 'company_owner') {
+      return 'Owner'
+    }
+    if (senderRole === 'admin') {
       return 'Admin'
     }
-    return 'Expert'
+    // Default fallback - try to infer from application context
+    // If sender is the company owner, they're an Owner
+    if (message.sender?.id === application.company_owner_id) {
+      return 'Owner'
+    }
+    // If sender is the assigned expert, they're an Expert
+    if (message.sender?.id === application.assigned_expert_id) {
+      return 'Expert'
+    }
+    // Last resort default
+    return 'User'
   }
 
   const getInitials = (name: string) => {
