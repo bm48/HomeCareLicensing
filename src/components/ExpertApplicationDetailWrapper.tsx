@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import ApplicationDetailContent from './ApplicationDetailContent'
 
 interface Application {
@@ -35,7 +36,18 @@ export default function ExpertApplicationDetailWrapper({
   application,
   documents
 }: ExpertApplicationDetailWrapperProps) {
-  const [activeTab, setActiveTab] = useState<'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'message'>('next-steps')
+  const searchParams = useSearchParams()
+  const fromNotification = searchParams?.get('fromNotification') === 'true'
+  const [activeTab, setActiveTab] = useState<'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'message'>(
+    fromNotification ? 'message' : 'next-steps'
+  )
+
+  // Update tab if fromNotification changes
+  useEffect(() => {
+    if (fromNotification) {
+      setActiveTab('message')
+    }
+  }, [fromNotification])
 
   return (
     <ApplicationDetailContent

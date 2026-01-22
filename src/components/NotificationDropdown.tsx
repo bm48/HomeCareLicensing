@@ -460,7 +460,7 @@ export default function NotificationDropdown({
     } else if (userRole === 'company_owner') {
       router.push(`/dashboard/applications/${applicationId}?fromNotification=true`)
     } else if (userRole === 'expert') {
-      router.push(`/dashboard/expert/messages?fromNotification=true&applicationId=${applicationId}`)
+      router.push(`/dashboard/expert/applications/${applicationId}?fromNotification=true`)
     }
   }
 
