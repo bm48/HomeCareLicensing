@@ -313,7 +313,19 @@ export default function AddCertificationModal({
               id="expiration_date"
               type="date"
               value={formData.expiration_date}
-              onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value })}
+              onChange={(e) => {
+                const expirationDate = e.target.value
+                // Auto-update status based on expiration date
+                const today = new Date()
+                today.setHours(0, 0, 0, 0)
+                const expiry = new Date(expirationDate)
+                expiry.setHours(0, 0, 0, 0)
+                
+                // If expiration date is before today, status is Expired, otherwise Active
+                const newStatus = expiry < today ? 'Expired' : 'Active'
+                
+                setFormData({ ...formData, expiration_date: expirationDate, status: newStatus })
+              }}
               className="block w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all pr-10"
               disabled={isSubmitting || isUploading}
               required

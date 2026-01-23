@@ -99,6 +99,8 @@ export default function ApplicationDetailContent({
   const [isLoadingLicenseType, setIsLoadingLicenseType] = useState(false)
   const [expertProfile, setExpertProfile] = useState<{ id: string; full_name: string | null; email: string | null } | null>(null)
   const [isLoadingExpert, setIsLoadingExpert] = useState(false)
+  const [clientProfile, setClientProfile] = useState<{ id: string; full_name: string | null; email: string | null } | null>(null)
+  const [isLoadingClient, setIsLoadingClient] = useState(false)
   const [messages, setMessages] = useState<any[]>([])
   const [messageContent, setMessageContent] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
@@ -130,7 +132,6 @@ export default function ApplicationDetailContent({
         .select('*')
         .eq('application_id', application.id)
         .order('created_at', { ascending: false })
-      console.log('data', data)
       if (error) throw error
       if (data) {
         setDocuments(data.map((doc: any) => ({
@@ -444,7 +445,7 @@ export default function ApplicationDetailContent({
     fetchLicenseType()
   }, [application.license_type_id, supabase])
 
-  // Fetch expert profile
+  // Fetch expert profile (for clients)
   useEffect(() => {
     const fetchExpertProfile = async () => {
       if (!application.assigned_expert_id) {
@@ -472,6 +473,35 @@ export default function ApplicationDetailContent({
 
     fetchExpertProfile()
   }, [application.assigned_expert_id, supabase])
+
+  // Fetch client profile (for experts)
+  useEffect(() => {
+    const fetchClientProfile = async () => {
+      if (!application.company_owner_id) {
+        setClientProfile(null)
+        return
+      }
+      
+      setIsLoadingClient(true)
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('id, full_name, email')
+          .eq('id', application.company_owner_id)
+          .single()
+
+        if (error) throw error
+        setClientProfile(data)
+      } catch (error) {
+        console.error('Error fetching client profile:', error)
+        setClientProfile(null)
+      } finally {
+        setIsLoadingClient(false)
+      }
+    }
+
+    fetchClientProfile()
+  }, [application.company_owner_id, supabase])
 
   // Get current user ID and role
   useEffect(() => {
@@ -579,7 +609,6 @@ export default function ApplicationDetailContent({
             is_own: msg.sender_id === currentUserId
           }))
 
-          console.log('messagesWithSenders', messagesWithSenders)
           setMessages(messagesWithSenders)
 
           // Mark messages as read by adding current user ID to is_read array
@@ -1042,19 +1071,40 @@ export default function ApplicationDetailContent({
         <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
       </div>
 
-      {/* Assigned Expert Block */}
-      {expertProfile && (
-        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Users className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <div className="text-sm font-semibold text-blue-900 mb-1">Your Assigned Licensing Expert</div>
-              <div className="text-base font-medium text-gray-900">{expertProfile.full_name || 'Expert'}</div>
+      {/* Assigned Expert Block (for clients) or Client Info Block (for experts) */}
+      {currentUserRole === 'expert' ? (
+        // Show client info when user is an expert
+        clientProfile && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-blue-900 mb-1">Client Information</div>
+                <div className="text-base font-medium text-gray-900">{clientProfile.full_name || 'Client'}</div>
+                {clientProfile.email && (
+                  <div className="text-sm text-gray-600 mt-1">{clientProfile.email}</div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )
+      ) : (
+        // Show expert info when user is a client
+        expertProfile && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-blue-900 mb-1">Your Assigned Licensing Expert</div>
+                <div className="text-base font-medium text-gray-900">{expertProfile.full_name || 'Expert'}</div>
+              </div>
+            </div>
+          </div>
+        )
       )}
 
       {/* Summary Cards */}

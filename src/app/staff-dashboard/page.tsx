@@ -16,6 +16,7 @@ import {
   ArrowRight,
   ChevronRight
 } from 'lucide-react'
+import { useEffect } from 'react'
 
 export default async function StaffDashboardPage() {
   const session = await getSession()
@@ -55,14 +56,19 @@ export default async function StaffDashboardPage() {
     redirect('/login?error=Staff member record not found. Please contact your administrator.')
   }
 
-  // Get staff licenses from applications table
+  // Get staff licenses from applications table - only for this staff member
   const { data: applicationsData, error: applicationError } = await supabase
     .from('applications')
     .select('*')
-    .not('staff_member_id', 'is', null)
+    .eq('staff_member_id', staffMember.id)
     .order('expiry_date', { ascending: true })
-    
-    console.log("applicationsData: ",applicationsData)
+
+  // Get certifications from certifications table - only for this user
+  const { data: certificationsData, error: certificationsError } = await supabase
+    .from('certifications')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .order('expiration_date', { ascending: true })
 
   // Get application document counts
   const applicationIds = applicationsData?.map(app => app.id) || []
@@ -79,7 +85,7 @@ export default async function StaffDashboardPage() {
   }, {}) || {}
 
   // Map applications to match the expected license structure
-  const staffLicenses = applicationsData?.map(app => ({
+  const applicationsAsLicenses = applicationsData?.map(app => ({
     id: app.id,
     license_type: app.application_name,
     license_number: app.license_number || 'N/A',
@@ -98,8 +104,51 @@ export default async function StaffDashboardPage() {
       return renewal.toISOString().split('T')[0]
     })() : null,
     documents_count: documentCounts[app.id] || 0,
+    source: 'application' as const
   })) || []
 
+  // Map certifications to match the expected license structure
+  const certificationsAsLicenses = certificationsData?.map(cert => {
+    const expiryDate = cert.expiration_date
+    const today = new Date()
+    const expiry = new Date(expiryDate)
+    const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    
+    let status = 'active'
+    if (cert.status === 'Expired' || daysUntilExpiry <= 0) {
+      status = 'expired'
+    } else if (daysUntilExpiry <= 90 && daysUntilExpiry > 0) {
+      status = 'expiring'
+    }
+
+    return {
+      id: cert.id,
+      license_type: cert.type,
+      license_number: cert.license_number,
+      state: cert.state || null,
+      status: status,
+      issue_date: cert.issue_date,
+      expiry_date: cert.expiration_date,
+      days_until_expiry: daysUntilExpiry,
+      issuing_authority: cert.issuing_authority,
+      activated_date: cert.issue_date,
+      renewal_due_date: expiryDate ? (() => {
+        const renewal = new Date(expiryDate)
+        renewal.setDate(renewal.getDate() - 90)
+        return renewal.toISOString().split('T')[0]
+      })() : null,
+      documents_count: cert.document_url ? 1 : 0,
+      source: 'certification' as const
+    }
+  }) || []
+
+  // Combine applications and certifications, sorted by expiry date
+  const staffLicenses = [...applicationsAsLicenses, ...certificationsAsLicenses].sort((a, b) => {
+    if (!a.expiry_date) return 1
+    if (!b.expiry_date) return -1
+    return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
+  }).reverse().splice(0, 3)
+  
   // Get unread notifications
   const { data: notifications } = await supabase
     .from('notifications')
@@ -139,7 +188,7 @@ export default async function StaffDashboardPage() {
   }).length || 0
 
   // Get licenses expiring within 90 days
-  const licensesExpiringSoon = staffLicenses?.filter(l => {
+  const licensesExpiringSoon = staffLicenses?.slice().reverse().filter(l => {
     if (l.days_until_expiry !== null && l.days_until_expiry !== undefined) {
       return l.days_until_expiry <= 90 && l.days_until_expiry > 0 && l.status === 'active'
     }
@@ -245,7 +294,7 @@ export default async function StaffDashboardPage() {
                 )}
               </div>
               <Link
-                href="/staff-dashboard/my-licenses"
+                href={`/staff-dashboard/my-certifications/${licensesExpiringSoon[0].id}`}
                 className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors text-sm md:text-base whitespace-nowrap"
               >
                 Renew
@@ -351,7 +400,9 @@ export default async function StaffDashboardPage() {
                         {/* ACTIONS */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           <Link
-                            href={`/staff-dashboard/my-certifications/${license.id}`}
+                            href={license.source === 'certification' 
+                              ? `/staff-dashboard/my-certifications/${license.id}`
+                              : `/staff-dashboard/my-certifications/${license.id}`}
                             className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
                           >
                             View Details
@@ -380,43 +431,6 @@ export default async function StaffDashboardPage() {
           )}
         </div>
 
-        {/* Bottom Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          {/* Renewal Reminders Card */}
-          <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Bell className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 mb-1 text-base md:text-lg">Renewal Reminders</h3>
-                <p className="text-sm text-gray-600 mb-4">Get notified before your license expire</p>
-                <button className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm">
-                  Configure Alerts
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* License Documents Card */}
-          <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <FolderOpen className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 mb-1 text-base md:text-lg">License Documents</h3>
-                <p className="text-sm text-gray-600 mb-4">Upload and manage your license documents</p>
-                <Link
-                  href="/staff-dashboard/my-licenses"
-                  className="inline-block px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
-                >
-                  View Documents
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </StaffLayout>
   )

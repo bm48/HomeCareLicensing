@@ -64,6 +64,16 @@ CREATE POLICY "Expert can insert own application steps"
   WITH CHECK (EXISTS (
     SELECT 1 FROM applications WHERE assigned_expert_id = auth.uid()
   ));
+CREATE POLICY "Expert can delete own application steps"
+  ON application_steps FOR DELETE
+  USING (EXISTS (
+    SELECT 1 FROM applications WHERE assigned_expert_id = auth.uid()
+  ));
+CREATE POLICY "Expert can update own application steps"
+  ON application_steps FOR UPDATE
+  USING (EXISTS (
+    SELECT 1 FROM applications WHERE assigned_expert_id = auth.uid()
+  ));
 
 CREATE POLICY "Admin can update own application steps"
   ON application_steps FOR ALL
