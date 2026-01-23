@@ -147,99 +147,119 @@ export default function ExpertClientsContent({
         </div>
       </div>
 
-      {/* Applications List */}
-      <div className="space-y-4 sm:space-y-6">
-        {filteredApplications.length > 0 ? (
-          filteredApplications.map((application) => (
-            <div
-              key={application.id}
-              className="bg-white rounded-xl shadow-md border border-gray-100 p-4 sm:p-6"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3">
-                <div className="flex items-start gap-3 flex-1">
-                  <MapPin className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="font-semibold text-gray-900 text-base sm:text-lg mb-1">
-                      {application.application_name}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-2">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        {application.state}
+      {/* Applications Table */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          {filteredApplications.length > 0 ? (
+            <table className="w-full min-w-[800px]">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Application Name</th>
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">State</th>
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Progress</th>
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Started</th>
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Last Updated</th>
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredApplications.map((application) => (
+                  <tr 
+                    key={application.id} 
+                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => router.push(`/dashboard/expert/applications/${application.id}`)}
+                  >
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-semibold text-gray-900">{application.application_name}</div>
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-900">{application.state}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(application.status)}`}>
+                        {getStatusDisplay(application.status)}
                       </span>
-                      {application.created_at && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          Created: {formatDate(application.created_at)}
-                        </span>
+                      {(application.status === 'under_review' || application.status === 'needs_revision') && (
+                        <div className="flex items-center gap-1 mt-1 text-xs text-yellow-700">
+                          <AlertCircle className="w-3 h-3" />
+                          <span>Requires Review</span>
+                        </div>
                       )}
-                    </div>
-                  </div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getStatusBadge(application.status)}`}>
-                  {getStatusDisplay(application.status)}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-sm mb-3 sm:mb-4">
-                {application.progress_percentage !== null && (
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <span className="font-medium">Progress:</span>
-                    <span className="font-semibold text-blue-600">{application.progress_percentage}%</span>
-                  </div>
-                )}
-                {application.started_date && (
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Clock className="w-4 h-4" />
-                    <span>Started: {formatDate(application.started_date)}</span>
-                  </div>
-                )}
-                {application.last_updated_date && (
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Clock className="w-4 h-4" />
-                    <span>Updated: {formatDate(application.last_updated_date)}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    setLoadingApplicationId(application.id)
-                    router.push(`/dashboard/expert/applications/${application.id}`)
-                  }}
-                  disabled={loadingApplicationId === application.id}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {loadingApplicationId === application.id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    'View Application Details'
-                  )}
-                </button>
-                {(application.status === 'under_review' || application.status === 'needs_revision') && (
-                  <span className="flex items-center gap-1 text-sm text-yellow-700 font-medium">
-                    <AlertCircle className="w-4 h-4" />
-                    Requires Review
-                  </span>
-                )}
-              </div>
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                      {application.progress_percentage !== null ? (
+                        <div className="w-32">
+                          <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all"
+                              style={{ width: `${application.progress_percentage}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-gray-500">{application.progress_percentage}%</div>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">N/A</span>
+                      )}
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-600 hidden md:table-cell">
+                      {application.started_date ? (
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          <span>{formatDate(application.started_date)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">N/A</span>
+                      )}
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-600 hidden lg:table-cell">
+                      {application.last_updated_date ? (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-4 h-4 text-gray-400" />
+                          <span>{formatDate(application.last_updated_date)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">N/A</span>
+                      )}
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm">
+                      <button
+                        onClick={() => {
+                          setLoadingApplicationId(application.id)
+                          router.push(`/dashboard/expert/applications/${application.id}`)
+                        }}
+                        disabled={loadingApplicationId === application.id}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {loadingApplicationId === application.id ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          'View Details'
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-8 sm:p-12 text-center">
+              <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No applications assigned</h3>
+              <p className="text-gray-600">
+                {searchQuery 
+                  ? 'No applications match your search criteria.' 
+                  : 'You don\'t have any assigned applications yet. Once applications are assigned to you, they will appear here.'}
+              </p>
             </div>
-          ))
-        ) : (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8 sm:p-12 text-center">
-            <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No applications assigned</h3>
-            <p className="text-gray-600">
-              {searchQuery 
-                ? 'No applications match your search criteria.' 
-                : 'You don\'t have any assigned applications yet. Once applications are assigned to you, they will appear here.'}
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

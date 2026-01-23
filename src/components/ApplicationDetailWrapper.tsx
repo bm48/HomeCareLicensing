@@ -48,7 +48,7 @@ export default function ApplicationDetailWrapper({
   profile,
   unreadNotifications = 0
 }: ApplicationDetailWrapperProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message'>('next-steps')
+  const [activeTab, setActiveTab] = useState<'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message' | 'expert-process'>('next-steps')
 
   // Map activeTab to a valid license tab type for DashboardLayout
   const getLicenseTab = (tab: typeof activeTab): 'overview' | 'checklist' | 'documents' | 'ai-assistant' => {
@@ -60,6 +60,11 @@ export default function ApplicationDetailWrapper({
 
   // Handle tab change from DashboardLayout (only for license tabs)
   const handleLicenseTabChange = (tab: 'overview' | 'checklist' | 'documents' | 'ai-assistant') => {
+    setActiveTab(tab)
+  }
+
+  // Handle tab change from ApplicationDetailContent
+  const handleTabChange = (tab: 'next-steps' | 'quick-actions' | 'requirements' | 'message' | 'expert-process') => {
     setActiveTab(tab)
   }
 
@@ -88,7 +93,7 @@ export default function ApplicationDetailWrapper({
         application={application}
         documents={documents}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         showInlineTabs={true}
       />
     </DashboardLayout>

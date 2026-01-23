@@ -223,6 +223,23 @@ CREATE POLICY "Company owners can delete own application documents"
     SELECT 1 FROM applications WHERE applications.id = application_documents.application_id AND applications.company_owner_id = auth.uid()
   ));
 
+
+CREATE POLICY "Experts can view own application documents"
+  ON application_documents FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM applications WHERE applications.id = application_documents.application_id AND applications.assigned_expert_id = auth.uid()
+  ));
+
+
+CREATE POLICY "Experts can update own application documents"
+  ON application_documents FOR UPDATE
+  USING (EXISTS (
+    SELECT 1 FROM applications WHERE applications.id = application_documents.application_id AND applications.assigned_expert_id = auth.uid()
+  ));
+
+
+
+
 -- RLS Policies for staff_members
 CREATE POLICY "Company owners can view own staff"
   ON staff_members FOR SELECT
@@ -299,3 +316,12 @@ CREATE TRIGGER update_staff_license_expiry_days_trigger
 
 
 
+-- Add description and expert_review_notes fields to application_documents table
+
+ALTER TABLE application_documents
+ADD COLUMN IF NOT EXISTS description TEXT,
+ADD COLUMN IF NOT EXISTS expert_review_notes TEXT;
+
+-- Add comment for documentation
+COMMENT ON COLUMN application_documents.description IS 'Description provided by the client when uploading the document';
+COMMENT ON COLUMN application_documents.expert_review_notes IS 'Review notes provided by the expert when approving or rejecting the document';

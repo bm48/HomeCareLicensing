@@ -45,7 +45,7 @@ export default function ClientCardMenu({
   const handleOpenMessages = () => {
     setIsOpen(false)
     try {
-      router.push(`/admin/messages?client=${clientId}`)
+      router.push(`/admin/applications?client=${clientId}`)
     } catch (error) {
       console.error('Navigation error:', error)
       // Fallback to window.location if router fails
@@ -78,11 +78,11 @@ export default function ClientCardMenu({
       icon: Eye,
       onClick: handleViewDetails,
     },
-    {
-      label: 'Open Messages',
-      icon: MessageSquare,
-      onClick: handleOpenMessages,
-    },
+    // {
+    //   label: 'Open Messages',
+    //   icon: MessageSquare,
+    //   onClick: handleOpenMessages,
+    // },
     {
       label: 'Change Expert',
       icon: UserCog,

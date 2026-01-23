@@ -59,7 +59,7 @@ export default function ExpertDashboardLayout({
 
   const menuItems = [
     { href: '/dashboard/expert/clients', label: 'Licenses', icon: Users },
-    { href: '/dashboard/expert/messages', label: 'Messages', icon: MessageSquare },
+    // { href: '/dashboard/expert/messages', label: 'Messages', icon: MessageSquare },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {

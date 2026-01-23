@@ -615,7 +615,8 @@ export default function LicensesContent({
                     <tbody className="bg-white divide-y divide-gray-200">
                       {/* Filtered Applications */}
                       {getFilteredApplications().map((application) => (
-                        <tr key={application.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={application.id} className="hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => router.push(`/dashboard/applications/${application.id}`)}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
                               {getStateAbbr(application.state)}
@@ -769,7 +770,9 @@ export default function LicensesContent({
                         const isExpired = license.expiry_date ? new Date(license.expiry_date) < today : license.status === 'expired'
                         
                         return (
-                          <tr key={license.id} className="hover:bg-gray-50 transition-colors">
+                          <tr key={license.id} 
+                          className="hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => router.push(`/dashboard/licenses/${license.id}`)}>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
                                 {getStateAbbr(license.state)}

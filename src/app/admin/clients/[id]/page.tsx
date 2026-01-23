@@ -128,7 +128,7 @@ export default async function ClientDetailPage({
       <div className="space-y-6">
         {/* Back Link */}
         <Link
-          href="/admin/clients"
+          href="/admin/users?tab=clients"
           className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />

@@ -66,7 +66,7 @@ export default function AdminLayout({
   const menuItems = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/licenses', label: 'License', icon: ShieldCheck },
-    { href: '/admin/messages', label: 'Messages', icon: MessageSquare },
+    // { href: '/admin/messages', label: 'Messages', icon: MessageSquare },
     { href: '/admin/license-requirements', label: 'License Requirements', icon: FileText },
     { href: '/admin/billing', label: 'Billing & Invoicing', icon: DollarSign },
     { href: '/admin/configuration', label: 'Configuration', icon: Settings },

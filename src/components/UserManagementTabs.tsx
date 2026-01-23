@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Users, Building2, Briefcase, CheckCircle2, Clock, MessageSquare, Search, Filter, Settings, UserX, UserCheck } from 'lucide-react'
 import ClientListWithFilters from './ClientListWithFilters'
 import ExpertListWithFilters from './ExpertListWithFilters'
 import ResetPasswordModal from './ResetPasswordModal'
 import { toggleUserStatus } from '@/app/actions/users'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
@@ -79,6 +79,11 @@ export default function UserManagementTabs({
   const [isTogglingStatus, setIsTogglingStatus] = useState<string | null>(null)
   
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const tab = searchParams.get('tab') || 'users' 
+  useEffect(() => {
+    setActiveTab(tab as TabType)
+  }, [tab])
   
   // Initialize user statuses (all active by default, but preserve existing changes)
   useMemo(() => {

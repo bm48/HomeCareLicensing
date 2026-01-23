@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { User, Key, ChevronDown } from 'lucide-react'
+import ChangePasswordModal from './ChangePasswordModal'
 
 interface UserDropdownProps {
   user: {
@@ -24,6 +25,7 @@ export default function UserDropdown({
   changePasswordUrl 
 }: UserDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
 
@@ -110,17 +112,25 @@ export default function UserDropdown({
               <span>View Profile</span>
             </Link>
             
-            <Link
-              href={changePasswordUrl}
-              className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
-              onClick={() => setIsOpen(false)}
+            <button
+              onClick={() => {
+                setIsOpen(false)
+                setIsChangePasswordModalOpen(true)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors text-left"
             >
               <Key className="w-5 h-5 text-gray-400" />
               <span>Change Password</span>
-            </Link>
+            </button>
           </div>
         </div>
       )}
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
+      />
     </div>
   )
 }

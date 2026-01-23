@@ -1,13 +1,19 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   Search,
   Mail,
   Phone,
   MapPin,
   Briefcase,
-  MoreVertical
+  MoreVertical,
+  User,
+  Edit,
+  Users,
+  BarChart3,
+  UserX
 } from 'lucide-react'
 
 interface Expert {
@@ -33,9 +39,12 @@ export default function ExpertListWithFilters({
   statesByExpert,
   clientsByExpert
 }: ExpertListWithFiltersProps) {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedState, setSelectedState] = useState('All States')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
+  const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   // Get unique states from all experts
   const allStates = useMemo(() => {
@@ -79,6 +88,58 @@ export default function ExpertListWithFilters({
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName[0]}${lastName[0]}`.toUpperCase()
+  }
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      Object.entries(dropdownRefs.current).forEach(([id, ref]) => {
+        if (ref && !ref.contains(event.target as Node)) {
+          setOpenDropdownId(null)
+        }
+      })
+    }
+
+    if (openDropdownId) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [openDropdownId])
+
+  const handleToggleDropdown = (expertId: string) => {
+    setOpenDropdownId(openDropdownId === expertId ? null : expertId)
+  }
+
+  const handleViewProfile = (expert: Expert) => {
+    router.push(`/admin/experts/${expert.id}`)
+    setOpenDropdownId(null)
+  }
+
+  const handleEditInformation = (expert: Expert) => {
+    router.push(`/admin/experts/${expert.id}/edit`)
+    setOpenDropdownId(null)
+  }
+
+  const handleManageClients = (expert: Expert) => {
+    router.push(`/admin/experts/${expert.id}/clients`)
+    setOpenDropdownId(null)
+  }
+
+  const handleViewPerformance = (expert: Expert) => {
+    router.push(`/admin/experts/${expert.id}/performance`)
+    setOpenDropdownId(null)
+  }
+
+  const handleDeactivate = async (expert: Expert) => {
+    if (!confirm(`Are you sure you want to deactivate ${expert.first_name} ${expert.last_name}?`)) {
+      return
+    }
+    // TODO: Implement deactivate functionality
+    alert('Deactivate functionality will be implemented')
+    setOpenDropdownId(null)
   }
 
   return (
@@ -181,9 +242,55 @@ export default function ExpertListWithFilters({
                       </div>
                     </div>
                   </div>
-                  <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
-                    <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
-                  </button>
+                  <div className="relative flex-shrink-0" ref={(el) => { dropdownRefs.current[expert.id] = el }}>
+                    <button 
+                      onClick={() => handleToggleDropdown(expert.id)}
+                      className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                      aria-label="More options"
+                    >
+                      <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
+                    </button>
+                    
+                    {openDropdownId === expert.id && (
+                      <div className="absolute right-0 top-10 z-50 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
+                        <button
+                          onClick={() => handleViewProfile(expert)}
+                          className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        >
+                          <User className="w-4 h-4" />
+                          <span>View Profile</span>
+                        </button>
+                        <button
+                          onClick={() => handleEditInformation(expert)}
+                          className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        >
+                          <Edit className="w-4 h-4" />
+                          <span>Edit Information</span>
+                        </button>
+                        <button
+                          onClick={() => handleManageClients(expert)}
+                          className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        >
+                          <Users className="w-4 h-4" />
+                          <span>Manage Clients</span>
+                        </button>
+                        <button
+                          onClick={() => handleViewPerformance(expert)}
+                          className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        >
+                          <BarChart3 className="w-4 h-4" />
+                          <span>View Performance</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeactivate(expert)}
+                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        >
+                          <UserX className="w-4 h-4" />
+                          <span>Deactivate</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )

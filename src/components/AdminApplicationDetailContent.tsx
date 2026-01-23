@@ -17,8 +17,11 @@ import {
   Loader2,
   Mail,
   Users,
-  Send
+  Send,
+  Copy,
+  CheckSquare
 } from 'lucide-react'
+import Modal from './Modal'
 
 interface Application {
   id: string
@@ -61,6 +64,8 @@ interface ApplicationStep {
   step_order: number
   description: string | null
   is_completed?: boolean
+  is_expert_step?: boolean
+  created_by_expert_id?: string | null
 }
 
 interface AdminApplicationDetailContentProps {
@@ -69,7 +74,7 @@ interface AdminApplicationDetailContentProps {
   adminUserId: string
 }
 
-type TabType = 'steps' | 'documents' | 'messages'
+type TabType = 'steps' | 'documents' | 'messages' | 'expert-process'
 
 export default function AdminApplicationDetailContent({
   application,
@@ -82,6 +87,16 @@ export default function AdminApplicationDetailContent({
   const [documents, setDocuments] = useState<Document[]>(initialDocuments)
   const [steps, setSteps] = useState<ApplicationStep[]>([])
   const [isLoadingSteps, setIsLoadingSteps] = useState(false)
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
+  const [isCompletingStep, setIsCompletingStep] = useState(false)
+  const [expertSteps, setExpertSteps] = useState<ApplicationStep[]>([])
+  const [isLoadingExpertSteps, setIsLoadingExpertSteps] = useState(false)
+  const [selectedExpertStepIds, setSelectedExpertStepIds] = useState<Set<string>>(new Set())
+  const [isCopyingExpertSteps, setIsCopyingExpertSteps] = useState(false)
+  const [showCopyExpertStepsModal, setShowCopyExpertStepsModal] = useState(false)
+  const [availableApplications, setAvailableApplications] = useState<Array<{id: string, application_name: string, state: string}>>([])
+  const [selectedTargetApplicationId, setSelectedTargetApplicationId] = useState<string>('')
+  const [isLoadingApplications, setIsLoadingApplications] = useState(false)
   const [messages, setMessages] = useState<any[]>([])
   const [messageContent, setMessageContent] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
@@ -142,15 +157,20 @@ export default function AdminApplicationDetailContent({
         console.error('Error fetching application steps:', appStepsError)
       }
 
-      // If application_steps exist, use them
+      // If application_steps exist, separate regular steps from expert steps
       if (applicationSteps && applicationSteps.length > 0) {
-        setSteps(applicationSteps.map((step: any) => ({
-          id: step.id,
-          step_name: step.step_name,
-          step_order: step.step_order,
-          description: step.description,
-          is_completed: step.is_completed
-        })))
+        const regularSteps = applicationSteps
+          .filter((step: any) => !step.is_expert_step)
+          .map((step: any) => ({
+            id: step.id,
+            step_name: step.step_name,
+            step_order: step.step_order,
+            description: step.description,
+            is_completed: step.is_completed,
+            is_expert_step: false
+          }))
+        
+        setSteps(regularSteps)
         setIsLoadingSteps(false)
         return
       }
@@ -218,6 +238,114 @@ export default function AdminApplicationDetailContent({
   useEffect(() => {
     fetchSteps()
   }, [fetchSteps])
+
+  // Fetch expert steps
+  const fetchExpertSteps = useCallback(async () => {
+    if (!application.id) return
+    
+    setIsLoadingExpertSteps(true)
+    try {
+      const { data: expertStepsData, error } = await supabase
+        .from('application_steps')
+        .select('*')
+        .eq('application_id', application.id)
+        .eq('is_expert_step', true)
+        .order('step_order', { ascending: true })
+
+      if (error) {
+        console.error('Error fetching expert steps:', error)
+        setExpertSteps([])
+      } else {
+        setExpertSteps((expertStepsData || []).map((step: any) => ({
+          id: step.id,
+          step_name: step.step_name,
+          step_order: step.step_order,
+          description: step.description,
+          is_completed: step.is_completed,
+          is_expert_step: true,
+          created_by_expert_id: step.created_by_expert_id
+        })))
+      }
+    } catch (error) {
+      console.error('Error fetching expert steps:', error)
+      setExpertSteps([])
+    } finally {
+      setIsLoadingExpertSteps(false)
+    }
+  }, [application.id, supabase])
+
+  useEffect(() => {
+    if (activeTab === 'expert-process') {
+      fetchExpertSteps()
+    }
+  }, [activeTab, fetchExpertSteps])
+
+  // Handle copying expert steps to another application
+  const handleCopyExpertSteps = async (targetApplicationId: string) => {
+    if (selectedExpertStepIds.size === 0 || !targetApplicationId || isCopyingExpertSteps) return
+
+    setIsCopyingExpertSteps(true)
+    try {
+      // Get the selected expert steps
+      const stepsToCopy = expertSteps.filter(step => selectedExpertStepIds.has(step.id))
+      
+      if (stepsToCopy.length === 0) {
+        alert('Please select at least one expert step to copy')
+        setIsCopyingExpertSteps(false)
+        return
+      }
+
+      // Get the highest step_order for expert steps in target application
+      const { data: existingSteps } = await supabase
+        .from('application_steps')
+        .select('step_order')
+        .eq('application_id', targetApplicationId)
+        .eq('is_expert_step', true)
+        .order('step_order', { ascending: false })
+        .limit(1)
+
+      let nextOrder = existingSteps && existingSteps.length > 0 
+        ? existingSteps[0].step_order + 1 
+        : 1
+
+      // Insert copied steps
+      const stepsToInsert = stepsToCopy.map(step => ({
+        application_id: targetApplicationId,
+        step_name: step.step_name,
+        step_order: nextOrder++,
+        description: step.description,
+        is_expert_step: true,
+        is_completed: false,
+        created_by_expert_id: step.created_by_expert_id // Preserve original expert
+      }))
+
+      const { error: insertError } = await supabase
+        .from('application_steps')
+        .insert(stepsToInsert)
+
+      if (insertError) throw insertError
+
+      alert(`Successfully copied ${stepsToCopy.length} expert step(s)`)
+      setSelectedExpertStepIds(new Set())
+    } catch (error: any) {
+      console.error('Error copying expert steps:', error)
+      alert('Failed to copy expert steps: ' + (error.message || 'Unknown error'))
+    } finally {
+      setIsCopyingExpertSteps(false)
+    }
+  }
+
+  const toggleExpertStepSelection = (stepId: string) => {
+    setSelectedExpertStepIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(stepId)) {
+        newSet.delete(stepId)
+      } else {
+        newSet.add(stepId)
+      }
+      return newSet
+    })
+  }
 
   // Set up conversation for application-based group chat
   useEffect(() => {
@@ -543,6 +671,91 @@ export default function AdminApplicationDetailContent({
   const completedSteps = steps.filter(s => s.is_completed).length
   const totalSteps = steps.length
 
+  // Handle step completion
+  const handleCompleteStep = async () => {
+    if (!selectedStepId || !application.id || isCompletingStep) return
+
+    setIsCompletingStep(true)
+    try {
+      // Find the selected step
+      const selectedStep = steps.find(s => s.id === selectedStepId)
+      if (!selectedStep) {
+        throw new Error('Step not found')
+      }
+
+      // First, check if an application_steps entry exists with this ID
+      const { data: existingAppStep } = await supabase
+        .from('application_steps')
+        .select('id')
+        .eq('application_id', application.id)
+        .eq('id', selectedStepId)
+        .maybeSingle()
+
+      if (existingAppStep) {
+        // Update existing application_steps entry
+        const { error: updateError } = await supabase
+          .from('application_steps')
+          .update({
+            is_completed: true,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', selectedStepId)
+          .eq('application_id', application.id)
+
+        if (updateError) throw updateError
+      } else {
+        // Step doesn't exist in application_steps yet
+        // Check if it exists by step_name and step_order
+        const { data: existingByName } = await supabase
+          .from('application_steps')
+          .select('id')
+          .eq('application_id', application.id)
+          .eq('step_name', selectedStep.step_name)
+          .eq('step_order', selectedStep.step_order)
+          .maybeSingle()
+
+        if (existingByName) {
+          // Update by step_name and step_order
+          const { error: updateError } = await supabase
+            .from('application_steps')
+            .update({
+              is_completed: true,
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', existingByName.id)
+            .eq('application_id', application.id)
+
+          if (updateError) throw updateError
+        } else {
+          // Create new application_steps entry
+          const { error: insertError } = await supabase
+            .from('application_steps')
+            .insert({
+              application_id: application.id,
+              step_name: selectedStep.step_name,
+              step_order: selectedStep.step_order,
+              description: selectedStep.description,
+              is_completed: true,
+              completed_at: new Date().toISOString()
+            })
+
+          if (insertError) throw insertError
+        }
+      }
+
+      // Refresh steps to reflect the update
+      await fetchSteps()
+      
+      // Clear selection
+      setSelectedStepId(null)
+    } catch (error: any) {
+      console.error('Error completing step:', error)
+      alert('Failed to complete step: ' + (error.message || 'Unknown error'))
+    } finally {
+      setIsCompletingStep(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Application Header */}
@@ -684,6 +897,7 @@ export default function AdminApplicationDetailContent({
               { id: 'steps', label: 'Steps' },
               { id: 'documents', label: 'Documents' },
               { id: 'messages', label: 'Messages' },
+              { id: 'expert-process', label: 'Expert Process' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -715,33 +929,83 @@ export default function AdminApplicationDetailContent({
             </div>
           ) : (
             <div className="space-y-3">
-              {steps.map((step) => (
-                <div
-                  key={step.id}
-                  className={`flex items-start gap-3 p-4 border rounded-lg ${
-                    step.is_completed
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-gray-50 border-gray-200'
-                  }`}
-                >
-                  <div className="mt-1">
-                    {step.is_completed ? (
-                      <CheckCircle2 className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
-                    {step.description && (
-                      <div className="text-sm text-gray-600 mb-2">{step.description}</div>
-                    )}
-                    <div className="text-xs text-gray-500">
-                      Step {step.step_order} of {totalSteps}
+              {steps.map((step) => {
+                const isSelected = selectedStepId === step.id
+                const isCompleted = step.is_completed
+                return (
+                  <div
+                    key={step.id}
+                    onClick={() => !isCompleted && setSelectedStepId(step.id === selectedStepId ? null : step.id)}
+                    className={`flex items-start gap-3 p-4 border rounded-lg transition-all ${
+                      isCompleted
+                        ? 'bg-green-50 border-green-200'
+                        : isSelected
+                        ? 'bg-blue-50 border-blue-500 shadow-md cursor-pointer'
+                        : 'bg-gray-50 border-gray-200 hover:border-gray-300 hover:bg-gray-100 cursor-pointer'
+                    }`}
+                  >
+                    <div className="mt-1">
+                      {isCompleted ? (
+                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <div className={`w-5 h-5 border-2 rounded-full ${
+                          isSelected
+                            ? 'border-blue-500 bg-blue-500'
+                            : 'border-gray-300'
+                        }`}>
+                          {isSelected && (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="w-2 h-2 bg-white rounded-full" />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
+                      {step.description && (
+                        <div className="text-sm text-gray-600 mb-2">{step.description}</div>
+                      )}
+                      <div className="text-xs text-gray-500">
+                        Step {step.step_order} of {totalSteps}
+                      </div>
                     </div>
                   </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Complete Button - appears when step is selected */}
+          {selectedStepId && (
+            <div className="mt-6 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">
+                    Selected: {steps.find(s => s.id === selectedStepId)?.step_name}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Click Complete to mark this step as finished
+                  </p>
                 </div>
-              ))}
+                <button
+                  onClick={handleCompleteStep}
+                  disabled={isCompletingStep}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+                >
+                  {isCompletingStep ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Completing...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-5 h-5" />
+                      Complete
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -901,6 +1165,174 @@ export default function AdminApplicationDetailContent({
           </div>
         </div>
       )}
+
+      {activeTab === 'expert-process' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Expert Process Steps</h2>
+              {selectedExpertStepIds.size > 0 && (
+                <button
+                  onClick={async () => {
+                    setIsLoadingApplications(true)
+                    setShowCopyExpertStepsModal(true)
+                    // Get all applications for the admin to select target
+                    const { data: allApplications } = await supabase
+                      .from('applications')
+                      .select('id, application_name, state')
+                      .neq('id', application.id)
+                      .order('created_at', { ascending: false })
+                      .limit(100)
+
+                    if (allApplications) {
+                      setAvailableApplications(allApplications)
+                    }
+                    setIsLoadingApplications(false)
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy Selected ({selectedExpertStepIds.size})
+                </button>
+              )}
+            </div>
+
+            {isLoadingExpertSteps ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            ) : expertSteps.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">No expert process steps found</p>
+                <p className="text-xs mt-1">Expert steps added by the assigned expert will appear here</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {expertSteps.map((step) => (
+                  <div
+                    key={step.id}
+                    className={`flex items-start gap-3 p-4 border rounded-lg ${
+                      step.is_completed
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-gray-50 border-gray-200'
+                    }`}
+                  >
+                    <div className="mt-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedExpertStepIds.has(step.id)}
+                        onChange={() => toggleExpertStepSelection(step.id)}
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
+                      {step.description && (
+                        <div className="text-sm text-gray-600 mb-2">{step.description}</div>
+                      )}
+                      <div className="text-xs text-gray-500">
+                        Step {step.step_order} of {expertSteps.length}
+                      </div>
+                    </div>
+                    <div className="mt-1">
+                      {step.is_completed ? (
+                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Copy Expert Steps Modal */}
+      <Modal
+        isOpen={showCopyExpertStepsModal}
+        onClose={() => {
+          setShowCopyExpertStepsModal(false)
+          setSelectedTargetApplicationId('')
+        }}
+        title="Copy Expert Steps to Another Application"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Target Application
+            </label>
+            {isLoadingApplications ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            ) : availableApplications.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">No other applications found</p>
+              </div>
+            ) : (
+              <select
+                value={selectedTargetApplicationId}
+                onChange={(e) => setSelectedTargetApplicationId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select an application...</option>
+                {availableApplications.map((app) => (
+                  <option key={app.id} value={app.id}>
+                    {app.application_name} ({app.state})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
+            <p className="font-medium mb-1">Selected Steps:</p>
+            <p>{selectedExpertStepIds.size} expert step(s) will be copied</p>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={() => {
+                setShowCopyExpertStepsModal(false)
+                setSelectedTargetApplicationId('')
+              }}
+              className="px-6 py-2.5 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!selectedTargetApplicationId) {
+                  alert('Please select a target application')
+                  return
+                }
+                await handleCopyExpertSteps(selectedTargetApplicationId)
+                setShowCopyExpertStepsModal(false)
+                setSelectedTargetApplicationId('')
+                setSelectedExpertStepIds(new Set())
+              }}
+              disabled={isCopyingExpertSteps || !selectedTargetApplicationId}
+              className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isCopyingExpertSteps ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Copying...
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copy Steps
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

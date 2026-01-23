@@ -81,8 +81,8 @@ export default function DashboardLayout({
     { href: '/dashboard/licenses', label: 'Licenses', icon: Medal },
     { href: '/dashboard/staff', label: 'Staff', icon: Users },
     { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
-    { href: '/dashboard/messages', label: 'Messages', icon: MessageSquare },
-    { href: '/dashboard/profile', label: 'My Profile', icon: User },
+    // { href: '/dashboard/messages', label: 'Messages', icon: MessageSquare },
+    // { href: '/dashboard/profile', label: 'My Profile', icon: User },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {

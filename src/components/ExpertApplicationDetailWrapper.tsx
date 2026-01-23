@@ -38,7 +38,7 @@ export default function ExpertApplicationDetailWrapper({
 }: ExpertApplicationDetailWrapperProps) {
   const searchParams = useSearchParams()
   const fromNotification = searchParams?.get('fromNotification') === 'true'
-  const [activeTab, setActiveTab] = useState<'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'message'>(
+  const [activeTab, setActiveTab] = useState<'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'message' | 'expert-process'>(
     fromNotification ? 'message' : 'next-steps'
   )
 

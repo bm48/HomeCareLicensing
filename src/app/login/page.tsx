@@ -51,6 +51,7 @@ function LoginPageContent() {
     const message = searchParams.get('message')
     const errorParam = searchParams.get('error')
     const emailParam = searchParams.get('email')
+    const passwordChanged = searchParams.get('passwordChanged')
     
     // Pre-fill email if provided
     if (emailParam) {
@@ -61,8 +62,34 @@ function LoginPageContent() {
       window.history.replaceState({}, '', url)
     }
     
+    // Handle password change - pre-fill email and new password from sessionStorage and show success message
+    if (passwordChanged === 'true') {
+      // Get email and password from sessionStorage (more secure than URL params)
+      if (typeof window !== 'undefined') {
+        const changedPassword = sessionStorage.getItem('changed_password')
+        const changedEmail = sessionStorage.getItem('changed_email')
+        
+        if (changedEmail) {
+          setValue('email', changedEmail)
+          // Clear email from sessionStorage after use
+          sessionStorage.removeItem('changed_email')
+        }
+        
+        if (changedPassword) {
+          setValue('password', changedPassword)
+          // Clear password from sessionStorage after use
+          sessionStorage.removeItem('changed_password')
+        }
+      }
+      setSuccessMessage('Password changed successfully! Please log in with your new password.')
+      // Clear URL parameter after setting
+      const url = new URL(window.location.href)
+      url.searchParams.delete('passwordChanged')
+      window.history.replaceState({}, '', url)
+    }
+    
     // Pre-fill password from sessionStorage if available (from signup)
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !passwordChanged) {
       const signupPassword = sessionStorage.getItem('signup_password')
       if (signupPassword) {
         setValue('password', signupPassword)

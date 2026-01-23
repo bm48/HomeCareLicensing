@@ -24,6 +24,7 @@ export default function UploadDocumentModal({
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [documentName, setDocumentName] = useState('')
   const [documentType, setDocumentType] = useState('')
+  const [description, setDescription] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -91,6 +92,7 @@ export default function UploadDocumentModal({
           document_name: documentName,
           document_url: publicUrl,
           document_type: documentType || null,
+          description: description.trim() || null,
           status: 'pending'
         })
 
@@ -106,6 +108,7 @@ export default function UploadDocumentModal({
       setSelectedFile(null)
       setDocumentName('')
       setDocumentType('')
+      setDescription('')
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
@@ -128,6 +131,7 @@ export default function UploadDocumentModal({
       setSelectedFile(null)
       setDocumentName('')
       setDocumentType('')
+      setDescription('')
       setError(null)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -227,6 +231,22 @@ export default function UploadDocumentModal({
             <option value="policy">Policy</option>
             <option value="other">Other</option>
           </select>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-2">
+            Description (Optional)
+          </label>
+          <textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Add a description for this document..."
+            rows={3}
+            className="block w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
+            disabled={isUploading}
+          />
         </div>
 
         {/* Form Actions */}
