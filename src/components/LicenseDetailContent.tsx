@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
+import UploadLicenseDocumentModal from './UploadLicenseDocumentModal'
 
 interface License {
   id: string
@@ -48,6 +49,7 @@ export default function LicenseDetailContent({
 }: LicenseDetailContentProps) {
   const router = useRouter()
   const [isUploading, setIsUploading] = useState(false)
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'N/A'
@@ -123,75 +125,12 @@ export default function LicenseDetailContent({
     }
   }
 
-  const handleUploadDocument = async () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png'
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file) return
+  const handleUploadDocument = () => {
+    setIsUploadModalOpen(true)
+  }
 
-      setIsUploading(true)
-      try {
-        const supabase = createClient()
-        
-        // Get current user
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          throw new Error('You must be logged in to upload documents')
-        }
-
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${license.id}/${Date.now()}.${fileExt}`
-        
-        // Upload file to storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('license-documents')
-          .upload(fileName, file, {
-            upsert: false,
-            contentType: file.type || `image/${fileExt}`,
-            cacheControl: '3600',
-          })
-
-        if (uploadError) {
-          console.error('Upload error details:', uploadError)
-          const errorMsg = uploadError.message || 'Failed to upload file'
-          throw new Error(`Upload failed: ${errorMsg}. Please check storage bucket exists and policies are configured.`)
-        }
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('license-documents')
-          .getPublicUrl(fileName)
-
-        // Create document record
-        const { error: docError } = await supabase
-          .from('license_documents')
-          .insert({
-            license_id: license.id,
-            document_name: file.name,
-            document_url: publicUrl,
-            document_type: fileExt?.toLowerCase() || null
-          })
-
-        if (docError) {
-          // If insert fails, try to delete the uploaded file
-          await supabase.storage
-            .from('license-documents')
-            .remove([fileName])
-          throw docError
-        }
-
-        router.refresh()
-      } catch (error: any) {
-        console.error('Error uploading document:', error)
-        const errorMsg = error.message || error.error?.message || 'Failed to upload document. Please try again.'
-        alert(errorMsg)
-      } finally {
-        setIsUploading(false)
-      }
-    }
-    input.click()
+  const handleUploadSuccess = () => {
+    router.refresh()
   }
 
   // Calculate days until expiry
@@ -238,20 +177,10 @@ export default function LicenseDetailContent({
           </div>
           <button
             onClick={handleUploadDocument}
-            disabled={isUploading}
-            className="px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all flex items-center gap-2"
           >
-            {isUploading ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="w-5 h-5" />
-                Upload Document
-              </>
-            )}
+            <Upload className="w-5 h-5" />
+            Upload Document
           </button>
         </div>
 
@@ -307,20 +236,10 @@ export default function LicenseDetailContent({
               <p className="text-gray-600 mb-6">Upload your first document to get started</p>
               <button
                 onClick={handleUploadDocument}
-                disabled={isUploading}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
               >
-                {isUploading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-5 h-5" />
-                    Upload Document
-                  </>
-                )}
+                <Upload className="w-5 h-5" />
+                Upload Document
               </button>
             </div>
           ) : (
@@ -370,6 +289,15 @@ export default function LicenseDetailContent({
           )}
         </div>
       </div>
+
+      {/* Upload Document Modal */}
+      <UploadLicenseDocumentModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        licenseId={license.id}
+        licenseExpiryDate={license.expiry_date}
+        onSuccess={handleUploadSuccess}
+      />
     </>
   )
 }

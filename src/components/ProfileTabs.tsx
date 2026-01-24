@@ -59,6 +59,11 @@ interface ProfileTabsProps {
     full_name?: string | null
     role?: UserRole
     email?: string | null
+    phone?: string | null
+    job_title?: string | null
+    department?: string | null
+    work_location?: string | null
+    start_date?: string | null
   } | null
 }
 
@@ -87,11 +92,11 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
       firstName,
       lastName,
       email: profile?.email || user.email || '',
-      phone: '',
-      jobTitle: '',
-      department: '',
-      workLocation: '',
-      startDate: '',
+      phone: profile?.phone || '',
+      jobTitle: profile?.job_title || '',
+      department: profile?.department || '',
+      workLocation: profile?.work_location || '',
+      startDate: profile?.start_date ? new Date(profile.start_date).toISOString().split('T')[0] : '',
     },
   })
 
@@ -158,6 +163,11 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
         .from('user_profiles')
         .update({
           full_name: `${data.firstName} ${data.lastName}`,
+          phone: data.phone || null,
+          job_title: data.jobTitle || null,
+          department: data.department || null,
+          work_location: data.workLocation || null,
+          start_date: data.startDate || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id)
@@ -218,13 +228,13 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
   }
 
   // For experts, only show Personal Information tab
-  const tabs = profile?.role === 'expert' 
+  const tabs = profile?.role === 'company_owner' 
     ? [
-        { id: 'personal', label: 'Personal Information', icon: User },
-      ]
+      { id: 'personal', label: 'Personal Information', icon: User },
+      { id: 'company', label: 'Company Details', icon: Building },
+    ]
     : [
         { id: 'personal', label: 'Personal Information', icon: User },
-        { id: 'company', label: 'Company Details', icon: Building },
       ]
 
   return (
@@ -284,19 +294,10 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
                 {getInitials()}
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-4 mb-2">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    {profile?.full_name || user.email || 'User'}
-                  </h2>
-                  <button
-                    type="button"
-                    className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-                  >
-                    Edit Profile
-                  </button>
-                </div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">
+                  {profile?.full_name || user.email || 'User'}
+                </h2>
                 <div className="text-gray-600">{getRoleDisplay()}</div>
-                <div className="text-sm text-gray-500 mt-1">Employee ID: HC001</div>
               </div>
             </div>
 
@@ -354,7 +355,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Phone Number *
+                  Phone Number
                 </label>
                 <input
                   {...register('phone')}
@@ -365,7 +366,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Job Title *
+                  Job Title
                 </label>
                 <input
                   {...register('jobTitle')}
@@ -406,7 +407,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
             </div>
 
             {/* Profile Completion */}
-            <div className="pt-6 border-t border-gray-200">
+            {/* <div className="pt-6 border-t border-gray-200">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">Profile Completion</span>
                 <span className="text-sm font-semibold text-gray-900">85%</span>
@@ -415,7 +416,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
                 <div className="bg-blue-600 h-2 rounded-full" style={{ width: '85%' }} />
               </div>
               <p className="text-xs text-gray-500 mt-2">Complete your profile to unlock all features</p>
-            </div>
+            </div> */}
 
             {/* Submit Button */}
             <div className="flex justify-end pt-4">

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, } from 'react'
+import { useRouter } from 'next/navigation'
 import ClientCardMenu from './ClientCardMenu'
 import MessagesButton from './MessagesButton'
 import ClientCardWrapper from './ClientCardWrapper'
@@ -186,10 +187,10 @@ export default function ClientListWithFilters({
             const statusCapitalized = client.status.charAt(0).toUpperCase() + client.status.slice(1)
 
             return (
-              <ClientCardWrapper key={client.id} clientId={client.id}>
+              <div  key={client.id} className='bg-white rounded-xl p-6 shadow-md border border-gray-100 relative block hover:shadow-lg transition-shadow'>
                 {/* More Options Menu - Top Right */}
                 <div className="absolute top-6 right-6 z-10">
-                  <ClientCardMenu clientId={client.id} />
+                  <ClientCardMenu clientId={client.id} client={client} />
                 </div>
 
                 <div className="flex items-start justify-between gap-4 pr-8">
@@ -216,7 +217,7 @@ export default function ClientListWithFilters({
 
                         
                         {/* Right Section: Action Buttons */}
-                        <div className="flex items-start gap-2 flex-shrink-0 absolute right-0 top-0 z-10">
+                        {/* <div className="flex items-start gap-2 flex-shrink-0 absolute right-0 top-0 z-10">
                           <ClickableButtonWrapper>
                             <MessagesButton clientId={client.id} unreadCount={unreadCount} />
                           </ClickableButtonWrapper>
@@ -227,7 +228,7 @@ export default function ClientListWithFilters({
                               View Application
                             </button>
                           </ClickableButtonWrapper>
-                        </div>
+                        </div> */}
 
                       </div>
 
@@ -282,7 +283,7 @@ export default function ClientListWithFilters({
                   </div>
 
                 </div>
-              </ClientCardWrapper>
+              </div>
             )
           })
         ) : (

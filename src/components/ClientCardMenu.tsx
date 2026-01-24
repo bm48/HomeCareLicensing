@@ -3,16 +3,34 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { MoreVertical, Eye, MessageSquare, UserCog, FileText, Edit } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import EditClientModal from './EditClientModal'
+
+interface Client {
+  id: string
+  company_name: string
+  contact_name: string
+  contact_email: string
+  contact_phone?: string | null
+  status: string
+  start_date?: string | null
+  expert_id?: string | null
+}
 
 interface ClientCardMenuProps {
   clientId: string
+  client?: Client | null
 }
 
 export default function ClientCardMenu({
   clientId,
+  client: clientProp,
 }: ClientCardMenuProps) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [client, setClient] = useState<Client | null>(null)
+  const [isLoadingClient, setIsLoadingClient] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Close dropdown when clicking outside
@@ -31,6 +49,14 @@ export default function ClientCardMenu({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isOpen])
+
+  // Sync client state with prop when it changes (after refresh)
+  useEffect(() => {
+    if (clientProp && !isEditModalOpen) {
+      // Only update if modal is closed to avoid interfering with form data
+      setClient(clientProp)
+    }
+  }, [clientProp, isEditModalOpen])
 
   const handleViewDetails = () => {
     setIsOpen(false)
@@ -66,10 +92,44 @@ export default function ClientCardMenu({
     setIsOpen(false)
   }
 
-  const handleEditClient = () => {
-    // TODO: Implement edit client functionality
-    console.log('Edit client:', clientId)
+  const handleEditClient = async () => {
     setIsOpen(false)
+    setIsLoadingClient(true)
+    
+    // Always fetch fresh data from the database to ensure we have the latest information
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', clientId)
+        .single()
+
+      if (error) {
+        console.error('Error fetching client:', error)
+        alert('Failed to load client information: ' + (error.message || 'Unknown error'))
+        return
+      }
+
+      if (data) {
+        setClient(data)
+        setIsEditModalOpen(true)
+      } else {
+        alert('Client not found')
+      }
+    } catch (error: any) {
+      console.error('Error:', error)
+      alert('Failed to load client information: ' + (error.message || 'Unknown error'))
+    } finally {
+      setIsLoadingClient(false)
+    }
+  }
+
+  const handleEditSuccess = () => {
+    setIsEditModalOpen(false)
+    setClient(null)
+    // Refresh the page to get updated client data from server
+    router.refresh()
   }
 
   const menuItems = [
@@ -83,16 +143,16 @@ export default function ClientCardMenu({
     //   icon: MessageSquare,
     //   onClick: handleOpenMessages,
     // },
-    {
-      label: 'Change Expert',
-      icon: UserCog,
-      onClick: handleChangeExpert,
-    },
-    {
-      label: 'View Applications',
-      icon: FileText,
-      onClick: handleViewApplications,
-    },
+    // {
+    //   label: 'Change Expert',
+    //   icon: UserCog,
+    //   onClick: handleChangeExpert,
+    // },
+    // {
+    //   label: 'View Applications',
+    //   icon: FileText,
+    //   onClick: handleViewApplications,
+    // },
     {
       label: 'Edit Client Info',
       icon: Edit,
@@ -134,6 +194,16 @@ export default function ClientCardMenu({
           })}
         </div>
       )}
+
+      <EditClientModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setClient(null)
+        }}
+        client={client}
+        onSuccess={handleEditSuccess}
+      />
     </div>
   )
 }

@@ -325,3 +325,10 @@ ADD COLUMN IF NOT EXISTS expert_review_notes TEXT;
 -- Add comment for documentation
 COMMENT ON COLUMN application_documents.description IS 'Description provided by the client when uploading the document';
 COMMENT ON COLUMN application_documents.expert_review_notes IS 'Review notes provided by the expert when approving or rejecting the document';
+
+
+-- Run this in Supabase SQL Editor
+ALTER TABLE license_documents
+ADD COLUMN IF NOT EXISTS expiry_date DATE;
+
+CREATE INDEX IF NOT EXISTS idx_license_documents_expiry_date ON license_documents(expiry_date);

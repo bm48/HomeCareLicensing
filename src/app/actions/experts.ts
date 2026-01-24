@@ -20,6 +20,18 @@ export async function createExpert(data: CreateExpertData) {
   try {
     // Call the database function to create the expert
     // This function handles both user creation and licensing_expert record creation
+    console.log('Creating expert:', data)
+    console.log('RPC call parameters:', {
+      p_first_name: data.firstName,
+      p_last_name: data.lastName,
+      p_email: data.email,
+      p_password: data.password,
+      p_phone: data.phone || null,
+      p_expertise: data.expertise || null,
+      p_role: data.role || 'Licensing Specialist',
+      p_status: data.status || 'active',
+    })
+    
     const { data: expertId, error } = await supabase.rpc('create_licensing_expert', {
       p_first_name: data.firstName,
       p_last_name: data.lastName,
@@ -29,6 +41,10 @@ export async function createExpert(data: CreateExpertData) {
       p_expertise: data.expertise || null,
       p_role: data.role || 'Licensing Specialist',
       p_status: data.status || 'active',
+    })
+    console.log('RPC call result:', {
+      expertId,
+      error,
     })
 
     if (error) {

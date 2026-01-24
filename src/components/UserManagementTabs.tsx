@@ -5,6 +5,7 @@ import { Users, Building2, Briefcase, CheckCircle2, Clock, MessageSquare, Search
 import ClientListWithFilters from './ClientListWithFilters'
 import ExpertListWithFilters from './ExpertListWithFilters'
 import ResetPasswordModal from './ResetPasswordModal'
+import AddExpertModal from './AddExpertModal'
 import { toggleUserStatus } from '@/app/actions/users'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -77,6 +78,7 @@ export default function UserManagementTabs({
   const [selectedUser, setSelectedUser] = useState<{ id: string; name: string; email: string } | null>(null)
   const [userStatuses, setUserStatuses] = useState<Record<string, boolean>>({})
   const [isTogglingStatus, setIsTogglingStatus] = useState<string | null>(null)
+  const [isAddExpertModalOpen, setIsAddExpertModalOpen] = useState(false)
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -640,13 +642,13 @@ export default function UserManagementTabs({
                 <h2 className="text-xl md:text-2xl font-bold text-gray-900">Licensing Experts</h2>
                 <p className="text-sm md:text-base text-gray-600 mt-1">Manage your team of licensing consultants and specialists.</p>
               </div>
-              <Link
-                href="/admin/experts/new"
+              <button
+                onClick={() => setIsAddExpertModalOpen(true)}
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-sm md:text-base whitespace-nowrap"
               >
                 <Plus className="w-4 h-4 md:w-5 md:h-5" />
                 Add Expert
-              </Link>
+              </button>
             </div>
 
             {/* Summary Cards */}
@@ -702,6 +704,16 @@ export default function UserManagementTabs({
           userId={selectedUser.id}
         />
       )}
+
+      {/* Add Expert Modal */}
+      <AddExpertModal
+        isOpen={isAddExpertModalOpen}
+        onClose={() => setIsAddExpertModalOpen(false)}
+        onSuccess={() => {
+          setIsAddExpertModalOpen(false)
+          router.refresh()
+        }}
+      />
     </div>
   )
 }

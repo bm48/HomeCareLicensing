@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { Lock, Loader2 } from 'lucide-react'
+import { Lock, Loader2, Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import Modal from './Modal'
 
@@ -33,6 +33,8 @@ export default function ChangePasswordModal({
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const {
     register,
@@ -126,12 +128,24 @@ export default function ChangePasswordModal({
             </div>
             <input
               id="newPassword"
-              type="password"
+              type={showNewPassword ? 'text' : 'password'}
               {...register('newPassword')}
               placeholder="Enter new password"
-              className="block w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              className="text-black block w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
               disabled={isLoading}
             />
+            <button
+              type="button"
+              onClick={() => setShowNewPassword(!showNewPassword)}
+              className="absolute inset-y-0 right-0 pr-4 flex items-center"
+              disabled={isLoading}
+            >
+              {showNewPassword ? (
+                <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+              ) : (
+                <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+              )}
+            </button>
           </div>
           {errors.newPassword && (
             <p className="mt-1 text-sm text-red-600">
@@ -151,12 +165,24 @@ export default function ChangePasswordModal({
             </div>
             <input
               id="confirmPassword"
-              type="password"
+              type={showConfirmPassword ? 'text' : 'password'}
               {...register('confirmPassword')}
               placeholder="Confirm new password"
-              className="block w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              className="text-black block w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
               disabled={isLoading}
             />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute inset-y-0 right-0 pr-4 flex items-center"
+              disabled={isLoading}
+            >
+              {showConfirmPassword ? (
+                <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+              ) : (
+                <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+              )}
+            </button>
           </div>
           {errors.confirmPassword && (
             <p className="mt-1 text-sm text-red-600">

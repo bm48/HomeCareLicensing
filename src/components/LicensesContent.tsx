@@ -18,7 +18,8 @@ import {
   RefreshCw,
   Loader2,
   X,
-  ChevronDown
+  ChevronDown,
+  Download
 } from 'lucide-react'
 import NewLicenseApplicationModal from './NewLicenseApplicationModal'
 import SelectLicenseTypeModal from './SelectLicenseTypeModal'
@@ -74,6 +75,8 @@ export default function LicensesContent({
   const [selectedLicenseType, setSelectedLicenseType] = useState<LicenseType | null>(null)
   const [loadingLicenseId, setLoadingLicenseId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [downloadingApplicationId, setDownloadingApplicationId] = useState<string | null>(null)
+  const [downloadingLicenseId, setDownloadingLicenseId] = useState<string | null>(null)
   
   // Filter states for each tab
   const [requestFilter, setRequestFilter] = useState<'pending' | 'cancelled' | 'all'>('pending')
@@ -179,6 +182,102 @@ export default function LicensesContent({
   const handleViewLicenseDetails = (licenseId: string) => {
     setLoadingLicenseId(licenseId)
     router.push(`/dashboard/licenses/${licenseId}`)
+  }
+
+  const handleDownloadLatestDocument = async (applicationId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent row click
+    setDownloadingApplicationId(applicationId)
+    
+    try {
+      const supabase = createClient()
+      
+      // Fetch the latest document for this application
+      const { data: documents, error } = await supabase
+        .from('application_documents')
+        .select('document_url, document_name')
+        .eq('application_id', applicationId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (error || !documents) {
+        if (error?.code === 'PGRST116') {
+          // No documents found
+          alert('No documents available for this application')
+          return
+        }
+        throw error || new Error('Failed to fetch document')
+      }
+
+      // Download the document
+      const response = await fetch(documents.document_url)
+      if (!response.ok) {
+        throw new Error('Failed to download file')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = documents.document_name || 'document'
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error: any) {
+      console.error('Error downloading document:', error)
+      alert('Failed to download document: ' + (error.message || 'Unknown error'))
+    } finally {
+      setDownloadingApplicationId(null)
+    }
+  }
+
+  const handleDownloadLatestLicenseDocument = async (licenseId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent row click
+    setDownloadingLicenseId(licenseId)
+    
+    try {
+      const supabase = createClient()
+      
+      // Fetch the latest document for this license
+      const { data: documents, error } = await supabase
+        .from('license_documents')
+        .select('document_url, document_name')
+        .eq('license_id', licenseId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (error || !documents) {
+        if (error?.code === 'PGRST116') {
+          // No documents found
+          alert('No documents available for this license')
+          return
+        }
+        throw error || new Error('Failed to fetch document')
+      }
+
+      // Download the document
+      const response = await fetch(documents.document_url)
+      if (!response.ok) {
+        throw new Error('Failed to download file')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = documents.document_name || 'document'
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error: any) {
+      console.error('Error downloading document:', error)
+      alert('Failed to download document: ' + (error.message || 'Unknown error'))
+    } finally {
+      setDownloadingLicenseId(null)
+    }
   }
 
   // Calculate statistics
@@ -609,6 +708,7 @@ export default function LicensesContent({
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Started Date</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Last Updated</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Expert Feedback</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">download document</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
@@ -656,6 +756,26 @@ export default function LicensesContent({
                             ) : (
                               <span className="text-gray-400">-</span>
                             )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <button
+                              onClick={(e) => handleDownloadLatestDocument(application.id, e)}
+                              disabled={downloadingApplicationId === application.id}
+                              className="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Download latest document"
+                            >
+                              {downloadingApplicationId === application.id ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Downloading...
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-4 h-4" />
+                                  Download
+                                </>
+                              )}
+                            </button>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex flex-col items-end gap-2">
@@ -754,6 +874,7 @@ export default function LicensesContent({
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Expiry Date</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Renewal Due Date</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Documents</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Download Document</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
@@ -831,6 +952,26 @@ export default function LicensesContent({
                                 <FileText className="w-4 h-4" />
                                 {documentCounts[license.id] || 0}
                               </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <button
+                                onClick={(e) => handleDownloadLatestLicenseDocument(license.id, e)}
+                                disabled={downloadingLicenseId === license.id}
+                                className="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Download latest document"
+                              >
+                                {downloadingLicenseId === license.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Downloading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="w-4 h-4" />
+                                    Download
+                                  </>
+                                )}
+                              </button>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               {isExpiringSoon && !isExpired ? (

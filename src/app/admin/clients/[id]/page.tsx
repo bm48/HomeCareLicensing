@@ -70,6 +70,13 @@ export default async function ClientDetailPage({
     redirect('/admin/clients')
   }
 
+  // Get applications for this client (for license applications list)
+  const { data: applications } = client.company_owner_id ? await supabase
+    .from('applications')
+    .select('id, state, application_name, status, company_owner_id, progress_percentage, started_date, created_at, updated_at, submitted_date')
+    .eq('company_owner_id', client.company_owner_id)
+    .order('created_at', { ascending: false }) : { data: [] }
+
   // Get expert (depends on client.expert_id)
   const { data: expert } = client.expert_id ? await supabase
     .from('licensing_experts')
@@ -119,6 +126,22 @@ export default async function ClientDetailPage({
   const statusCapitalized = client.status.charAt(0).toUpperCase() + client.status.slice(1)
   const expertName = expert ? `${expert.first_name} ${expert.last_name}` : 'Unassigned'
 
+  // Create a map of applications by state and name to match with cases
+  const applicationsByStateAndName = new Map<string, string>()
+  if (applications) {
+    applications.forEach((app: { state: string; application_name: string; id: string }) => {
+      const key = `${app.state}_${app.application_name}`
+      applicationsByStateAndName.set(key, app.id)
+    })
+  }
+
+  // Helper function to find application ID for a case
+  const getApplicationIdForCase = (caseItem: any): string | null => {
+    // Try to match by state and business_name/application_name
+    const key = `${caseItem.state}_${caseItem.business_name}`
+    return applicationsByStateAndName.get(key) || null
+  }
+
   return (
     <AdminLayout 
       user={user} 
@@ -152,9 +175,9 @@ export default async function ClientDetailPage({
                 <p className="text-sm text-gray-600">Client ID: {client.id.substring(0, 8)}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <MessagesButton clientId={client.id} unreadCount={unreadCount} />
-            </div>
+            </div> */}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -304,10 +327,23 @@ export default async function ClientDetailPage({
                             </div>
                           </div>
                         </div>
-                        <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-2">
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </button>
+                        {(() => {
+                          const applicationId = getApplicationIdForCase(caseItem)
+                          return applicationId ? (
+                            <Link
+                              href={`/admin/licenses/applications/${applicationId}`}
+                              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-2"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View Details
+                            </Link>
+                          ) : (
+                            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-2" disabled>
+                              <Eye className="w-4 h-4" />
+                              View Details
+                            </button>
+                          )
+                        })()}
                       </div>
                     </div>
                   ))}
@@ -323,41 +359,46 @@ export default async function ClientDetailPage({
             <p className="text-sm text-gray-600">View and manage all applications for this client</p>
           </div>
 
-          {cases && cases.length > 0 ? (
+          {applications && applications.length > 0 ? (
             <div className="space-y-4">
-              {cases
-                .filter(c => c.status !== 'approved')
-                .map((caseItem) => (
+              {applications
+                .filter(app => app.status !== 'approved')
+                .map((application) => (
                   <div
-                    key={caseItem.id}
+                    key={application.id}
                     className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <FileText className="w-4 h-4 text-gray-400" />
-                          <h4 className="font-semibold text-gray-900">{caseItem.business_name}</h4>
+                          <h4 className="font-semibold text-gray-900">{application.application_name}</h4>
                           <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200">
                             <MapPin className="w-3 h-3" />
-                            {caseItem.state}
+                            {application.state}
                           </span>
                         </div>
                         <p className="text-sm text-gray-600 mb-3">
-                          {caseItem.status === 'under_review'
-                            ? `Application submitted on ${formatShortDate(caseItem.last_activity)}`
+                          {application.status === 'under_review' && application.submitted_date
+                            ? `Application submitted on ${formatShortDate(application.submitted_date)}`
+                            : application.status === 'under_review'
+                            ? `Application submitted on ${formatShortDate(application.updated_at)}`
                             : 'Application in progress'}
                         </p>
                         <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                           <div
                             className="bg-gray-800 h-2 rounded-full transition-all"
-                            style={{ width: `${caseItem.progress_percentage || 0}%` }}
+                            style={{ width: `${application.progress_percentage || 0}%` }}
                           ></div>
                         </div>
-                        <p className="text-xs text-gray-500">{caseItem.progress_percentage || 0}% complete</p>
+                        <p className="text-xs text-gray-500">{application.progress_percentage || 0}% complete</p>
                       </div>
-                      <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium whitespace-nowrap">
+                      <Link
+                        href={`/admin/licenses/applications/${application.id}`}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium whitespace-nowrap"
+                      >
                         View Application
-                      </button>
+                      </Link>
                     </div>
                   </div>
                 ))}

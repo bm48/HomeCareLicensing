@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { 
   Search,
   Mail,
@@ -92,12 +93,11 @@ export default function ExpertListWithFilters({
 
   // Close dropdown when clicking outside
   useEffect(() => {
+    
     function handleClickOutside(event: MouseEvent) {
-      Object.entries(dropdownRefs.current).forEach(([id, ref]) => {
-        if (ref && !ref.contains(event.target as Node)) {
-          setOpenDropdownId(null)
-        }
-      })
+      if (openDropdownId && dropdownRefs.current[openDropdownId] && !dropdownRefs.current[openDropdownId]?.contains(event.target as Node)) {
+        setOpenDropdownId(null)
+      }
     }
 
     if (openDropdownId) {
@@ -113,33 +113,59 @@ export default function ExpertListWithFilters({
     setOpenDropdownId(openDropdownId === expertId ? null : expertId)
   }
 
+  // All routes navigate to admin-side pages (not expert dashboard)
   const handleViewProfile = (expert: Expert) => {
-    router.push(`/admin/experts/${expert.id}`)
     setOpenDropdownId(null)
+    router.push(`/admin/experts/${expert.id}`)
   }
 
   const handleEditInformation = (expert: Expert) => {
-    router.push(`/admin/experts/${expert.id}/edit`)
     setOpenDropdownId(null)
+    router.push(`/admin/experts/${expert.id}/edit`)
   }
 
   const handleManageClients = (expert: Expert) => {
-    router.push(`/admin/experts/${expert.id}/clients`)
     setOpenDropdownId(null)
+    router.push(`/admin/experts/${expert.id}/clients`)
   }
 
   const handleViewPerformance = (expert: Expert) => {
-    router.push(`/admin/experts/${expert.id}/performance`)
     setOpenDropdownId(null)
+    router.push(`/admin/experts/${expert.id}/performance`)
   }
 
-  const handleDeactivate = async (expert: Expert) => {
-    if (!confirm(`Are you sure you want to deactivate ${expert.first_name} ${expert.last_name}?`)) {
+  const handleToggleStatus = async (expert: Expert) => {
+    const isActive = expert.status === 'active'
+    const actionText = isActive ? 'deactivate' : 'activate'
+    
+    if (!confirm(`Are you sure you want to ${actionText} ${expert.first_name} ${expert.last_name}?`)) {
       return
     }
-    // TODO: Implement deactivate functionality
-    alert('Deactivate functionality will be implemented')
+
     setOpenDropdownId(null)
+
+    try {
+      const supabase = createClient()
+      const newStatus = isActive ? 'inactive' : 'active'
+      
+      const { error } = await supabase
+        .from('licensing_experts')
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', expert.id)
+
+      if (error) {
+        alert(`Failed to ${actionText} expert: ${error.message}`)
+        return
+      }
+
+      // Refresh the page to show updated status
+      router.refresh()
+    } catch (err: any) {
+      alert(`Failed to ${actionText} expert: ${err.message || 'Unknown error'}`)
+    }
   }
 
   return (
@@ -242,9 +268,17 @@ export default function ExpertListWithFilters({
                       </div>
                     </div>
                   </div>
-                  <div className="relative flex-shrink-0" ref={(el) => { dropdownRefs.current[expert.id] = el }}>
+                  <div 
+                    className="relative flex-shrink-0" 
+                    ref={(el) => { dropdownRefs.current[expert.id] = el }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button 
-                      onClick={() => handleToggleDropdown(expert.id)}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleToggleDropdown(expert.id)
+                      }}
                       className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                       aria-label="More options"
                     >
@@ -254,39 +288,58 @@ export default function ExpertListWithFilters({
                     {openDropdownId === expert.id && (
                       <div className="absolute right-0 top-10 z-50 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
                         <button
-                          onClick={() => handleViewProfile(expert)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleViewProfile(expert)
+                          }}
                           className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
                         >
                           <User className="w-4 h-4" />
                           <span>View Profile</span>
                         </button>
                         <button
-                          onClick={() => handleEditInformation(expert)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEditInformation(expert)
+                          }}
                           className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
                         >
                           <Edit className="w-4 h-4" />
                           <span>Edit Information</span>
                         </button>
                         <button
-                          onClick={() => handleManageClients(expert)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleManageClients(expert)
+                          }}
                           className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
                         >
                           <Users className="w-4 h-4" />
                           <span>Manage Clients</span>
                         </button>
                         <button
-                          onClick={() => handleViewPerformance(expert)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleViewPerformance(expert)
+                          }}
                           className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
                         >
                           <BarChart3 className="w-4 h-4" />
                           <span>View Performance</span>
                         </button>
                         <button
-                          onClick={() => handleDeactivate(expert)}
-                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleToggleStatus(expert)
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors ${
+                            expert.status === 'active' 
+                              ? 'text-red-600' 
+                              : 'text-green-600'
+                          }`}
                         >
                           <UserX className="w-4 h-4" />
-                          <span>Deactivate</span>
+                          <span>{expert.status === 'active' ? 'Deactivate' : 'Activate'}</span>
                         </button>
                       </div>
                     )}
