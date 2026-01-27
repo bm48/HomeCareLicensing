@@ -28,7 +28,7 @@
 
     "@supabase/supabase-js": "^2.89.0",
 
-    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-prettier": "^10.1.8",
 
     "less": "^4.2.1",
 
