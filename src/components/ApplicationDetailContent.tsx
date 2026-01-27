@@ -1688,7 +1688,7 @@ export default function ApplicationDetailContent({
           </div>
           
           {/* Complete Button - appears at bottom when step is selected */}
-          {selectedStepId && (
+          {/* {selectedStepId && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
@@ -1718,7 +1718,7 @@ export default function ApplicationDetailContent({
                 </button>
               </div>
             </div>
-          )}
+          )} */}
         </div>
       )}
 
