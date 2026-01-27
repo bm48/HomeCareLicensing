@@ -201,7 +201,7 @@ export default function StaffManagementClient({
               <Users className="w-6 h-6 text-purple-600" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Staff Management</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Caregiver Management</h1>
               <p className="text-gray-600 text-sm">
                 Manage your team members and track their professional licenses
               </p>
@@ -212,7 +212,7 @@ export default function StaffManagementClient({
             className="px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all flex items-center gap-2 shadow-lg"
           >
             <Plus className="w-5 h-5" />
-            Add Staff Member
+            Add Caregiver
           </button>
         </div>
 
@@ -221,7 +221,7 @@ export default function StaffManagementClient({
           <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
             <div className="flex items-center gap-3 mb-2">
               <Users className="w-6 h-6 text-blue-600" />
-              <span className="text-sm font-semibold text-gray-600">Total Staff Members</span>
+              <span className="text-sm font-semibold text-gray-600">Total Caregivers</span>
             </div>
             <div className="text-xl font-bold text-gray-900">{totalStaff}</div>
           </div>
@@ -229,7 +229,7 @@ export default function StaffManagementClient({
           <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
             <div className="flex items-center gap-3 mb-2">
               <CheckCircle2 className="w-6 h-6 text-green-600" />
-              <span className="text-sm font-semibold text-gray-600">Active Staff</span>
+              <span className="text-sm font-semibold text-gray-600">Active Caregivers</span>
             </div>
             <div className="text-xl font-bold text-gray-900">{activeStaff}</div>
           </div>

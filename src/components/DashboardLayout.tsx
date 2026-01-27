@@ -18,7 +18,8 @@ import {
   MessageSquare,
   BarChart3,
   Grid3x3,
-  CheckSquare
+  CheckSquare,
+  UserCircle
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
@@ -79,7 +80,8 @@ export default function DashboardLayout({
   const menuItems = [
     { href: '/dashboard', label: 'Home', icon: Home },
     { href: '/dashboard/licenses', label: 'Licenses', icon: Medal },
-    { href: '/dashboard/staff', label: 'Staff', icon: Users },
+    { href: '/dashboard/clients', label: 'Clients', icon: UserCircle },
+    { href: '/dashboard/caregiver', label: 'Caregivers', icon: Users },
     { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
     // { href: '/dashboard/messages', label: 'Messages', icon: MessageSquare },
     // { href: '/dashboard/profile', label: 'My Profile', icon: User },

@@ -1,0 +1,447 @@
+'use client'
+
+import { useState } from 'react'
+import { X, Plus } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+
+interface AddNewClientModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSuccess?: () => void
+}
+
+const US_STATES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
+  'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
+  'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana',
+  'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
+  'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
+  'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
+  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
+  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
+  'West Virginia', 'Wisconsin', 'Wyoming'
+]
+
+export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNewClientModalProps) {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [formData, setFormData] = useState({
+    full_name: '',
+    date_of_birth: '',
+    street_address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    phone_number: '',
+    email_address: '',
+    emergency_contact_name: '',
+    emergency_phone: '',
+    primary_diagnosis: '',
+    current_medications: '',
+    allergies: '',
+    gender: '',
+    class: ''
+  })
+
+  if (!isOpen) return null
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+    setError(null)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const supabase = createClient()
+      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setError('You must be logged in to add a client')
+        setIsLoading(false)
+        return
+      }
+
+      const { error: insertError } = await supabase
+        .from('small_clients')
+        .insert({
+          owner_id: user.id,
+          full_name: formData.full_name,
+          date_of_birth: formData.date_of_birth,
+          street_address: formData.street_address,
+          city: formData.city,
+          state: formData.state,
+          zip_code: formData.zip_code,
+          phone_number: formData.phone_number,
+          email_address: formData.email_address,
+          emergency_contact_name: formData.emergency_contact_name,
+          emergency_phone: formData.emergency_phone,
+          primary_diagnosis: formData.primary_diagnosis || null,
+          current_medications: formData.current_medications || null,
+          allergies: formData.allergies || null,
+          gender: formData.gender || null,
+          class: formData.class || null,
+          status: 'active'
+        })
+
+      if (insertError) {
+        setError(insertError.message)
+        setIsLoading(false)
+        return
+      }
+
+      // Reset form
+      setFormData({
+        full_name: '',
+        date_of_birth: '',
+        street_address: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        phone_number: '',
+        email_address: '',
+        emergency_contact_name: '',
+        emergency_phone: '',
+        primary_diagnosis: '',
+        current_medications: '',
+        allergies: '',
+        gender: '',
+        class: ''
+      })
+
+      onSuccess?.()
+      router.refresh()
+      onClose()
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Add New Client</h2>
+            <p className="text-sm text-gray-600 mt-1">Enter client information to create a new care recipient profile</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Full Name */}
+            <div>
+              <label htmlFor="full_name" className="block text-sm font-semibold text-gray-700 mb-2">
+                Full Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="full_name"
+                name="full_name"
+                value={formData.full_name}
+                onChange={handleChange}
+                placeholder="John Doe"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Date of Birth */}
+            <div>
+              <label htmlFor="date_of_birth" className="block text-sm font-semibold text-gray-700 mb-2">
+                Date of Birth <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                id="date_of_birth"
+                name="date_of_birth"
+                value={formData.date_of_birth}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Street Address */}
+            <div>
+              <label htmlFor="street_address" className="block text-sm font-semibold text-gray-700 mb-2">
+                Street Address <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="street_address"
+                name="street_address"
+                value={formData.street_address}
+                onChange={handleChange}
+                placeholder="123 Main Street"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* City */}
+            <div>
+              <label htmlFor="city" className="block text-sm font-semibold text-gray-700 mb-2">
+                City <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="city"
+                name="city"
+                value={formData.city}
+                onChange={handleChange}
+                placeholder="Austin"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* State */}
+            <div>
+              <label htmlFor="state" className="block text-sm font-semibold text-gray-700 mb-2">
+                State <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="state"
+                name="state"
+                value={formData.state}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select state</option>
+                {US_STATES.map(state => (
+                  <option key={state} value={state}>{state}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* ZIP Code */}
+            <div>
+              <label htmlFor="zip_code" className="block text-sm font-semibold text-gray-700 mb-2">
+                ZIP Code <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="zip_code"
+                name="zip_code"
+                value={formData.zip_code}
+                onChange={handleChange}
+                placeholder="78701"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Phone Number */}
+            <div>
+              <label htmlFor="phone_number" className="block text-sm font-semibold text-gray-700 mb-2">
+                Phone Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="tel"
+                id="phone_number"
+                name="phone_number"
+                value={formData.phone_number}
+                onChange={handleChange}
+                placeholder="(555) 123-4567"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Email Address */}
+            <div>
+              <label htmlFor="email_address" className="block text-sm font-semibold text-gray-700 mb-2">
+                Email Address <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                id="email_address"
+                name="email_address"
+                value={formData.email_address}
+                onChange={handleChange}
+                placeholder="client@email.com"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Emergency Contact Name */}
+            <div>
+              <label htmlFor="emergency_contact_name" className="block text-sm font-semibold text-gray-700 mb-2">
+                Emergency Contact Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="emergency_contact_name"
+                name="emergency_contact_name"
+                value={formData.emergency_contact_name}
+                onChange={handleChange}
+                placeholder="Jane Doe (Daughter)"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Emergency Phone */}
+            <div>
+              <label htmlFor="emergency_phone" className="block text-sm font-semibold text-gray-700 mb-2">
+                Emergency Phone <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="tel"
+                id="emergency_phone"
+                name="emergency_phone"
+                value={formData.emergency_phone}
+                onChange={handleChange}
+                placeholder="(555) 987-6543"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Gender */}
+            <div>
+              <label htmlFor="gender" className="block text-sm font-semibold text-gray-700 mb-2">
+                Gender
+              </label>
+              <select
+                id="gender"
+                name="gender"
+                value={formData.gender}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </div>
+
+            {/* Class */}
+            <div>
+              <label htmlFor="class" className="block text-sm font-semibold text-gray-700 mb-2">
+                Class
+              </label>
+              <select
+                id="class"
+                name="class"
+                value={formData.class}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select class</option>
+                <option value="Private Pay">Private Pay</option>
+                <option value="Medicare">Medicare</option>
+                <option value="Medicaid">Medicaid</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            {/* Primary Diagnosis */}
+            <div className="md:col-span-2">
+              <label htmlFor="primary_diagnosis" className="block text-sm font-semibold text-gray-700 mb-2">
+                Primary Diagnosis
+              </label>
+              <textarea
+                id="primary_diagnosis"
+                name="primary_diagnosis"
+                value={formData.primary_diagnosis}
+                onChange={handleChange}
+                placeholder="e.g., Alzheimer's Disease"
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Current Medications */}
+            <div className="md:col-span-2">
+              <label htmlFor="current_medications" className="block text-sm font-semibold text-gray-700 mb-2">
+                Current Medications
+              </label>
+              <textarea
+                id="current_medications"
+                name="current_medications"
+                value={formData.current_medications}
+                onChange={handleChange}
+                placeholder="List medications with dosages"
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Allergies */}
+            <div className="md:col-span-2">
+              <label htmlFor="allergies" className="block text-sm font-semibold text-gray-700 mb-2">
+                Allergies
+              </label>
+              <textarea
+                id="allergies"
+                name="allergies"
+                value={formData.allergies}
+                onChange={handleChange}
+                placeholder="e.g., Penicillin, Peanuts"
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isLoading ? (
+                'Adding...'
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Add Client
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

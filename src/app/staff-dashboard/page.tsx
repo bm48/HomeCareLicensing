@@ -143,6 +143,15 @@ export default async function StaffDashboardPage() {
   }) || []
 
   // Combine applications and certifications, sorted by expiry date
+  const expiringList = [...applicationsAsLicenses, ...certificationsAsLicenses].filter(l => {
+    if (l.status === 'expiring') return l;
+  }).sort((a, b) => {
+    if (!a.expiry_date) return 1
+    if (!b.expiry_date) return -1
+    return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
+  }).reverse()
+
+  console.log("expiringList: ", expiringList)
   const staffLicenses = [...applicationsAsLicenses, ...certificationsAsLicenses].sort((a, b) => {
     if (!a.expiry_date) return 1
     if (!b.expiry_date) return -1
@@ -274,7 +283,7 @@ export default async function StaffDashboardPage() {
         </div>
 
         {/* Action Required: Licenses Expiring Soon */}
-        {licensesExpiringSoon.length > 0 && (
+        {/* {licensesExpiringSoon.length > 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 md:p-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -301,7 +310,7 @@ export default async function StaffDashboardPage() {
               </Link>
             </div>
           </div>
-        )}
+        )} */}
 
         {/* All Licenses & Certifications */}
         <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 md:p-6">
@@ -316,7 +325,7 @@ export default async function StaffDashboardPage() {
             </Link>
           </div>
 
-          {staffLicenses && staffLicenses.length > 0 ? (
+          {expiringList && expiringList.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px]">
                 <thead>
@@ -332,7 +341,7 @@ export default async function StaffDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {staffLicenses.map((license) => {
+                  {expiringList.map((license) => {
                     const daysUntilExpiry = license.days_until_expiry !== null && license.days_until_expiry !== undefined
                       ? license.days_until_expiry
                       : getDaysUntilExpiry(license.expiry_date)
@@ -399,7 +408,7 @@ export default async function StaffDashboardPage() {
 
                         {/* ACTIONS */}
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <Link
+                          {/* <Link
                             href={license.source === 'certification' 
                               ? `/staff-dashboard/my-certifications/${license.id}`
                               : `/staff-dashboard/my-certifications/${license.id}`}
@@ -407,6 +416,13 @@ export default async function StaffDashboardPage() {
                           >
                             View Details
                             <ChevronRight className="w-4 h-4" />
+                          </Link> */}
+                          
+                          <Link
+                            href={`/staff-dashboard/my-certifications/${license.id}`}
+                            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors text-sm md:text-base whitespace-nowrap"
+                          >
+                            Renew
                           </Link>
                         </td>
                       </tr>

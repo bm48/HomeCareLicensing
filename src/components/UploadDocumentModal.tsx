@@ -104,6 +104,80 @@ export default function UploadDocumentModal({
         throw insertError
       }
 
+      // Send email notification to expert if assigned
+      try {
+        // Get application details to find assigned expert
+        const { data: application } = await supabase
+          .from('applications')
+          .select('assigned_expert_id, application_name, company_owner_id')
+          .eq('id', applicationId)
+          .single()
+
+          console.log("application: ", application)
+
+        if (application?.assigned_expert_id) {
+          // Get expert's email
+          const { data: expertProfile } = await supabase
+            .from('user_profiles')
+            .select('email, full_name')
+            .eq('id', application.assigned_expert_id)
+            .single()
+
+          console.log("expertProfile: ", expertProfile)
+
+          // Get owner's name
+          const { data: ownerProfile } = application.company_owner_id
+            ? await supabase
+                .from('user_profiles')
+                .select('full_name')
+                .eq('id', application.company_owner_id)
+                .single()
+            : { data: null }
+
+          console.log("ownerProfile: ", ownerProfile)
+
+          if (expertProfile?.email) {
+            // Trim email to remove any whitespace/newline characters
+            const trimmedEmail = expertProfile.email.trim()
+            // Send email notification (don't await - fire and forget)
+            console.log("trimmedEmail: ", trimmedEmail)
+            console.log("expertProfile.full_name: ", expertProfile.full_name)
+            console.log("ownerProfile?.full_name: ", ownerProfile?.full_name)
+            console.log("application.application_name: ", application.application_name)
+            console.log("documentName: ", documentName)
+            console.log("applicationId: ", applicationId)
+            fetch('/api/send-email-notification', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                expertEmail: trimmedEmail,
+                expertName: expertProfile.full_name || undefined,
+                ownerName: ownerProfile?.full_name || undefined,
+                applicationName: application.application_name,
+                documentName: documentName,
+                applicationId: applicationId
+              })
+            }).then(async response => {
+              const result = await response.json()
+              if (!response.ok && result.warning) {
+                // Testing mode warning - log but don't show error to user
+                console.warn('Email notification:', result.warning)
+              } else if (!response.ok) {
+                console.error('Failed to send email notification:', result)
+              }
+            }).catch(err => {
+              console.error('Failed to send email notification:', err)
+              // Don't throw - email failure shouldn't break upload
+            })
+          }
+        }
+      } catch (emailError) {
+        console.error('Error sending email notification:', emailError)
+        // Don't throw - email failure shouldn't break upload
+      }
+
       // Reset form
       setSelectedFile(null)
       setDocumentName('')

@@ -900,13 +900,13 @@ export default function ApplicationDetailContent({
   }
 
   // Handle step completion
-  const handleCompleteStep = async () => {
-    if (!selectedStepId || !application.id || isCompletingStep) return
+  const handleCompleteStep = async (isCompleted: boolean, stepId: string) => {
+    if (!stepId || !application.id || isCompletingStep) return
 
     setIsCompletingStep(true)
     try {
       // Find the selected step
-      const selectedStep = steps.find(s => s.id === selectedStepId)
+      const selectedStep = steps.find(s => s.id === stepId)
       if (!selectedStep) {
         throw new Error('Step not found')
       }
@@ -916,7 +916,7 @@ export default function ApplicationDetailContent({
         .from('application_steps')
         .select('id')
         .eq('application_id', application.id)
-        .eq('id', selectedStepId)
+        .eq('id', stepId)
         .maybeSingle()
 
       if (existingAppStep) {
@@ -924,10 +924,10 @@ export default function ApplicationDetailContent({
         const { error: updateError } = await supabase
           .from('application_steps')
           .update({
-            is_completed: true,
+            is_completed: isCompleted,
             completed_at: new Date().toISOString()
           })
-          .eq('id', selectedStepId)
+          .eq('id', stepId)
           .eq('application_id', application.id)
 
         if (updateError) throw updateError
@@ -975,7 +975,7 @@ export default function ApplicationDetailContent({
       await fetchSteps()
       
       // Clear selection
-      setSelectedStepId(null)
+      // setSelectedStepId(null)
     } catch (error: any) {
       console.error('Error completing step:', error)
       alert('Failed to complete step: ' + (error.message || 'Unknown error'))
@@ -1636,12 +1636,19 @@ export default function ApplicationDetailContent({
                   return (
                     <div 
                       key={step.id} 
-                      onClick={() => !isCompleted && setSelectedStepId(step.id === selectedStepId ? null : step.id)}
+                      // onClick={() => !isCompleted && setSelectedStepId(step.id === selectedStepId ? null : step.id)}
+                      onClick={() => {
+                        if (!isCompleted) {
+                          handleCompleteStep(true, step.id)
+                        } else {
+                          handleCompleteStep(false, step.id)
+                        }
+                      }}
                       className={`flex items-start gap-3 p-3 border rounded-lg transition-all ${
                         isCompleted
-                          ? 'bg-green-50 border-green-200'
-                          : isSelected
-                          ? 'border-blue-500 bg-blue-50 shadow-md cursor-pointer'
+                          ? 'bg-green-50 border-green-200 cursor-pointer'
+                          // : isSelected
+                          // ? 'border-blue-500 bg-blue-50 shadow-md cursor-pointer'
                           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer'
                       }`}
                     >
@@ -1693,7 +1700,7 @@ export default function ApplicationDetailContent({
                   </p>
                 </div>
                 <button
-                  onClick={handleCompleteStep}
+                  // onClick={handleCompleteStep}
                   disabled={isCompletingStep}
                   className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
                 >

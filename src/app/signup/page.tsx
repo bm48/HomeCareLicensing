@@ -27,8 +27,8 @@ const signupSchema = z
 type SignupFormData = z.infer<typeof signupSchema>
 
 const ROLE_OPTIONS = [
-  { value: 'company_owner', label: 'Company Owner', description: 'Full access to manage your company' },
-  { value: 'staff_member', label: 'Staff Member', description: 'Access to assigned tasks and resources' },
+  { value: 'company_owner', label: 'Agency Admin', description: 'Full access to manage your company' },
+  { value: 'staff_member', label: 'Caregiver', description: 'Access to assigned tasks and resources' },
   { value: 'admin', label: 'Admin', description: 'Administrative access to the platform' },
   { value: 'expert', label: 'Expert', description: 'Expert consultant access' },
 ]

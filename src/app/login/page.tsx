@@ -19,9 +19,9 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>
 
 const DEMO_CREDENTIALS = [
-  { role: 'Company Owner', email: 'owner@demo.com', password: 'demo123', icon: User, color: 'bg-blue-500' },
+  { role: 'Agency Admin', email: 'owner@demo.com', password: 'demo123', icon: User, color: 'bg-blue-500' },
   { role: 'Admin', email: 'admin@demo.com', password: 'demo123', icon: Shield, color: 'bg-purple-500' },
-  { role: 'Staff Member', email: 'staff@demo.com', password: 'demo123', icon: RefreshCw, color: 'bg-green-500' },
+  { role: 'Caregiver', email: 'staff@demo.com', password: 'demo123', icon: RefreshCw, color: 'bg-green-500' },
   { role: 'Expert', email: 'expert@demo.com', password: 'demo123', icon: GraduationCap, color: 'bg-orange-500' },
 ]
 
