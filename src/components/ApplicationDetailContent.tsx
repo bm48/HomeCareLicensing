@@ -21,7 +21,8 @@ import {
   AlertCircle,
   Plus,
   Edit2,
-  Trash2
+  Trash2,
+  ChevronDown
 } from 'lucide-react'
 import UploadDocumentModal from './UploadDocumentModal'
 import Modal from './Modal'
@@ -992,11 +993,12 @@ export default function ApplicationDetailContent({
   const totalDocuments = documents.length
 
   // Filter documents based on selected filter
+  // draft = just uploaded (DB pending), pending = expert rejected (DB rejected), completed = expert approved (DB approved)
   const filteredDocuments = documents.filter(doc => {
     if (documentFilter === 'all') return true
-    if (documentFilter === 'completed') return doc.status === 'approved' 
-    if (documentFilter === 'pending') return doc.status === 'pending'
-    if (documentFilter === 'drafts') return doc.status === 'rejected' 
+    if (documentFilter === 'completed') return doc.status === 'approved' || doc.status === 'completed'
+    if (documentFilter === 'pending') return doc.status === 'rejected'
+    if (documentFilter === 'drafts') return doc.status === 'pending'
     return true
   })
 
@@ -1024,10 +1026,11 @@ export default function ApplicationDetailContent({
     })
   }
 
+  // UI status: draft = just uploaded (DB pending), pending = expert rejected (DB rejected), completed = expert approved (DB approved)
   const getDocumentStatus = (status: string) => {
     if (status === 'approved' || status === 'completed') return 'completed'
-    if (status === 'pending') return 'pending'
-    if (status === 'rejected') return 'draft'
+    if (status === 'pending') return 'draft'
+    if (status === 'rejected') return 'pending'
     return 'draft'
   }
 
@@ -1441,26 +1444,9 @@ export default function ApplicationDetailContent({
 
       {activeTab === 'documents' && (
             <div className="space-y-6">
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900 mb-2">Document Generator</h1>
-                  <p className="text-gray-600">Generate and manage your licensing documents for {application.state}</p>
-                </div>
-                {/* Upload button - only for clients (company owners) */}
-                {currentUserRole === 'company_owner' && (
-                  <button
-                    onClick={() => setIsUploadModalOpen(true)}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
-                  >
-                    <Upload className="w-5 h-5" />
-                    Upload Document
-                  </button>
-                )}
-              </div>
 
               {/* Status Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                   <div className="flex items-center gap-3 mb-2">
                     <CheckCircle2 className="w-6 h-6 text-green-600" />
@@ -1490,31 +1476,36 @@ export default function ApplicationDetailContent({
                     {documents.filter(d => getDocumentStatus(d.status) === 'pending').length}
                   </div>
                 </div>
-              </div>
+              </div> */}
 
-              {/* Tabs */}
+              {/* Documents section with filter select */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="border-b border-gray-200">
-                  <nav className="flex space-x-4 px-6" aria-label="Tabs">
-                    {[
-                      { id: 'all', label: `All Documents (${documents.length})` },
-                      { id: 'pending', label: `Pending (${documents.filter(d => getDocumentStatus(d.status) === 'pending').length})` },
-                      { id: 'drafts', label: `Drafts (${documents.filter(d => getDocumentStatus(d.status) === 'draft').length})` },
-                      { id: 'completed', label: `Completed (${documents.filter(d => getDocumentStatus(d.status) === 'completed').length})` },
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setDocumentFilter(tab.id as typeof documentFilter)}
-                        className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                          documentFilter === tab.id
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </nav>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">Documents</h2>
+                  <div className="relative flex items-center gap-4">
+                    
+                {/* Upload button - only for clients (company owners) */}
+                {currentUserRole === 'company_owner' && (
+                  <button
+                    onClick={() => setIsUploadModalOpen(true)}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                  >
+                    <Upload className="w-5 h-5" />
+                    Upload Document
+                  </button>
+                )}
+                    <select
+                      value={documentFilter}
+                      onChange={(e) => setDocumentFilter(e.target.value as typeof documentFilter)}
+                      className="appearance-none pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-700 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer min-w-[140px]"
+                    >
+                      <option value="all">All</option>
+                      <option value="drafts">Drafts</option>
+                      <option value="pending">Pending</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" />
+                  </div>
                 </div>
 
                 {/* Documents List */}
@@ -1529,7 +1520,7 @@ export default function ApplicationDetailContent({
                       {filteredDocuments.map((doc) => {
                         const status = getDocumentStatus(doc.status)
                         const isExpert = currentUserRole === 'expert'
-                        const isPending = doc.status === 'pending'
+                        const isDraft = doc.status === 'pending' // draft = just uploaded, awaiting expert review
                         return (
                           <div
                             key={doc.id}
@@ -1571,8 +1562,8 @@ export default function ApplicationDetailContent({
                                   <Download className="w-4 h-4" />
                                   Download
                                 </button>
-                                {/* Expert review buttons - only show for experts on pending documents */}
-                                {isExpert && isPending && (
+                                {/* Expert review buttons - only show for experts on draft documents (awaiting review) */}
+                                {isExpert && isDraft && (
                                   <>
                                     <button
                                       onClick={() => {
