@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Search, Filter, MapPin, FileText, DollarSign, Clock, Calendar, Plus, Eye, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AddLicenseTypeModal from './AddLicenseTypeModal'
+import { updateLicenseTypeActive } from '@/app/actions/license-types'
 
 interface LicenseType {
   id: string
@@ -26,26 +27,33 @@ interface LicenseTypesTableProps {
 
 export default function LicenseTypesTable({ licenseTypes }: LicenseTypesTableProps) {
   const router = useRouter()
+  const [localLicenseTypes, setLocalLicenseTypes] = useState(licenseTypes)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedState, setSelectedState] = useState('All States')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
   const [showAddModal, setShowAddModal] = useState(false)
   const [loadingLicenseId, setLoadingLicenseId] = useState<string | null>(null)
+  const [togglingLicenseId, setTogglingLicenseId] = useState<string | null>(null)
+
+  // Sync from server when props change (e.g. after refresh or add new type)
+  useEffect(() => {
+    setLocalLicenseTypes(licenseTypes)
+  }, [licenseTypes])
 
   // Get unique states
   const allStates = useMemo(() => {
     const statesSet = new Set<string>()
-    licenseTypes.forEach(lt => {
+    localLicenseTypes.forEach(lt => {
       if (lt.state) {
         statesSet.add(lt.state)
       }
     })
     return Array.from(statesSet).sort()
-  }, [licenseTypes])
+  }, [localLicenseTypes])
 
   // Filter license types
   const filteredLicenseTypes = useMemo(() => {
-    return licenseTypes.filter(lt => {
+    return localLicenseTypes.filter(lt => {
       // Search filter (name, state, description)
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
@@ -70,7 +78,7 @@ export default function LicenseTypesTable({ licenseTypes }: LicenseTypesTablePro
 
       return true
     })
-  }, [licenseTypes, searchQuery, selectedState, selectedStatus])
+  }, [localLicenseTypes, searchQuery, selectedState, selectedStatus])
 
   const handleViewDetail = (e: React.MouseEvent, licenseTypeId: string) => {
     e.stopPropagation()
@@ -84,6 +92,31 @@ export default function LicenseTypesTable({ licenseTypes }: LicenseTypesTablePro
       return `${avg} days`
     }
     return licenseType.processing_time_display || 'N/A'
+  }
+
+  const handleToggleActive = async (e: React.MouseEvent, licenseType: LicenseType) => {
+    e.stopPropagation()
+    const nextActive = !licenseType.is_active
+    // Optimistic update: switch UI immediately
+    setLocalLicenseTypes(prev =>
+      prev.map(lt =>
+        lt.id === licenseType.id ? { ...lt, is_active: nextActive } : lt
+      )
+    )
+    setTogglingLicenseId(licenseType.id)
+    const result = await updateLicenseTypeActive(licenseType.id, nextActive)
+    setTogglingLicenseId(null)
+    if (result.error) {
+      console.error(result.error)
+      // Revert on error
+      setLocalLicenseTypes(prev =>
+        prev.map(lt =>
+          lt.id === licenseType.id ? { ...lt, is_active: licenseType.is_active } : lt
+        )
+      )
+      return
+    }
+    router.refresh()
   }
 
   return (
@@ -151,6 +184,7 @@ export default function LicenseTypesTable({ licenseTypes }: LicenseTypesTablePro
                 <th className="px-3 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Application Fee</th>
                 <th className="px-3 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Service Fee</th>
                 <th className="px-3 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Renewal Period</th>
+                <th className="px-3 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
                 <th className="px-3 md:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -206,6 +240,32 @@ export default function LicenseTypesTable({ licenseTypes }: LicenseTypesTablePro
                       </td>
                       <td className="px-3 md:px-6 py-4 whitespace-nowrap">
                         <button
+                          type="button"
+                          onClick={(e) => handleToggleActive(e, licenseType)}
+                          disabled={togglingLicenseId === licenseType.id}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            licenseType.is_active ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
+                          role="switch"
+                          aria-checked={licenseType.is_active}
+                          aria-label={licenseType.is_active ? 'Deactivate license type' : 'Activate license type'}
+                          title={licenseType.is_active ? 'Active - click to deactivate' : 'Inactive - click to activate'}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              licenseType.is_active ? 'translate-x-5' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        <span className="ml-2 text-xs font-medium text-gray-600 flex items-center gap-1">
+                          {togglingLicenseId === licenseType.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : null}
+                          {licenseType.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-3 md:px-6 py-4 whitespace-nowrap">
+                        <button
                           onClick={(e) => handleViewDetail(e, licenseType.id)}
                           disabled={loadingLicenseId === licenseType.id}
                           className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -228,7 +288,7 @@ export default function LicenseTypesTable({ licenseTypes }: LicenseTypesTablePro
                 })
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
+                  <td colSpan={9} className="px-6 py-12 text-center">
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">No license types found</p>
                   </td>

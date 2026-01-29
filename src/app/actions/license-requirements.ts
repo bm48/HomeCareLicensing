@@ -8,6 +8,7 @@ export interface CreateStepData {
   stepName: string
   description: string
   estimatedDays?: number
+  isRequired: boolean
 }
 
 export interface CreateDocumentData {
@@ -82,6 +83,7 @@ export async function createStep(data: CreateStepData) {
       description: data.description || null,
       is_expert_step: false,
       estimated_days: data.estimatedDays ?? null,
+      is_required: data.isRequired,
     })
     .select()
     .single()
@@ -156,7 +158,7 @@ export async function createExpertStep(data: CreateExpertStepData) {
 }
 
 // Update functions
-export async function updateStep(id: string, data: { stepName: string; description: string; estimatedDays?: number }) {
+export async function updateStep(id: string, data: { stepName: string; description: string; estimatedDays?: number; isRequired: boolean }) {
   const supabase = await createClient()
 
   const { data: step, error } = await supabase
@@ -165,6 +167,7 @@ export async function updateStep(id: string, data: { stepName: string; descripti
       step_name: data.stepName,
       description: data.description || null,
       estimated_days: data.estimatedDays ?? null,
+      is_required: data.isRequired,
     })
     .eq('id', id)
     .select()
@@ -370,6 +373,7 @@ export async function copySteps(targetRequirementId: string, sourceStepIds: stri
     description: step.description,
     is_expert_step: false,
     estimated_days: step.estimated_days ?? null,
+    is_required: step.is_required ?? true,
   }))
   
   const { data: copiedSteps, error: insertError } = await supabase

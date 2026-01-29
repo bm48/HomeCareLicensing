@@ -80,6 +80,22 @@ export async function createLicenseType(data: CreateLicenseTypeData) {
   return { error: null, data: licenseType }
 }
 
+export async function updateLicenseTypeActive(id: string, isActive: boolean) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('license_types')
+    .update({ is_active: isActive })
+    .eq('id', id)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/admin/license-requirements')
+  return { error: null }
+}
+
 export async function deleteLicenseType(id: string) {
   const supabase = await createClient()
 

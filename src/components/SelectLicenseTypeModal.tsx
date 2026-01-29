@@ -53,6 +53,7 @@ export default function SelectLicenseTypeModal({
         name: item.name,
         description: item.description,
         cost: item.cost_display,
+        serviceFee: item.service_fee_display ?? undefined,
         processingTime: item.processing_time_display,
         renewalPeriod: item.renewal_period_display,
         icon: item.icon_type as 'heart' | 'users',
@@ -125,9 +126,16 @@ export default function SelectLicenseTypeModal({
                 <div className="flex flex-wrap gap-4 text-sm">
                   <div className="flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-green-600" />
-                    <span className="text-gray-700 font-medium">Cost:</span>
+                    <span className="text-gray-700 font-medium">Application Fee:</span>
                     <span className="text-gray-600">{licenseType.cost}</span>
                   </div>
+                  {licenseType.serviceFee != null && licenseType.serviceFee !== '' && (
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-blue-600" />
+                      <span className="text-gray-700 font-medium">Service Fee:</span>
+                      <span className="text-gray-600">{licenseType.serviceFee}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-orange-600" />
                     <span className="text-gray-700 font-medium">Processing Time:</span>

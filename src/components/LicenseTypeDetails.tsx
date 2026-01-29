@@ -47,6 +47,7 @@ interface Step {
   is_expert_step?: boolean
   phase?: string | null
   estimated_days?: number | null
+  is_required?: boolean
 }
 
 interface Document {
@@ -97,7 +98,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [editingExpertStep, setEditingExpertStep] = useState<string | null>(null)
   
   // Form data
-  const [stepFormData, setStepFormData] = useState({ stepName: '', description: '', estimatedDays: '' })
+  const [stepFormData, setStepFormData] = useState({ stepName: '', description: '', estimatedDays: '', isRequired: true })
   const [documentFormData, setDocumentFormData] = useState({ documentName: '', description: '', isRequired: true })
   const [expertFormData, setExpertFormData] = useState({ phase: 'Pre-Application', stepTitle: '', description: '' })
   
@@ -385,13 +386,14 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       stepName: stepFormData.stepName,
       description: stepFormData.description,
       estimatedDays: stepFormData.estimatedDays ? parseInt(stepFormData.estimatedDays) : undefined,
+      isRequired: stepFormData.isRequired,
     })
 
     if (result.error) {
       setError(result.error)
       setIsSubmitting(false)
     } else {
-      setStepFormData({ stepName: '', description: '', estimatedDays: '' })
+      setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
       setShowStepForm(false)
       await loadData()
       setIsSubmitting(false)
@@ -465,6 +467,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       stepName: step.step_name,
       description: step.description || '',
       estimatedDays: step.estimated_days != null ? String(step.estimated_days) : '',
+      isRequired: step.is_required ?? true,
     })
   }
 
@@ -498,13 +501,14 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       stepName: stepFormData.stepName,
       description: stepFormData.description,
       estimatedDays: stepFormData.estimatedDays ? parseInt(stepFormData.estimatedDays) : undefined,
+      isRequired: stepFormData.isRequired,
     })
 
     if (result.error) {
       setError(result.error)
       setIsSubmitting(false)
     } else {
-      setStepFormData({ stepName: '', description: '', estimatedDays: '' })
+      setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
       setShowStepForm(false)
       setEditingStep(null)
       await loadData()
@@ -1156,6 +1160,18 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="stepIsRequired"
+                      checked={stepFormData.isRequired}
+                      onChange={(e) => setStepFormData({ ...stepFormData, isRequired: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="stepIsRequired" className="ml-2 text-sm font-medium text-gray-700">
+                      Required Step
+                    </label>
+                  </div>
                   <div className="flex gap-3 pt-2">
                     <button
                       type="submit"
@@ -1169,7 +1185,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="button"
                       onClick={() => {
                         setShowStepForm(false)
-                        setStepFormData({ stepName: '', description: '', estimatedDays: '' })
+                        setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
                         setError(null)
                       }}
                       className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -1186,7 +1202,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 isOpen={!!editingStep}
                 onClose={() => {
                   setEditingStep(null)
-                  setStepFormData({ stepName: '', description: '', estimatedDays: '' })
+                  setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
                   setShowStepForm(false)
                   setError(null)
                 }}
@@ -1226,6 +1242,18 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="stepIsRequiredEdit"
+                      checked={stepFormData.isRequired}
+                      onChange={(e) => setStepFormData({ ...stepFormData, isRequired: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="stepIsRequiredEdit" className="ml-2 text-sm font-medium text-gray-700">
+                      Required Step
+                    </label>
+                  </div>
                   <div className="flex gap-3 pt-2">
                     <button
                       type="submit"
@@ -1239,7 +1267,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="button"
                       onClick={() => {
                         setEditingStep(null)
-                        setStepFormData({ stepName: '', description: '', estimatedDays: '' })
+                        setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
                         setShowStepForm(false)
                         setError(null)
                       }}
@@ -1276,7 +1304,14 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       <span className="text-sm font-semibold text-white">{step.step_order}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-semibold text-gray-900">{step.step_name}</h4>
+                        {step.is_required !== false && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">
+                            Required
+                          </span>
+                        )}
+                      </div>
                       {step.description && (
                         <p className="text-sm text-gray-600 mb-2">{step.description}</p>
                       )}
