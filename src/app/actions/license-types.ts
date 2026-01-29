@@ -9,6 +9,7 @@ export interface CreateLicenseTypeData {
   description: string
   processingTime: string
   applicationFee: string
+  serviceFee: string
   renewalPeriod: string
 }
 
@@ -25,6 +26,11 @@ export async function createLicenseType(data: CreateLicenseTypeData) {
   const costMin = feeMatch ? parseFloat(feeMatch) : null
   const costMax = costMin
 
+  // Parse service fee (e.g., "$350" -> 350.00); default to 0 if empty
+  const serviceFeeMatch = (data.serviceFee || '').replace(/[^0-9.]/g, '')
+  const serviceFee = serviceFeeMatch ? parseFloat(serviceFeeMatch) : 0
+  const serviceFeeDisplay = data.serviceFee?.trim() || '$0'
+
   // Parse renewal period (e.g., "1 year" -> 1)
   const renewalMatch = data.renewalPeriod.match(/(\d+)/)
   const renewalPeriodYears = renewalMatch ? parseInt(renewalMatch[1]) : 1
@@ -38,6 +44,8 @@ export async function createLicenseType(data: CreateLicenseTypeData) {
       cost_min: costMin,
       cost_max: costMax,
       cost_display: data.applicationFee,
+      service_fee: serviceFee,
+      service_fee_display: serviceFeeDisplay,
       processing_time_min: processingTimeMin,
       processing_time_max: processingTimeMax,
       processing_time_display: data.processingTime,

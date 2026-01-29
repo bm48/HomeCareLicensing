@@ -81,6 +81,7 @@ export async function createStep(data: CreateStepData) {
       step_order: nextOrder,
       description: data.description || null,
       is_expert_step: false,
+      estimated_days: data.estimatedDays ?? null,
     })
     .select()
     .single()
@@ -163,6 +164,7 @@ export async function updateStep(id: string, data: { stepName: string; descripti
     .update({
       step_name: data.stepName,
       description: data.description || null,
+      estimated_days: data.estimatedDays ?? null,
     })
     .eq('id', id)
     .select()
@@ -367,7 +369,7 @@ export async function copySteps(targetRequirementId: string, sourceStepIds: stri
     step_order: nextOrder++,
     description: step.description,
     is_expert_step: false,
-    // Note: estimated_days column doesn't exist in the database schema
+    estimated_days: step.estimated_days ?? null,
   }))
   
   const { data: copiedSteps, error: insertError } = await supabase

@@ -17,6 +17,7 @@ import {
 } from '@/app/actions/license-requirements'
 import { updateLicenseType } from '@/app/actions/configuration'
 import ExpertProcessComingSoonModal from '@/components/ExpertProcessComingSoonModal'
+import Modal from '@/components/Modal'
 import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, copySteps, copyDocuments } from '@/app/actions/license-requirements'
 
 interface LicenseType {
@@ -463,9 +464,8 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     setStepFormData({
       stepName: step.step_name,
       description: step.description || '',
-      estimatedDays: '',
+      estimatedDays: step.estimated_days != null ? String(step.estimated_days) : '',
     })
-    setShowStepForm(true)
   }
 
   const handleEditDocument = (doc: Document) => {
@@ -475,7 +475,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       description: doc.description || '',
       isRequired: doc.is_required,
     })
-    setShowDocumentForm(true)
   }
 
   const handleEditExpertStep = (step: Step) => {
@@ -485,7 +484,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       stepTitle: step.step_name,
       description: step.description || '',
     })
-    setShowExpertForm(true)
   }
 
   // Update handlers
@@ -1122,11 +1120,9 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
               </div>
             )}
 
-            {showStepForm && (
+            {showStepForm && !editingStep && (
               <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                  {editingStep ? 'Edit Step' : 'Add New Step'}
-                </h4>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Add New Step</h4>
                 <form onSubmit={handleAddStep} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
@@ -1174,7 +1170,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       onClick={() => {
                         setShowStepForm(false)
                         setStepFormData({ stepName: '', description: '', estimatedDays: '' })
-                        setEditingStep(null)
                         setError(null)
                       }}
                       className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -1184,6 +1179,77 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                   </div>
                 </form>
               </div>
+            )}
+
+            {editingStep && (
+              <Modal
+                isOpen={!!editingStep}
+                onClose={() => {
+                  setEditingStep(null)
+                  setStepFormData({ stepName: '', description: '', estimatedDays: '' })
+                  setShowStepForm(false)
+                  setError(null)
+                }}
+                title="Edit Step"
+                size="lg"
+              >
+                <form onSubmit={handleAddStep} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
+                    <input
+                      type="text"
+                      value={stepFormData.stepName}
+                      onChange={(e) => setStepFormData({ ...stepFormData, stepName: e.target.value })}
+                      placeholder="e.g., Complete Pre-Application Training"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      value={stepFormData.description}
+                      onChange={(e) => setStepFormData({ ...stepFormData, description: e.target.value })}
+                      placeholder="Detailed description of this step"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Days</label>
+                    <input
+                      type="number"
+                      value={stepFormData.estimatedDays}
+                      onChange={(e) => setStepFormData({ ...stepFormData, estimatedDays: e.target.value })}
+                      placeholder="7"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4" />
+                      Save Step
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingStep(null)
+                        setStepFormData({ stepName: '', description: '', estimatedDays: '' })
+                        setShowStepForm(false)
+                        setError(null)
+                      }}
+                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </Modal>
             )}
 
             {isLoading ? (
@@ -1370,11 +1436,9 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
               </div>
             )}
 
-            {showDocumentForm && (
+            {showDocumentForm && !editingDocument && (
               <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                  {editingDocument ? 'Edit Document' : 'Add New Document'}
-                </h4>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Add New Document</h4>
                 <form onSubmit={handleAddDocument} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Document Name</label>
@@ -1424,7 +1488,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       onClick={() => {
                         setShowDocumentForm(false)
                         setDocumentFormData({ documentName: '', description: '', isRequired: true })
-                        setEditingDocument(null)
                         setError(null)
                       }}
                       className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -1434,6 +1497,79 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                   </div>
                 </form>
               </div>
+            )}
+
+            {editingDocument && (
+              <Modal
+                isOpen={!!editingDocument}
+                onClose={() => {
+                  setEditingDocument(null)
+                  setDocumentFormData({ documentName: '', description: '', isRequired: true })
+                  setShowDocumentForm(false)
+                  setError(null)
+                }}
+                title="Edit Document"
+                size="lg"
+              >
+                <form onSubmit={handleAddDocument} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Document Name</label>
+                    <input
+                      type="text"
+                      value={documentFormData.documentName}
+                      onChange={(e) => setDocumentFormData({ ...documentFormData, documentName: e.target.value })}
+                      placeholder="e.g., Application for License"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      value={documentFormData.description}
+                      onChange={(e) => setDocumentFormData({ ...documentFormData, description: e.target.value })}
+                      placeholder="Brief description of this document"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isRequiredEdit"
+                      checked={documentFormData.isRequired}
+                      onChange={(e) => setDocumentFormData({ ...documentFormData, isRequired: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="isRequiredEdit" className="ml-2 text-sm font-medium text-gray-700">
+                      Required Document
+                    </label>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Save Document
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingDocument(null)
+                        setDocumentFormData({ documentName: '', description: '', isRequired: true })
+                        setShowDocumentForm(false)
+                        setError(null)
+                      }}
+                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </Modal>
             )}
 
             {isLoading ? (
@@ -1518,11 +1654,9 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
               </div>
             </div>
 
-            {showExpertForm && (
+            {showExpertForm && !editingExpertStep && (
               <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                  {editingExpertStep ? 'Edit Expert Step' : 'Add New Expert Step'}
-                </h4>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Add New Expert Step</h4>
                 <form onSubmit={handleAddExpertStep} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
@@ -1575,7 +1709,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       onClick={() => {
                         setShowExpertForm(false)
                         setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
-                        setEditingExpertStep(null)
                         setError(null)
                       }}
                       className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -1585,6 +1718,82 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                   </div>
                 </form>
               </div>
+            )}
+
+            {editingExpertStep && (
+              <Modal
+                isOpen={!!editingExpertStep}
+                onClose={() => {
+                  setEditingExpertStep(null)
+                  setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+                  setShowExpertForm(false)
+                  setError(null)
+                }}
+                title="Edit Expert Step"
+                size="lg"
+              >
+                <form onSubmit={handleAddExpertStep} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
+                    <select
+                      value={expertFormData.phase}
+                      onChange={(e) => setExpertFormData({ ...expertFormData, phase: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="Pre-Application">Pre-Application</option>
+                      <option value="Post-Application">Post-Application</option>
+                      <option value="Application">Application</option>
+                      <option value="Review">Review</option>
+                      <option value="Post-Approval">Post-Approval</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
+                    <input
+                      type="text"
+                      value={expertFormData.stepTitle}
+                      onChange={(e) => setExpertFormData({ ...expertFormData, stepTitle: e.target.value })}
+                      placeholder="e.g., Initial Client Consultation"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      value={expertFormData.description}
+                      onChange={(e) => setExpertFormData({ ...expertFormData, description: e.target.value })}
+                      placeholder="Detailed description of this step"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4" />
+                      Save Step
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingExpertStep(null)
+                        setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+                        setShowExpertForm(false)
+                        setError(null)
+                      }}
+                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </Modal>
             )}
 
             {isLoading ? (

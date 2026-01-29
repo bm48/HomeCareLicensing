@@ -33,6 +33,7 @@ export default function AddLicenseTypeModal({ isOpen, onClose, onSuccess }: AddL
     description: '',
     processingTime: '',
     applicationFee: '',
+    serviceFee: '',
     renewalPeriod: '',
   })
 
@@ -41,7 +42,7 @@ export default function AddLicenseTypeModal({ isOpen, onClose, onSuccess }: AddL
     setError(null)
 
     if (!formData.name || !formData.description || !formData.processingTime || !formData.applicationFee || !formData.renewalPeriod) {
-      setError('Please fill in all fields')
+      setError('Please fill in all required fields')
       return
     }
 
@@ -61,6 +62,7 @@ export default function AddLicenseTypeModal({ isOpen, onClose, onSuccess }: AddL
       description: '',
       processingTime: '',
       applicationFee: '',
+      serviceFee: '',
       renewalPeriod: '',
     })
     
@@ -76,6 +78,7 @@ export default function AddLicenseTypeModal({ isOpen, onClose, onSuccess }: AddL
         description: '',
         processingTime: '',
         applicationFee: '',
+        serviceFee: '',
         renewalPeriod: '',
       })
       onClose()
@@ -166,6 +169,21 @@ export default function AddLicenseTypeModal({ isOpen, onClose, onSuccess }: AddL
             required
             disabled={isLoading}
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Service Fee
+          </label>
+          <input
+            type="text"
+            value={formData.serviceFee}
+            onChange={(e) => setFormData({ ...formData, serviceFee: e.target.value })}
+            placeholder="e.g., $350"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={isLoading}
+          />
+          <p className="text-xs text-gray-500 mt-1">Cost of helping the owner submit their license</p>
         </div>
 
         <div>
