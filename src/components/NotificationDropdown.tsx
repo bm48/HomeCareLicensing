@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Bell, MessageSquare, Clock } from 'lucide-react'
+import { Bell, MessageSquare, Clock, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -11,6 +11,13 @@ interface ApplicationNotification {
   state: string
   unread_count: number
   last_message_at: string
+}
+
+interface AdminNotificationItem {
+  id: string
+  title: string
+  type: string
+  created_at: string
 }
 
 interface NotificationDropdownProps {
@@ -24,6 +31,7 @@ export default function NotificationDropdown({
 }: NotificationDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [applications, setApplications] = useState<ApplicationNotification[]>([])
+  const [adminNotifications, setAdminNotifications] = useState<AdminNotificationItem[]>([])
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
   const [isLoading, setIsLoading] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -56,8 +64,9 @@ export default function NotificationDropdown({
   useEffect(() => {
     if (isOpen && userId && userRole) {
       const now = Date.now()
-      // Use cache if recent
-      if (now - lastFetchRef.current < CACHE_TTL && applications.length > 0) {
+      // Use cache if recent and we have content (applications or admin notifications)
+      const hasContent = applications.length > 0 || ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && adminNotifications.length > 0)
+      if (now - lastFetchRef.current < CACHE_TTL && hasContent) {
         return
       }
       fetchApplicationsWithUnread()
@@ -141,8 +150,29 @@ export default function NotificationDropdown({
       }
 
       if (applicationIds.length === 0) {
-        setApplications([])
-        setUnreadCount(0)
+        if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
+          // Admin, expert, or owner with no conversations: still fetch unread notifications
+          const { data: notificationRows } = await supabase
+            .from('notifications')
+            .select('id, title, type, created_at')
+            .eq('user_id', userId)
+            .eq('is_read', false)
+            .order('created_at', { ascending: false })
+            .limit(20)
+          const items = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
+            id: n.id,
+            title: n.title,
+            type: n.type,
+            created_at: n.created_at
+          }))
+          setAdminNotifications(items)
+          setApplications([])
+          setUnreadCount(items.length)
+        } else {
+          setApplications([])
+          setAdminNotifications([])
+          setUnreadCount(0)
+        }
         setIsLoading(false)
         lastFetchRef.current = Date.now()
         return
@@ -248,12 +278,35 @@ export default function NotificationDropdown({
         .sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime())
 
       setApplications(appNotifications)
-      const totalUnread = appNotifications.reduce((sum, app) => sum + app.unread_count, 0)
+      let totalUnread = appNotifications.reduce((sum, app) => sum + app.unread_count, 0)
+
+      // For admin, expert, owner: also fetch unread notifications (e.g. New Application Request, Application Assigned, Document Approved) and add to list
+      if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
+        const { data: notificationRows } = await supabase
+          .from('notifications')
+          .select('id, title, type, created_at')
+          .eq('user_id', userId)
+          .eq('is_read', false)
+          .order('created_at', { ascending: false })
+          .limit(20)
+        const items = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
+          id: n.id,
+          title: n.title,
+          type: n.type,
+          created_at: n.created_at
+        }))
+        setAdminNotifications(items)
+        totalUnread += items.length
+      } else {
+        setAdminNotifications([])
+      }
+
       setUnreadCount(totalUnread)
       lastFetchRef.current = Date.now()
     } catch (err) {
       console.error('Error fetching applications with unread:', err)
       setApplications([])
+      setAdminNotifications([])
       setUnreadCount(0)
     } finally {
       setIsLoading(false)
@@ -281,7 +334,13 @@ export default function NotificationDropdown({
         const applicationIds = data?.map(a => a.id) || []
         
         if (applicationIds.length === 0) {
-          setUnreadCount(0)
+          // No applications: still show unread notifications count (e.g. Document Approved)
+          const { count: notificationsCount } = await supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('is_read', false)
+          setUnreadCount(notificationsCount || 0)
           return
         }
 
@@ -314,26 +373,32 @@ export default function NotificationDropdown({
         return
       }
 
-      if (conversationIds.length === 0) {
-        setUnreadCount(0)
-        return
-      }
+      let count = 0
+      let countError: { message?: string; details?: unknown; hint?: string; code?: string } | null = null
 
-      // Validate inputs before calling RPC
-      if (!userId || !Array.isArray(conversationIds) || conversationIds.length === 0) {
-        console.warn('Invalid inputs for RPC call:', { userId, conversationIds: conversationIds.length })
-        setUnreadCount(0)
-        return
-      }
-
-      // Use RPC function to count unread messages (user ID not in is_read array)
-      const { data: count, error: countError } = await supabase
-        .rpc('get_total_unread_count_for_user', {
+      if (conversationIds.length > 0 && userId && Array.isArray(conversationIds)) {
+        // Use RPC function to count unread messages (user ID not in is_read array)
+        const result = await supabase.rpc('get_total_unread_count_for_user', {
           conversation_ids: conversationIds,
           user_id: userId
         })
+        count = result.data ?? 0
+        countError = result.error
+      }
 
-      if (countError) {
+      let totalCount = countError ? 0 : (count || 0)
+
+      // For admin, expert, owner: add unread notifications count (e.g. New Application Request, Application Assigned, Document Approved)
+      if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
+        const { count: notificationsCount } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('is_read', false)
+        totalCount += notificationsCount || 0
+      }
+
+      if (countError && userRole !== 'admin' && userRole !== 'expert' && userRole !== 'company_owner') {
         console.error('Error counting unread messages:', {
           error: countError,
           message: countError.message,
@@ -343,10 +408,8 @@ export default function NotificationDropdown({
           conversationIds: conversationIds.length,
           userId
         })
-        // Don't set to 0 on error - keep previous count to avoid flickering
-        // setUnreadCount(0)
       } else {
-        setUnreadCount(count || 0)
+        setUnreadCount(totalCount)
       }
     } catch (err) {
       console.error('Error refreshing badge:', err)
@@ -442,6 +505,35 @@ export default function NotificationDropdown({
         }
       })
 
+    // For admin, expert, owner: subscribe to notifications table so badge updates when new notification arrives
+    if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
+      const notifChannelName = `notification-${userRole}-${userId}`
+      const notifChannel = supabase
+        .channel(notifChannelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`
+          },
+          async () => {
+            await new Promise(resolve => setTimeout(resolve, 300))
+            debouncedRefreshBadge()
+          }
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+        supabase.removeChannel(notifChannel)
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current)
+        }
+      }
+    }
+
     return () => {
       supabase.removeChannel(channel)
       if (fetchTimeoutRef.current) {
@@ -461,6 +553,29 @@ export default function NotificationDropdown({
       router.push(`/dashboard/applications/${applicationId}?fromNotification=true`)
     } else if (userRole === 'expert') {
       router.push(`/dashboard/expert/applications/${applicationId}?fromNotification=true`)
+    }
+  }
+
+  const handleAdminNotificationClick = async (notificationId: string) => {
+    // Mark this notification as read so the unread count decreases when clicked
+    try {
+      await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId)
+        .eq('user_id', userId)
+      setAdminNotifications(prev => prev.filter(n => n.id !== notificationId))
+      setUnreadCount(prev => Math.max(0, prev - 1))
+    } catch (err) {
+      console.error('Error marking notification as read:', err)
+    }
+    setIsOpen(false)
+    if (userRole === 'expert') {
+      router.push('/dashboard/expert/applications')
+    } else if (userRole === 'company_owner') {
+      router.push('/dashboard/applications')
+    } else {
+      router.push('/admin/licenses')
     }
   }
 
@@ -492,17 +607,17 @@ export default function NotificationDropdown({
         <Bell className="w-5 h-5 sm:w-6 sm:h-6 cursor-pointer hover:text-blue-200 transition-colors" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-            {unreadCount > 9 ? 0 : unreadCount}
+            {unreadCount }
           </span>
         )}
       </button>
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[500px] flex flex-col">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[400px] flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">Messages</h3>
+          <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+            <h3 className="font-semibold text-gray-900">{(userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') ? 'Notifications' : 'Messages'}</h3>
             {unreadCount > 0 && (
               <span className="text-sm text-gray-600">
                 {unreadCount} unread
@@ -510,15 +625,46 @@ export default function NotificationDropdown({
             )}
           </div>
 
-          {/* Applications List */}
-          <div className="overflow-y-auto flex-1">
+          {/* Scrollable body: admin notifications + applications list */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Admin: New Application Request; Expert: Application Assigned; Owner: Document Approved */}
+          {((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && adminNotifications.length > 0) && (
+            <div className="border-b border-gray-200">
+              {adminNotifications.map((notif) => (
+                <div
+                  key={notif.id}
+                  onClick={() => {
+                    handleAdminNotificationClick(notif.id)
+                  }}
+                  className="p-4 hover:bg-gray-50 transition-colors cursor-pointer bg-amber-50/50"
+                >
+                  <div className="flex items-start gap-3">
+                    <FileText className="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-600" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-gray-900">{notif.title}</div>
+                      <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                        <Clock className="w-3 h-3" />
+                        {formatDate(notif.created_at)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Applications List (unread messages) */}
+          <div>
             {isLoading ? (
               <div className="p-8 text-center text-gray-500">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-2 text-sm">Loading messages...</p>
+                <p className="mt-2 text-sm">Loading...</p>
               </div>
             ) : applications.length > 0 ? (
               <div className="divide-y divide-gray-100">
+                {(userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && adminNotifications.length > 0 && (
+                  <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">Unread messages</div>
+                )}
                 {applications.map((app) => (
                   <div
                     key={app.application_id}
@@ -540,7 +686,7 @@ export default function NotificationDropdown({
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {app.unread_count > 0 && (
                               <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                {app.unread_count > 9 ? 0 : app.unread_count}
+                                {app.unread_count > 9 ? '9+' : app.unread_count}
                               </span>
                             )}
                           </div>
@@ -554,12 +700,17 @@ export default function NotificationDropdown({
                   </div>
                 ))}
               </div>
+            ) : adminNotifications.length > 0 && (userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') ? (
+              <div className="p-6 text-center text-gray-500">
+                <p className="text-sm">No unread messages</p>
+              </div>
             ) : (
               <div className="p-8 text-center text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p className="text-sm">No unread messages</p>
+                <p className="text-sm">{(userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') ? 'No notifications' : 'No unread messages'}</p>
               </div>
             )}
+          </div>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2, GripVertical, Users2, Copy } from 'lucide-react'
+import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2, GripVertical, Users2, Copy, Search, ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { 
   createStep, 
@@ -18,7 +18,7 @@ import {
 import { updateLicenseType } from '@/app/actions/configuration'
 import ExpertProcessComingSoonModal from '@/components/ExpertProcessComingSoonModal'
 import Modal from '@/components/Modal'
-import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, copySteps, copyDocuments } from '@/app/actions/license-requirements'
+import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, copySteps, copyDocuments, getAllStepsWithRequirementInfo, type StepWithRequirementInfo } from '@/app/actions/license-requirements'
 
 interface LicenseType {
   id: string
@@ -91,6 +91,15 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [selectedStepIds, setSelectedStepIds] = useState<Set<string>>(new Set())
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set())
   const [isLoadingCopyData, setIsLoadingCopyData] = useState(false)
+  
+  // Browse All Steps modal
+  const [showBrowseStepsModal, setShowBrowseStepsModal] = useState(false)
+  const [browseStepsSearch, setBrowseStepsSearch] = useState('')
+  const [allBrowseSteps, setAllBrowseSteps] = useState<StepWithRequirementInfo[]>([])
+  const [selectedBrowseStepIds, setSelectedBrowseStepIds] = useState<Set<string>>(new Set())
+  const [isLoadingBrowseSteps, setIsLoadingBrowseSteps] = useState(false)
+  const [browseStepsError, setBrowseStepsError] = useState<string | null>(null)
+  const [expandedBrowseStepId, setExpandedBrowseStepId] = useState<string | null>(null)
   
   // Edit states
   const [editingStep, setEditingStep] = useState<string | null>(null)
@@ -698,6 +707,75 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     }
   }
 
+  // Browse All Steps handlers
+  const handleOpenBrowseSteps = async () => {
+    setShowBrowseStepsModal(true)
+    setBrowseStepsSearch('')
+    setSelectedBrowseStepIds(new Set())
+    setBrowseStepsError(null)
+    setExpandedBrowseStepId(null)
+    setIsLoadingBrowseSteps(true)
+    try {
+      const result = await getAllStepsWithRequirementInfo(requirementId ?? undefined)
+      if (result.error) {
+        setBrowseStepsError(result.error)
+        setAllBrowseSteps([])
+      } else {
+        setAllBrowseSteps(result.data ?? [])
+      }
+    } catch (err: any) {
+      setBrowseStepsError(err.message ?? 'Failed to load steps')
+      setAllBrowseSteps([])
+    } finally {
+      setIsLoadingBrowseSteps(false)
+    }
+  }
+
+  const handleCloseBrowseSteps = () => {
+    setShowBrowseStepsModal(false)
+    setBrowseStepsSearch('')
+    setAllBrowseSteps([])
+    setSelectedBrowseStepIds(new Set())
+    setBrowseStepsError(null)
+    setExpandedBrowseStepId(null)
+  }
+
+  const filteredBrowseSteps = browseStepsSearch.trim()
+    ? allBrowseSteps.filter(
+        (s) =>
+          s.step_name.toLowerCase().includes(browseStepsSearch.toLowerCase()) ||
+          (s.description?.toLowerCase().includes(browseStepsSearch.toLowerCase()) ?? false) ||
+          s.state.toLowerCase().includes(browseStepsSearch.toLowerCase()) ||
+          s.license_type.toLowerCase().includes(browseStepsSearch.toLowerCase())
+      )
+    : allBrowseSteps
+
+  const toggleBrowseStepSelection = (stepId: string) => {
+    const next = new Set(selectedBrowseStepIds)
+    if (next.has(stepId)) next.delete(stepId)
+    else next.add(stepId)
+    setSelectedBrowseStepIds(next)
+  }
+
+  const handleAddBrowseSteps = async () => {
+    if (!requirementId || selectedBrowseStepIds.size === 0) return
+    setIsSubmitting(true)
+    setBrowseStepsError(null)
+    try {
+      const result = await copySteps(requirementId, Array.from(selectedBrowseStepIds))
+      if (result.error) {
+        setBrowseStepsError(result.error)
+      } else {
+        handleCloseBrowseSteps()
+        await loadData()
+      }
+    } catch (err: any) {
+      setBrowseStepsError(err.message ?? 'Failed to add steps')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   // Copy Documents handlers
   const handleShowCopyDocumentsForm = async () => {
     setShowCopyDocumentsForm(true)
@@ -1010,6 +1088,13 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
               <h3 className="text-lg font-semibold text-gray-900">Licensing Steps</h3>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={handleOpenBrowseSteps}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Search className="w-4 h-4" />
+                  Browse All Steps
+                </button>
+                <button
                   onClick={handleShowCopyStepsForm}
                   className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
@@ -1123,6 +1208,115 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 </div>
               </div>
             )}
+
+            {/* Browse All Available Steps modal */}
+            <Modal
+              isOpen={showBrowseStepsModal}
+              onClose={handleCloseBrowseSteps}
+              title="Browse All Available Steps"
+              size="xl"
+            >
+              <div className="flex flex-col gap-4 max-h-[70vh]">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Steps</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={browseStepsSearch}
+                      onChange={(e) => setBrowseStepsSearch(e.target.value)}
+                      placeholder="Search by title, description, state, or license type..."
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Select Steps to Add ({selectedBrowseStepIds.size} selected)
+                </p>
+                {browseStepsError && (
+                  <p className="text-sm text-red-600">{browseStepsError}</p>
+                )}
+                <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50/50">
+                  {isLoadingBrowseSteps ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                    </div>
+                  ) : filteredBrowseSteps.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <p className="text-sm">No steps found</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-200 p-2">
+                      {filteredBrowseSteps.map((step) => (
+                        <div
+                          key={step.id}
+                          className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+                        >
+                          <label className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedBrowseStepIds.has(step.id)}
+                              onChange={() => toggleBrowseStepSelection(step.id)}
+                              className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-gray-900">{step.step_name}</div>
+                              {step.description && (
+                                <p className="text-sm text-gray-600 mt-1">{step.description}</p>
+                              )}
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                  {step.state}
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                  {step.license_type}
+                                </span>
+                                {step.estimated_days != null && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                    {step.estimated_days} {step.estimated_days === 1 ? 'day' : 'days'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setExpandedBrowseStepId((prev) => (prev === step.id ? null : step.id))
+                              }}
+                              className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                              aria-label={expandedBrowseStepId === step.id ? 'Collapse' : 'Expand'}
+                            >
+                              <ChevronDown
+                                className={`w-5 h-5 transition-transform ${expandedBrowseStepId === step.id ? 'rotate-180' : ''}`}
+                              />
+                            </button>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-3 pt-2 border-t border-gray-200">
+                  <button
+                    onClick={handleAddBrowseSteps}
+                    disabled={isSubmitting || selectedBrowseStepIds.size === 0 || isLoadingBrowseSteps}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add {selectedBrowseStepIds.size} {selectedBrowseStepIds.size === 1 ? 'Step' : 'Steps'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseBrowseSteps}
+                    className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </Modal>
 
             {showStepForm && !editingStep && (
               <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">

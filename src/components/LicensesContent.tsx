@@ -449,7 +449,7 @@ export default function LicensesContent({
 
   return (
     <>
-      <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-4 sm:space-y-6 min-w-0 w-full max-w-full overflow-x-hidden">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -679,9 +679,9 @@ export default function LicensesContent({
         {/* Applications Tab Content */}
         {activeTab === 'applications' && (
           <>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
               <h2 className="text-lg font-bold text-gray-900">Applications</h2>
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <select
                   value={applicationFilter}
                   onChange={(e) => setApplicationFilter(e.target.value as 'active' | 'approved' | 'denied' | 'all')}
@@ -696,9 +696,9 @@ export default function LicensesContent({
               </div>
             </div>
             {getFilteredApplications().length > 0 ? (
-              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+              <div className="min-w-0 w-full bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                <div className="overflow-x-auto -mx-0">
+                  <table className="w-full min-w-[800px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">State</th>
@@ -845,9 +845,9 @@ export default function LicensesContent({
         {/* Licenses Tab Content */}
         {activeTab === 'licenses' && (
           <>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
               <h2 className="text-lg font-bold text-gray-900">Current Licenses</h2>
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <select
                   value={licenseFilter}
                   onChange={(e) => setLicenseFilter(e.target.value as 'active' | 'expired' | 'all')}
@@ -862,9 +862,9 @@ export default function LicensesContent({
             </div>
             {/* All Licenses Table */}
             {getFilteredLicenses().length > 0 ? (
-              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+              <div className="min-w-0 w-full bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                <div className="overflow-x-auto -mx-0">
+                  <table className="w-full min-w-[700px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">State</th>

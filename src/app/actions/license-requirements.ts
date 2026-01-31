@@ -306,7 +306,6 @@ export async function getStepsFromRequirement(requirementId: string) {
     .from('license_requirement_steps')
     .select('*')
     .eq('license_requirement_id', requirementId)
-    .eq('is_expert_step', false)
     .order('step_order', { ascending: true })
   
   if (error) {
@@ -314,6 +313,67 @@ export async function getStepsFromRequirement(requirementId: string) {
   }
   
   return { error: null, data: steps || [] }
+}
+
+// Step with state and license_type for Browse All Steps
+export type StepWithRequirementInfo = {
+  id: string
+  step_name: string
+  step_order: number
+  description: string | null
+  estimated_days?: number | null
+  is_required?: boolean
+  license_requirement_id: string
+  state: string
+  license_type: string
+}
+
+// Get all steps across all license requirements with state and license_type (for Browse All Steps modal).
+// Optionally exclude steps belonging to currentRequirementId so the current license's steps are not listed.
+export async function getAllStepsWithRequirementInfo(currentRequirementId?: string | null): Promise<{ error: string | null; data: StepWithRequirementInfo[] | null }> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('license_requirement_steps')
+    .select(`
+      id,
+      step_name,
+      step_order,
+      description,
+      estimated_days,
+      is_required,
+      license_requirement_id,
+      license_requirements!inner(state, license_type)
+    `)
+    .order('license_requirement_id')
+    .order('step_order', { ascending: true })
+
+  if (currentRequirementId) {
+    query = query.neq('license_requirement_id', currentRequirementId)
+  }
+
+  const { data: rows, error } = await query
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  const steps: StepWithRequirementInfo[] = (rows || []).map((row: Record<string, unknown>) => {
+    const req = row.license_requirements as { state?: string; license_type?: string } | null
+    return {
+      id: row.id as string,
+      step_name: row.step_name as string,
+      step_order: row.step_order as number,
+      description: (row.description as string | null) ?? null,
+      estimated_days: (row.estimated_days as number | null) ?? null,
+      is_required: (row.is_required as boolean) ?? true,
+      license_requirement_id: row.license_requirement_id as string,
+      state: req?.state ?? '',
+      license_type: req?.license_type ?? '',
+    }
+  })
+
+  return { error: null, data: steps }
 }
 
 // Get documents from a license requirement
@@ -341,12 +401,11 @@ export async function copySteps(targetRequirementId: string, sourceStepIds: stri
     return { error: 'No steps selected', data: null }
   }
   
-  // Get source steps
+  // Get source steps (license_requirement_steps has no is_expert_step column)
   const { data: sourceSteps, error: fetchError } = await supabase
     .from('license_requirement_steps')
     .select('*')
     .in('id', sourceStepIds)
-    .eq('is_expert_step', false)
   
   if (fetchError || !sourceSteps || sourceSteps.length === 0) {
     return { error: fetchError?.message || 'Failed to fetch source steps', data: null }
@@ -357,7 +416,6 @@ export async function copySteps(targetRequirementId: string, sourceStepIds: stri
     .from('license_requirement_steps')
     .select('step_order')
     .eq('license_requirement_id', targetRequirementId)
-    .eq('is_expert_step', false)
     .order('step_order', { ascending: false })
     .limit(1)
   
@@ -365,13 +423,12 @@ export async function copySteps(targetRequirementId: string, sourceStepIds: stri
     ? existingSteps[0].step_order + 1 
     : 1
   
-  // Insert copied steps
+  // Insert copied steps (omit is_expert_step - not on license_requirement_steps)
   const stepsToInsert = sourceSteps.map((step) => ({
     license_requirement_id: targetRequirementId,
     step_name: step.step_name,
     step_order: nextOrder++,
     description: step.description,
-    is_expert_step: false,
     estimated_days: step.estimated_days ?? null,
     is_required: step.is_required ?? true,
   }))

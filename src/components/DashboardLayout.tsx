@@ -284,7 +284,7 @@ export default function DashboardLayout({
         </aside>
 
         {/* Main Content */}
-        <main className={`flex-1 p-4 sm:p-6 w-full transition-all duration-300 ${
+        <main className={`flex-1 min-w-0 p-4 sm:p-6 w-full max-w-full transition-all duration-300 overflow-x-hidden ${
           sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
         }`}>
           {children}
