@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { FileText, Download, Image as ImageIcon, Loader2, ExternalLink } from 'lucide-react'
 
 interface CertificationDocumentViewerProps {
@@ -94,12 +95,14 @@ export default function CertificationDocumentViewer({
         {isImage && (
           <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
             {!imageError ? (
-              <div className="relative w-full max-w-2xl">
-                <img
+              <div className="relative w-full max-w-2xl min-h-[200px] aspect-video max-h-96">
+                <Image
                   src={documentUrl}
                   alt={`${certificationName} certification`}
-                  className="w-full h-auto max-h-96 object-contain"
+                  fill
+                  className="object-contain"
                   onError={() => setImageError(true)}
+                  sizes="(max-width: 672px) 100vw, 672px"
                 />
               </div>
             ) : (

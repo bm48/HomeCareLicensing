@@ -55,6 +55,7 @@ export default function LicenseTypesManager({
     description: '',
     processingTime: '',
     applicationFee: '',
+    serviceFee: '',
     renewalPeriod: '',
   })
 
@@ -111,6 +112,7 @@ export default function LicenseTypesManager({
         description: '',
         processingTime: '',
         applicationFee: '',
+        serviceFee: '',
         renewalPeriod: '',
       })
       setShowForm(false)
