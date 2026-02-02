@@ -107,8 +107,12 @@ function LoginPageContent() {
     }
     
     if (errorParam) {
-      setError(errorParam)
-      // Clear URL parameters after displaying error
+      // Hide raw PKCE error when magic link was sent from server (e.g. add caregiver);
+      // user can still sign in with email/password.
+      const isPkceError =
+        errorParam.includes('PKCE') || errorParam.toLowerCase().includes('code verifier')
+      setError(isPkceError ? null : errorParam)
+      // Always clear error from URL so it doesn't show on refresh
       const url = new URL(window.location.href)
       url.searchParams.delete('error')
       window.history.replaceState({}, '', url)

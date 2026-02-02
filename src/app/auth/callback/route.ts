@@ -67,7 +67,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // If it's a magic link and there's an error, show error
+    // PKCE error: magic link was sent from server (e.g. when agency admin added a caregiver),
+    // so the recipient's browser never had the code verifier. Don't show the raw error—
+    // they can still sign in with email/password.
+    const isPkceError =
+      error?.message?.includes('PKCE') ||
+      error?.message?.toLowerCase().includes('code verifier')
+    if (error && isPkceError) {
+      const url = new URL('/login', requestUrl.origin)
+      url.searchParams.set('message', 'Please sign in with your email and password below.')
+      return NextResponse.redirect(url)
+    }
+
+    // Other magic link / callback errors: show error
     if (error) {
       const url = new URL('/login', requestUrl.origin)
       url.searchParams.set('error', error.message || 'Failed to activate account. Please try again.')

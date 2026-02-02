@@ -376,6 +376,62 @@ export async function getAllStepsWithRequirementInfo(currentRequirementId?: stri
   return { error: null, data: steps }
 }
 
+// Document with state and license_type for Browse All Documents
+export type DocumentWithRequirementInfo = {
+  id: string
+  document_name: string
+  document_type: string | null
+  description: string | null
+  is_required: boolean
+  license_requirement_id: string
+  state: string
+  license_type: string
+}
+
+export async function getAllDocumentsWithRequirementInfo(currentRequirementId?: string | null): Promise<{ error: string | null; data: DocumentWithRequirementInfo[] | null }> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('license_requirement_documents')
+    .select(`
+      id,
+      document_name,
+      document_type,
+      description,
+      is_required,
+      license_requirement_id,
+      license_requirements!inner(state, license_type)
+    `)
+    .order('license_requirement_id')
+    .order('document_name', { ascending: true })
+
+  if (currentRequirementId) {
+    query = query.neq('license_requirement_id', currentRequirementId)
+  }
+
+  const { data: rows, error } = await query
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  const documents: DocumentWithRequirementInfo[] = (rows || []).map((row: Record<string, unknown>) => {
+    const req = row.license_requirements as { state?: string; license_type?: string } | null
+    return {
+      id: row.id as string,
+      document_name: row.document_name as string,
+      document_type: (row.document_type as string | null) ?? null,
+      description: (row.description as string | null) ?? null,
+      is_required: (row.is_required as boolean) ?? true,
+      license_requirement_id: row.license_requirement_id as string,
+      state: req?.state ?? '',
+      license_type: req?.license_type ?? '',
+    }
+  })
+
+  return { error: null, data: documents }
+}
+
 // Get documents from a license requirement
 export async function getDocumentsFromRequirement(requirementId: string) {
   const supabase = await createClient()

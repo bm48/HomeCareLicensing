@@ -18,7 +18,7 @@ import {
 import { updateLicenseType } from '@/app/actions/configuration'
 import ExpertProcessComingSoonModal from '@/components/ExpertProcessComingSoonModal'
 import Modal from '@/components/Modal'
-import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, copySteps, copyDocuments, getAllStepsWithRequirementInfo, type StepWithRequirementInfo } from '@/app/actions/license-requirements'
+import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, copySteps, copyDocuments, getAllStepsWithRequirementInfo, getAllDocumentsWithRequirementInfo, type StepWithRequirementInfo, type DocumentWithRequirementInfo } from '@/app/actions/license-requirements'
 
 interface LicenseType {
   id: string
@@ -78,10 +78,22 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // Copy form states
+  // Copy form states (used inside Add Step/Document modals)
   const [showCopyStepsForm, setShowCopyStepsForm] = useState(false)
   const [showCopyDocumentsForm, setShowCopyDocumentsForm] = useState(false)
   const [showExpertComingSoonModal, setShowExpertComingSoonModal] = useState(false)
+  
+  // Add Step modal (for Steps tab) – single button opens modal with 3 tabs
+  const [showAddStepModal, setShowAddStepModal] = useState(false)
+  const [addStepModalTab, setAddStepModalTab] = useState<'new' | 'copy' | 'browse'>('new')
+  
+  // Add Document modal (for Documents tab)
+  const [showAddDocumentModal, setShowAddDocumentModal] = useState(false)
+  const [addDocumentModalTab, setAddDocumentModalTab] = useState<'new' | 'copy' | 'browse'>('new')
+  
+  // Add Expert Step modal (for Expert Process tab)
+  const [showAddExpertStepModal, setShowAddExpertStepModal] = useState(false)
+  const [addExpertStepModalTab, setAddExpertStepModalTab] = useState<'new' | 'copy' | 'browse'>('new')
   
   // Copy form data
   const [availableLicenseRequirements, setAvailableLicenseRequirements] = useState<Array<{id: string, state: string, license_type: string}>>([])
@@ -92,14 +104,20 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set())
   const [isLoadingCopyData, setIsLoadingCopyData] = useState(false)
   
-  // Browse All Steps modal
-  const [showBrowseStepsModal, setShowBrowseStepsModal] = useState(false)
+  // Browse All Steps (inside Add Step modal)
   const [browseStepsSearch, setBrowseStepsSearch] = useState('')
   const [allBrowseSteps, setAllBrowseSteps] = useState<StepWithRequirementInfo[]>([])
   const [selectedBrowseStepIds, setSelectedBrowseStepIds] = useState<Set<string>>(new Set())
   const [isLoadingBrowseSteps, setIsLoadingBrowseSteps] = useState(false)
   const [browseStepsError, setBrowseStepsError] = useState<string | null>(null)
   const [expandedBrowseStepId, setExpandedBrowseStepId] = useState<string | null>(null)
+  
+  // Browse All Documents (inside Add Document modal)
+  const [browseDocumentsSearch, setBrowseDocumentsSearch] = useState('')
+  const [allBrowseDocuments, setAllBrowseDocuments] = useState<DocumentWithRequirementInfo[]>([])
+  const [selectedBrowseDocumentIds, setSelectedBrowseDocumentIds] = useState<Set<string>>(new Set())
+  const [isLoadingBrowseDocuments, setIsLoadingBrowseDocuments] = useState(false)
+  const [browseDocumentsError, setBrowseDocumentsError] = useState<string | null>(null)
   
   // Edit states
   const [editingStep, setEditingStep] = useState<string | null>(null)
@@ -404,6 +422,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     } else {
       setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
       setShowStepForm(false)
+      closeAddStepModal()
       await loadData()
       setIsSubmitting(false)
     }
@@ -434,6 +453,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     } else {
       setDocumentFormData({ documentName: '', description: '', isRequired: true })
       setShowDocumentForm(false)
+      closeAddDocumentModal()
       await loadData()
       setIsSubmitting(false)
     }
@@ -464,6 +484,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     } else {
       setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
       setShowExpertForm(false)
+      closeAddExpertStepModal()
       await loadData()
       setIsSubmitting(false)
     }
@@ -622,21 +643,17 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   }
 
   // Copy Steps handlers
-  const handleShowCopyStepsForm = async () => {
-    setShowCopyStepsForm(true)
+  const loadCopyStepsData = async () => {
     setSelectedSourceRequirementId('')
     setAvailableSteps([])
     setSelectedStepIds(new Set())
     setError(null)
-    
-    // Load available license requirements
     setIsLoadingCopyData(true)
     try {
       const result = await getAllLicenseRequirements()
       if (result.error) {
         setError(result.error)
       } else {
-        // Filter out current license requirement
         const filtered = result.data?.filter(req => req.id !== requirementId) || []
         setAvailableLicenseRequirements(filtered)
       }
@@ -694,10 +711,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       if (result.error) {
         setError(result.error)
       } else {
-        setShowCopyStepsForm(false)
-        setSelectedSourceRequirementId('')
-        setAvailableSteps([])
-        setSelectedStepIds(new Set())
+        closeAddStepModal()
         await loadData()
       }
     } catch (err: any) {
@@ -708,8 +722,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   }
 
   // Browse All Steps handlers
-  const handleOpenBrowseSteps = async () => {
-    setShowBrowseStepsModal(true)
+  const loadBrowseStepsData = async () => {
     setBrowseStepsSearch('')
     setSelectedBrowseStepIds(new Set())
     setBrowseStepsError(null)
@@ -731,8 +744,21 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     }
   }
 
-  const handleCloseBrowseSteps = () => {
-    setShowBrowseStepsModal(false)
+  const openAddStepModal = () => {
+    setShowAddStepModal(true)
+    setAddStepModalTab('new')
+    setError(null)
+  }
+
+  const closeAddStepModal = () => {
+    setShowAddStepModal(false)
+    setAddStepModalTab('new')
+    setShowStepForm(false)
+    setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
+    setShowCopyStepsForm(false)
+    setSelectedSourceRequirementId('')
+    setAvailableSteps([])
+    setSelectedStepIds(new Set())
     setBrowseStepsSearch('')
     setAllBrowseSteps([])
     setSelectedBrowseStepIds(new Set())
@@ -766,7 +792,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       if (result.error) {
         setBrowseStepsError(result.error)
       } else {
-        handleCloseBrowseSteps()
+        closeAddStepModal()
         await loadData()
       }
     } catch (err: any) {
@@ -777,21 +803,17 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   }
 
   // Copy Documents handlers
-  const handleShowCopyDocumentsForm = async () => {
-    setShowCopyDocumentsForm(true)
+  const loadCopyDocumentsData = async () => {
     setSelectedSourceRequirementId('')
     setAvailableDocuments([])
     setSelectedDocumentIds(new Set())
     setError(null)
-    
-    // Load available license requirements
     setIsLoadingCopyData(true)
     try {
       const result = await getAllLicenseRequirements()
       if (result.error) {
         setError(result.error)
       } else {
-        // Filter out current license requirement
         const filtered = result.data?.filter(req => req.id !== requirementId) || []
         setAvailableLicenseRequirements(filtered)
       }
@@ -801,6 +823,97 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setIsLoadingCopyData(false)
     }
   }
+
+  const loadBrowseDocumentsData = async () => {
+    setBrowseDocumentsSearch('')
+    setSelectedBrowseDocumentIds(new Set())
+    setBrowseDocumentsError(null)
+    setIsLoadingBrowseDocuments(true)
+    try {
+      const result = await getAllDocumentsWithRequirementInfo(requirementId ?? undefined)
+      if (result.error) {
+        setBrowseDocumentsError(result.error)
+        setAllBrowseDocuments([])
+      } else {
+        setAllBrowseDocuments(result.data ?? [])
+      }
+    } catch (err: any) {
+      setBrowseDocumentsError(err.message ?? 'Failed to load documents')
+      setAllBrowseDocuments([])
+    } finally {
+      setIsLoadingBrowseDocuments(false)
+    }
+  }
+
+  const openAddDocumentModal = () => {
+    setShowAddDocumentModal(true)
+    setAddDocumentModalTab('new')
+    setError(null)
+  }
+
+  const closeAddDocumentModal = () => {
+    setShowAddDocumentModal(false)
+    setAddDocumentModalTab('new')
+    setShowDocumentForm(false)
+    setDocumentFormData({ documentName: '', description: '', isRequired: true })
+    setShowCopyDocumentsForm(false)
+    setSelectedSourceRequirementId('')
+    setAvailableDocuments([])
+    setSelectedDocumentIds(new Set())
+    setBrowseDocumentsSearch('')
+    setAllBrowseDocuments([])
+    setSelectedBrowseDocumentIds(new Set())
+    setBrowseDocumentsError(null)
+  }
+
+  const toggleBrowseDocumentSelection = (documentId: string) => {
+    const next = new Set(selectedBrowseDocumentIds)
+    if (next.has(documentId)) next.delete(documentId)
+    else next.add(documentId)
+    setSelectedBrowseDocumentIds(next)
+  }
+
+  const openAddExpertStepModal = () => {
+    setShowAddExpertStepModal(true)
+    setAddExpertStepModalTab('new')
+    setError(null)
+  }
+
+  const closeAddExpertStepModal = () => {
+    setShowAddExpertStepModal(false)
+    setAddExpertStepModalTab('new')
+    setShowExpertForm(false)
+    setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+  }
+
+  const handleAddBrowseDocuments = async () => {
+    if (!requirementId || selectedBrowseDocumentIds.size === 0) return
+    setIsSubmitting(true)
+    setBrowseDocumentsError(null)
+    try {
+      const result = await copyDocuments(requirementId, Array.from(selectedBrowseDocumentIds))
+      if (result.error) {
+        setBrowseDocumentsError(result.error)
+      } else {
+        closeAddDocumentModal()
+        await loadData()
+      }
+    } catch (err: any) {
+      setBrowseDocumentsError(err.message ?? 'Failed to add documents')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const filteredBrowseDocuments = browseDocumentsSearch.trim()
+    ? allBrowseDocuments.filter(
+        (d) =>
+          d.document_name.toLowerCase().includes(browseDocumentsSearch.toLowerCase()) ||
+          (d.description?.toLowerCase().includes(browseDocumentsSearch.toLowerCase()) ?? false) ||
+          d.state.toLowerCase().includes(browseDocumentsSearch.toLowerCase()) ||
+          d.license_type.toLowerCase().includes(browseDocumentsSearch.toLowerCase())
+      )
+    : allBrowseDocuments
 
   const handleSourceRequirementChangeForDocuments = async (requirementId: string) => {
     setSelectedSourceRequirementId(requirementId)
@@ -849,10 +962,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       if (result.error) {
         setError(result.error)
       } else {
-        setShowCopyDocumentsForm(false)
-        setSelectedSourceRequirementId('')
-        setAvailableDocuments([])
-        setSelectedDocumentIds(new Set())
+        closeAddDocumentModal()
         await loadData()
       }
     } catch (err: any) {
@@ -1086,42 +1196,140 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Licensing Steps</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleOpenBrowseSteps}
-                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Search className="w-4 h-4" />
-                  Browse All Steps
-                </button>
-                <button
-                  onClick={handleShowCopyStepsForm}
-                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy from Another License
-                </button>
-                <button
-                  onClick={() => {
-                    setShowStepForm(!showStepForm)
-                    setError(null)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Step
-                </button>
-              </div>
+              <button
+                onClick={openAddStepModal}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Step
+              </button>
             </div>
 
-            {showCopyStepsForm && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Copy Steps from Another License</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select License Type to Copy From
-                    </label>
+            {/* Add Step modal with 3 tabs: New, Copy from Another License, Browse All Steps */}
+            <Modal
+              isOpen={showAddStepModal}
+              onClose={closeAddStepModal}
+              title="Add Step"
+              size="xl"
+            >
+              <div className="flex flex-col gap-4">
+                <div className="flex border-b border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setAddStepModalTab('new')}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addStepModalTab === 'new'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Plus className="w-4 h-4" />
+                    New
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddStepModalTab('copy')
+                      if (availableLicenseRequirements.length === 0) loadCopyStepsData()
+                    }}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addStepModalTab === 'copy'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy from Another License
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddStepModalTab('browse')
+                      if (allBrowseSteps.length === 0 && !isLoadingBrowseSteps) loadBrowseStepsData()
+                    }}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addStepModalTab === 'browse'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Search className="w-4 h-4" />
+                    Browse All Steps
+                  </button>
+                </div>
+
+                {addStepModalTab === 'new' && (
+                  <div className="py-2">
+                    <h4 className="text-base font-semibold text-gray-900 mb-4">Create New Step</h4>
+                    <form onSubmit={handleAddStep} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
+                        <input
+                          type="text"
+                          value={stepFormData.stepName}
+                          onChange={(e) => setStepFormData({ ...stepFormData, stepName: e.target.value })}
+                          placeholder="e.g., Complete Pre-Application Training"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                          value={stepFormData.description}
+                          onChange={(e) => setStepFormData({ ...stepFormData, description: e.target.value })}
+                          placeholder="Detailed description of this step"
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Days</label>
+                        <input
+                          type="number"
+                          value={stepFormData.estimatedDays}
+                          onChange={(e) => setStepFormData({ ...stepFormData, estimatedDays: e.target.value })}
+                          placeholder="7"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="stepIsRequiredModal"
+                          checked={stepFormData.isRequired}
+                          onChange={(e) => setStepFormData({ ...stepFormData, isRequired: e.target.checked })}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="stepIsRequiredModal" className="ml-2 text-sm font-medium text-gray-700">
+                          Required Step
+                        </label>
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                        >
+                          <Save className="w-4 h-4" />
+                          Save Step
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeAddStepModal}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {addStepModalTab === 'copy' && (
+                  <div className="py-2 space-y-4">
+                    <h4 className="text-base font-semibold text-gray-900">Select License Type to Copy From</h4>
                     <select
                       value={selectedSourceRequirementId}
                       onChange={(e) => handleSourceRequirementChangeForSteps(e.target.value)}
@@ -1135,261 +1343,156 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  {selectedSourceRequirementId && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Select Steps to Copy ({selectedStepIds.size} selected)
-                      </label>
-                      <div className="border border-gray-300 rounded-lg max-h-[300px] overflow-y-auto bg-white">
-                        {isLoadingCopyData ? (
-                          <div className="flex items-center justify-center py-8">
-                            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-                          </div>
-                        ) : availableSteps.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500">
-                            <p>No steps available for this license type</p>
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-gray-200">
-                            {availableSteps.map((step) => (
-                              <label
-                                key={step.id}
-                                className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedStepIds.has(step.id)}
-                                  onChange={() => toggleStepSelection(step.id)}
-                                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
+                    {selectedSourceRequirementId && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Select Steps to Copy ({selectedStepIds.size} selected)
+                        </label>
+                        <div className="border border-gray-300 rounded-lg max-h-[300px] overflow-y-auto bg-white">
+                          {isLoadingCopyData ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                            </div>
+                          ) : availableSteps.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                              <p>No steps available for this license type</p>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-gray-200">
+                              {availableSteps.map((step) => (
+                                <label
+                                  key={step.id}
+                                  className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedStepIds.has(step.id)}
+                                    onChange={() => toggleStepSelection(step.id)}
+                                    className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <div className="flex-1 min-w-0">
                                     <span className="text-sm font-medium text-gray-900">
                                       {step.step_order}. {step.step_name}
                                     </span>
+                                    {step.description && (
+                                      <p className="text-sm text-gray-600 mt-0.5">{step.description}</p>
+                                    )}
                                   </div>
-                                  {step.description && (
-                                    <p className="text-sm text-gray-600">{step.description}</p>
-                                  )}
-                                </div>
-                              </label>
-                            ))}
-                          </div>
-                        )}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-3 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={handleCopySteps}
+                        disabled={isSubmitting || selectedStepIds.size === 0 || isLoadingCopyData}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy {selectedStepIds.size} {selectedStepIds.size === 1 ? 'Step' : 'Steps'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeAddStepModal}
+                        className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {addStepModalTab === 'browse' && (
+                  <div className="py-2 flex flex-col gap-4 max-h-[60vh]">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Search Steps</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="text"
+                          value={browseStepsSearch}
+                          onChange={(e) => setBrowseStepsSearch(e.target.value)}
+                          placeholder="Search by title, description, state, or license type..."
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
                       </div>
                     </div>
-                  )}
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      onClick={handleCopySteps}
-                      disabled={isSubmitting || selectedStepIds.size === 0 || isLoadingCopyData}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Copy className="w-4 h-4" />
-                      Copy {selectedStepIds.size} {selectedStepIds.size === 1 ? 'Step' : 'Steps'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCopyStepsForm(false)
-                        setSelectedSourceRequirementId('')
-                        setAvailableSteps([])
-                        setSelectedStepIds(new Set())
-                        setError(null)
-                      }}
-                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Browse All Available Steps modal */}
-            <Modal
-              isOpen={showBrowseStepsModal}
-              onClose={handleCloseBrowseSteps}
-              title="Browse All Available Steps"
-              size="xl"
-            >
-              <div className="flex flex-col gap-4 max-h-[70vh]">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Steps</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="text"
-                      value={browseStepsSearch}
-                      onChange={(e) => setBrowseStepsSearch(e.target.value)}
-                      placeholder="Search by title, description, state, or license type..."
-                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Select Steps to Add ({selectedBrowseStepIds.size} selected)
-                </p>
-                {browseStepsError && (
-                  <p className="text-sm text-red-600">{browseStepsError}</p>
-                )}
-                <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50/50">
-                  {isLoadingBrowseSteps ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-                    </div>
-                  ) : filteredBrowseSteps.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                      <p className="text-sm">No steps found</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-200 p-2">
-                      {filteredBrowseSteps.map((step) => (
-                        <div
-                          key={step.id}
-                          className="bg-white rounded-lg border border-gray-200 overflow-hidden"
-                        >
-                          <label className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedBrowseStepIds.has(step.id)}
-                              onChange={() => toggleBrowseStepSelection(step.id)}
-                              className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-gray-900">{step.step_name}</div>
-                              {step.description && (
-                                <p className="text-sm text-gray-600 mt-1">{step.description}</p>
-                              )}
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
-                                  {step.state}
-                                </span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
-                                  {step.license_type}
-                                </span>
-                                {step.estimated_days != null && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
-                                    {step.estimated_days} {step.estimated_days === 1 ? 'day' : 'days'}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                setExpandedBrowseStepId((prev) => (prev === step.id ? null : step.id))
-                              }}
-                              className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                              aria-label={expandedBrowseStepId === step.id ? 'Collapse' : 'Expand'}
-                            >
-                              <ChevronDown
-                                className={`w-5 h-5 transition-transform ${expandedBrowseStepId === step.id ? 'rotate-180' : ''}`}
-                              />
-                            </button>
-                          </label>
+                    <p className="text-sm text-gray-600">
+                      Select Steps to Add ({selectedBrowseStepIds.size} selected)
+                    </p>
+                    {browseStepsError && (
+                      <p className="text-sm text-red-600">{browseStepsError}</p>
+                    )}
+                    <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50/50">
+                      {isLoadingBrowseSteps ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                         </div>
-                      ))}
+                      ) : filteredBrowseSteps.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500">
+                          <p className="text-sm">No steps found</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-200 p-2">
+                          {filteredBrowseSteps.map((step) => (
+                            <label
+                              key={step.id}
+                              className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer rounded-lg"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedBrowseStepIds.has(step.id)}
+                                onChange={() => toggleBrowseStepSelection(step.id)}
+                                className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-gray-900">{step.step_name}</div>
+                                {step.description && (
+                                  <p className="text-sm text-gray-600 mt-1">{step.description}</p>
+                                )}
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                    {step.state}
+                                  </span>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                    {step.license_type}
+                                  </span>
+                                  {step.estimated_days != null && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                      {step.estimated_days} {step.estimated_days === 1 ? 'day' : 'days'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="flex gap-3 pt-2 border-t border-gray-200">
-                  <button
-                    onClick={handleAddBrowseSteps}
-                    disabled={isSubmitting || selectedBrowseStepIds.size === 0 || isLoadingBrowseSteps}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add {selectedBrowseStepIds.size} {selectedBrowseStepIds.size === 1 ? 'Step' : 'Steps'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCloseBrowseSteps}
-                    className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                    <div className="flex gap-3 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={handleAddBrowseSteps}
+                        disabled={isSubmitting || selectedBrowseStepIds.size === 0 || isLoadingBrowseSteps}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy {selectedBrowseStepIds.size} {selectedBrowseStepIds.size === 1 ? 'Step' : 'Steps'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeAddStepModal}
+                        className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </Modal>
-
-            {showStepForm && !editingStep && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Add New Step</h4>
-                <form onSubmit={handleAddStep} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
-                    <input
-                      type="text"
-                      value={stepFormData.stepName}
-                      onChange={(e) => setStepFormData({ ...stepFormData, stepName: e.target.value })}
-                      placeholder="e.g., Complete Pre-Application Training"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea
-                      value={stepFormData.description}
-                      onChange={(e) => setStepFormData({ ...stepFormData, description: e.target.value })}
-                      placeholder="Detailed description of this step"
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Days</label>
-                    <input
-                      type="number"
-                      value={stepFormData.estimatedDays}
-                      onChange={(e) => setStepFormData({ ...stepFormData, estimatedDays: e.target.value })}
-                      placeholder="7"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="stepIsRequired"
-                      checked={stepFormData.isRequired}
-                      onChange={(e) => setStepFormData({ ...stepFormData, isRequired: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label htmlFor="stepIsRequired" className="ml-2 text-sm font-medium text-gray-700">
-                      Required Step
-                    </label>
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
-                    >
-                      <Save className="w-4 h-4" />
-                      Save Step
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowStepForm(false)
-                        setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
-                        setError(null)
-                      }}
-                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
 
             {editingStep && (
               <Modal
@@ -1544,35 +1647,130 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Required Documents</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleShowCopyDocumentsForm}
-                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy from Another License
-                </button>
-                <button
-                  onClick={() => {
-                    setShowDocumentForm(!showDocumentForm)
-                    setError(null)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Document
-                </button>
-              </div>
+              <button
+                onClick={openAddDocumentModal}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Document
+              </button>
             </div>
 
-            {showCopyDocumentsForm && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Copy Documents from Another License</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select License Type to Copy From
-                    </label>
+            {/* Add Document modal with 3 tabs */}
+            <Modal
+              isOpen={showAddDocumentModal}
+              onClose={closeAddDocumentModal}
+              title="Add Document"
+              size="xl"
+            >
+              <div className="flex flex-col gap-4">
+                <div className="flex border-b border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setAddDocumentModalTab('new')}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addDocumentModalTab === 'new'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Plus className="w-4 h-4" />
+                    New
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddDocumentModalTab('copy')
+                      if (availableLicenseRequirements.length === 0) loadCopyDocumentsData()
+                    }}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addDocumentModalTab === 'copy'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy from Another License
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddDocumentModalTab('browse')
+                      if (allBrowseDocuments.length === 0 && !isLoadingBrowseDocuments) loadBrowseDocumentsData()
+                    }}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addDocumentModalTab === 'browse'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Search className="w-4 h-4" />
+                    Browse All Documents
+                  </button>
+                </div>
+
+                {addDocumentModalTab === 'new' && (
+                  <div className="py-2">
+                    <h4 className="text-base font-semibold text-gray-900 mb-4">Create New Document</h4>
+                    <form onSubmit={handleAddDocument} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Document Name</label>
+                        <input
+                          type="text"
+                          value={documentFormData.documentName}
+                          onChange={(e) => setDocumentFormData({ ...documentFormData, documentName: e.target.value })}
+                          placeholder="e.g., Application for License"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                          value={documentFormData.description}
+                          onChange={(e) => setDocumentFormData({ ...documentFormData, description: e.target.value })}
+                          placeholder="Brief description of this document"
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="docIsRequiredModal"
+                          checked={documentFormData.isRequired}
+                          onChange={(e) => setDocumentFormData({ ...documentFormData, isRequired: e.target.checked })}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="docIsRequiredModal" className="ml-2 text-sm font-medium text-gray-700">
+                          Required Document
+                        </label>
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Save Document
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeAddDocumentModal}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {addDocumentModalTab === 'copy' && (
+                  <div className="py-2 space-y-4">
+                    <h4 className="text-base font-semibold text-gray-900">Select License Type to Copy From</h4>
                     <select
                       value={selectedSourceRequirementId}
                       onChange={(e) => handleSourceRequirementChangeForDocuments(e.target.value)}
@@ -1586,147 +1784,159 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  {selectedSourceRequirementId && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Select Documents to Copy ({selectedDocumentIds.size} selected)
-                      </label>
-                      <div className="border border-gray-300 rounded-lg max-h-[300px] overflow-y-auto bg-white">
-                        {isLoadingCopyData ? (
-                          <div className="flex items-center justify-center py-8">
-                            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-                          </div>
-                        ) : availableDocuments.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500">
-                            <p>No documents available for this license type</p>
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-gray-200">
-                            {availableDocuments.map((doc) => (
-                              <label
-                                key={doc.id}
-                                className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedDocumentIds.has(doc.id)}
-                                  onChange={() => toggleDocumentSelection(doc.id)}
-                                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-sm font-medium text-gray-900">
-                                      {doc.document_name}
-                                    </span>
+                    {selectedSourceRequirementId && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Select Documents to Copy ({selectedDocumentIds.size} selected)
+                        </label>
+                        <div className="border border-gray-300 rounded-lg max-h-[300px] overflow-y-auto bg-white">
+                          {isLoadingCopyData ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                            </div>
+                          ) : availableDocuments.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                              <p>No documents available for this license type</p>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-gray-200">
+                              {availableDocuments.map((doc) => (
+                                <label
+                                  key={doc.id}
+                                  className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedDocumentIds.has(doc.id)}
+                                    onChange={() => toggleDocumentSelection(doc.id)}
+                                    className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium text-gray-900">{doc.document_name}</span>
                                     {doc.is_required && (
-                                      <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">
+                                      <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">
                                         Required
                                       </span>
                                     )}
+                                    {doc.description && (
+                                      <p className="text-sm text-gray-600 mt-0.5">{doc.description}</p>
+                                    )}
                                   </div>
-                                  {doc.description && (
-                                    <p className="text-sm text-gray-600">{doc.description}</p>
-                                  )}
-                                </div>
-                              </label>
-                            ))}
-                          </div>
-                        )}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-3 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={handleCopyDocuments}
+                        disabled={isSubmitting || selectedDocumentIds.size === 0 || isLoadingCopyData}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy {selectedDocumentIds.size} {selectedDocumentIds.size === 1 ? 'Document' : 'Documents'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeAddDocumentModal}
+                        className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {addDocumentModalTab === 'browse' && (
+                  <div className="py-2 flex flex-col gap-4 max-h-[60vh]">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Search Documents</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="text"
+                          value={browseDocumentsSearch}
+                          onChange={(e) => setBrowseDocumentsSearch(e.target.value)}
+                          placeholder="Search by name, description, state, or license type..."
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
                       </div>
                     </div>
-                  )}
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      onClick={handleCopyDocuments}
-                      disabled={isSubmitting || selectedDocumentIds.size === 0 || isLoadingCopyData}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Copy className="w-4 h-4" />
-                      Copy {selectedDocumentIds.size} {selectedDocumentIds.size === 1 ? 'Document' : 'Documents'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCopyDocumentsForm(false)
-                        setSelectedSourceRequirementId('')
-                        setAvailableDocuments([])
-                        setSelectedDocumentIds(new Set())
-                        setError(null)
-                      }}
-                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                    <p className="text-sm text-gray-600">
+                      Select Documents to Add ({selectedBrowseDocumentIds.size} selected)
+                    </p>
+                    {browseDocumentsError && (
+                      <p className="text-sm text-red-600">{browseDocumentsError}</p>
+                    )}
+                    <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50/50">
+                      {isLoadingBrowseDocuments ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                        </div>
+                      ) : filteredBrowseDocuments.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500">
+                          <p className="text-sm">No documents found</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-200 p-2">
+                          {filteredBrowseDocuments.map((doc) => (
+                            <label
+                              key={doc.id}
+                              className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer rounded-lg"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedBrowseDocumentIds.has(doc.id)}
+                                onChange={() => toggleBrowseDocumentSelection(doc.id)}
+                                className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-gray-900">{doc.document_name}</div>
+                                {doc.description && (
+                                  <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
+                                )}
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                    {doc.state}
+                                  </span>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                    {doc.license_type}
+                                  </span>
+                                  {doc.is_required && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-red-100 text-xs text-red-700">
+                                      Required
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-3 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={handleAddBrowseDocuments}
+                        disabled={isSubmitting || selectedBrowseDocumentIds.size === 0 || isLoadingBrowseDocuments}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy {selectedBrowseDocumentIds.size} {selectedBrowseDocumentIds.size === 1 ? 'Document' : 'Documents'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeAddDocumentModal}
+                        className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
-            )}
-
-            {showDocumentForm && !editingDocument && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Add New Document</h4>
-                <form onSubmit={handleAddDocument} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Document Name</label>
-                    <input
-                      type="text"
-                      value={documentFormData.documentName}
-                      onChange={(e) => setDocumentFormData({ ...documentFormData, documentName: e.target.value })}
-                      placeholder="e.g., Application for License"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea
-                      value={documentFormData.description}
-                      onChange={(e) => setDocumentFormData({ ...documentFormData, description: e.target.value })}
-                      placeholder="Brief description of this document"
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="isRequired"
-                      checked={documentFormData.isRequired}
-                      onChange={(e) => setDocumentFormData({ ...documentFormData, isRequired: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label htmlFor="isRequired" className="ml-2 text-sm font-medium text-gray-700">
-                      Required Document
-                    </label>
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
-                    >
-                      <FileText className="w-4 h-4" />
-                      Save Document
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowDocumentForm(false)
-                        setDocumentFormData({ documentName: '', description: '', isRequired: true })
-                        setError(null)
-                      }}
-                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
+            </Modal>
 
             {editingDocument && (
               <Modal
@@ -1862,92 +2072,148 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Expert Process Steps</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowExpertComingSoonModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy from Another License
-                </button>
-                <button
-                  onClick={() => {
-                    setShowExpertForm(!showExpertForm)
-                    setError(null)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Step
-                </button>
-              </div>
+              <button
+                onClick={openAddExpertStepModal}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Step
+              </button>
             </div>
 
-            {showExpertForm && !editingExpertStep && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Add New Expert Step</h4>
-                <form onSubmit={handleAddExpertStep} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
-                    <select
-                      value={expertFormData.phase}
-                      onChange={(e) => setExpertFormData({ ...expertFormData, phase: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    >
-                      <option value="Pre-Application">Pre-Application</option>
-                      <option value="Post-Application">Post-Application</option>
-                      <option value="Application">Application</option>
-                      <option value="Review">Review</option>
-                      <option value="Post-Approval">Post-Approval</option>
-                    </select>
+            {/* Add Expert Step modal with 3 tabs */}
+            <Modal
+              isOpen={showAddExpertStepModal}
+              onClose={closeAddExpertStepModal}
+              title="Add Step"
+              size="xl"
+            >
+              <div className="flex flex-col gap-4">
+                <div className="flex border-b border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setAddExpertStepModalTab('new')}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addExpertStepModalTab === 'new'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Plus className="w-4 h-4" />
+                    New
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddExpertStepModalTab('copy')}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addExpertStepModalTab === 'copy'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy from Another License
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddExpertStepModalTab('browse')}
+                    className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                      addExpertStepModalTab === 'browse'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Search className="w-4 h-4" />
+                    Browse All Steps
+                  </button>
+                </div>
+
+                {addExpertStepModalTab === 'new' && (
+                  <div className="py-2">
+                    <h4 className="text-base font-semibold text-gray-900 mb-4">Create New Expert Step</h4>
+                    <form onSubmit={handleAddExpertStep} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
+                        <select
+                          value={expertFormData.phase}
+                          onChange={(e) => setExpertFormData({ ...expertFormData, phase: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        >
+                          <option value="Pre-Application">Pre-Application</option>
+                          <option value="Post-Application">Post-Application</option>
+                          <option value="Application">Application</option>
+                          <option value="Review">Review</option>
+                          <option value="Post-Approval">Post-Approval</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
+                        <input
+                          type="text"
+                          value={expertFormData.stepTitle}
+                          onChange={(e) => setExpertFormData({ ...expertFormData, stepTitle: e.target.value })}
+                          placeholder="e.g., Initial Client Consultation"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                          value={expertFormData.description}
+                          onChange={(e) => setExpertFormData({ ...expertFormData, description: e.target.value })}
+                          placeholder="Detailed description of this step"
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                        >
+                          <Save className="w-4 h-4" />
+                          Save Step
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeAddExpertStepModal}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
-                    <input
-                      type="text"
-                      value={expertFormData.stepTitle}
-                      onChange={(e) => setExpertFormData({ ...expertFormData, stepTitle: e.target.value })}
-                      placeholder="e.g., Initial Client Consultation"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea
-                      value={expertFormData.description}
-                      onChange={(e) => setExpertFormData({ ...expertFormData, description: e.target.value })}
-                      placeholder="Detailed description of this step"
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                    >
-                      <Save className="w-4 h-4" />
-                      Save Step
-                    </button>
+                )}
+
+                {addExpertStepModalTab === 'copy' && (
+                  <div className="py-6 text-center text-gray-500">
+                    <Copy className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p className="font-medium">Copy from Another License</p>
+                    <p className="text-sm mt-1">This feature is coming soon for Expert Process steps.</p>
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowExpertForm(false)
-                        setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
-                        setError(null)
-                      }}
-                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      onClick={() => setShowExpertComingSoonModal(true)}
+                      className="mt-4 text-blue-600 hover:underline text-sm"
                     >
-                      Cancel
+                      Learn more
                     </button>
                   </div>
-                </form>
+                )}
+
+                {addExpertStepModalTab === 'browse' && (
+                  <div className="py-6 text-center text-gray-500">
+                    <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p className="font-medium">Browse All Expert Steps</p>
+                    <p className="text-sm mt-1">This feature is coming soon.</p>
+                  </div>
+                )}
               </div>
-            )}
+            </Modal>
 
             {editingExpertStep && (
               <Modal

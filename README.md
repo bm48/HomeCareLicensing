@@ -60,8 +60,10 @@ A complete authentication and user management system built with Next.js 15, Type
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
    NEXT_PUBLIC_SITE_URL=http://localhost:3000
    ```
+   - **Note:** `SUPABASE_SERVICE_ROLE_KEY` is required for agency admins to create caregiver/staff accounts (Admin API). Get it from Project Settings > API in Supabase. Never expose it in the browser.
 
 5. **Set up the database schema**
    - In your Supabase dashboard, go to SQL Editor
