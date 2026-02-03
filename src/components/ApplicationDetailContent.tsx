@@ -353,7 +353,7 @@ export default function ApplicationDetailContent({
     } finally {
       setIsLoadingRequirementDocuments(false)
     }
-  }, [application?.id, application?.license_type_id, application?.state, supabase])
+  }, [application?.license_type_id, application?.state, supabase])
 
   useEffect(() => {
     fetchRequirementDocuments()

@@ -693,7 +693,7 @@ export async function getAllExpertStepsWithRequirementInfo(currentRequirementId?
 
   if (!rows?.length) return { error: null, data: [] }
 
-  const appIds = [...new Set((rows as { application_id: string }[]).map((r) => r.application_id))]
+  const appIds = Array.from(new Set((rows as { application_id: string }[]).map((r) => r.application_id)))
   const { data: apps } = await supabase
     .from('applications')
     .select('id, state, license_type_id')
@@ -705,7 +705,7 @@ export async function getAllExpertStepsWithRequirementInfo(currentRequirementId?
       license_type_id: (a as { license_type_id: string | null }).license_type_id ?? null,
     })
   }
-  const ltIds = [...new Set(Array.from(appMap.values()).map((a) => a.license_type_id).filter(Boolean) as string[])]
+  const ltIds = Array.from(new Set(Array.from(appMap.values()).map((a) => a.license_type_id).filter(Boolean) as string[]))
   const { data: lts } = await supabase.from('license_types').select('id, name').in('id', ltIds)
   const ltMap = new Map<string, string>()
   for (const lt of lts || []) {
