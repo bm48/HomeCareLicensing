@@ -125,7 +125,7 @@ export default function UploadDocumentButton({
           document_name: file.name,
           document_url: publicUrl,
           document_type: null,
-          status: 'pending'
+          status: 'draft'
         })
 
       if (insertError) {

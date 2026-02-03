@@ -5,7 +5,7 @@
 
 // Note: RESEND_API_KEY should be set in .env.local as a server-side environment variable
 // For now, using the provided API key as fallback
-const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_e7KSoSkr_FtRSE22oRv4ePWJWFv5sxJLN'
+const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 
 interface SendDocumentUploadNotificationParams {
   expertEmail: string

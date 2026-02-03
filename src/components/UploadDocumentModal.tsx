@@ -105,7 +105,7 @@ export default function UploadDocumentModal({
         document_url: publicUrl,
         document_type: documentType || null,
         description: description.trim() || null,
-        status: 'pending'
+        status: 'draft'
       }
       if (licenseRequirementDocumentId) {
         insertPayload.license_requirement_document_id = licenseRequirementDocumentId

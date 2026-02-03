@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
 import {
   FileText,
   Download,
@@ -326,7 +327,7 @@ export default function AdminApplicationDetailContent({
     }
   }, [activeTab, application?.license_type_id, fetchRequirementDocuments])
 
-  // Fetch expert steps
+  // Fetch expert steps. If application has a license type but no expert steps yet, copy from requirement (backfill).
   const fetchExpertSteps = useCallback(async () => {
     if (!application.id) return
     
@@ -342,24 +343,55 @@ export default function AdminApplicationDetailContent({
       if (error) {
         console.error('Error fetching expert steps:', error)
         setExpertSteps([])
-      } else {
-        setExpertSteps((expertStepsData || []).map((step: any) => ({
-          id: step.id,
-          step_name: step.step_name,
-          step_order: step.step_order,
-          description: step.description,
-          is_completed: step.is_completed,
-          is_expert_step: true,
-          created_by_expert_id: step.created_by_expert_id
-        })))
+        return
       }
+
+      const steps = expertStepsData || []
+      if (steps.length === 0 && application.license_type_id && application.state) {
+        const { data: licenseType } = await supabase
+          .from('license_types')
+          .select('name')
+          .eq('id', application.license_type_id)
+          .maybeSingle()
+        if (licenseType?.name) {
+          await copyExpertStepsFromRequirementToApplication(application.id, application.state, licenseType.name)
+          const { data: refetched, error: refetchErr } = await supabase
+            .from('application_steps')
+            .select('*')
+            .eq('application_id', application.id)
+            .eq('is_expert_step', true)
+            .order('step_order', { ascending: true })
+          if (!refetchErr && refetched?.length) {
+            setExpertSteps(refetched.map((step: any) => ({
+              id: step.id,
+              step_name: step.step_name,
+              step_order: step.step_order,
+              description: step.description,
+              is_completed: step.is_completed,
+              is_expert_step: true,
+              created_by_expert_id: step.created_by_expert_id
+            })))
+            return
+          }
+        }
+      }
+
+      setExpertSteps(steps.map((step: any) => ({
+        id: step.id,
+        step_name: step.step_name,
+        step_order: step.step_order,
+        description: step.description,
+        is_completed: step.is_completed,
+        is_expert_step: true,
+        created_by_expert_id: step.created_by_expert_id
+      })))
     } catch (error) {
       console.error('Error fetching expert steps:', error)
       setExpertSteps([])
     } finally {
       setIsLoadingExpertSteps(false)
     }
-  }, [application.id, supabase])
+  }, [application.id, application.license_type_id, application.state, supabase])
 
   useEffect(() => {
     if (activeTab === 'expert-process') {

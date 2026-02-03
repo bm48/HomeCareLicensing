@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
 import {
   FileText,
   Download,
@@ -366,7 +367,7 @@ export default function ApplicationDetailContent({
     }
   }, [activeTab, application?.license_type_id, application?.state, fetchRequirementDocuments])
 
-  // Fetch expert steps separately
+  // Fetch expert steps separately. If application has a license type but no expert steps yet, copy from requirement (e.g. backfill for existing apps or when license type was assigned later).
   const fetchExpertSteps = useCallback(async () => {
     if (!application.id) return
     
@@ -382,24 +383,55 @@ export default function ApplicationDetailContent({
       if (error) {
         console.error('Error fetching expert steps:', error)
         setExpertSteps([])
-      } else {
-        setExpertSteps((expertStepsData || []).map((step: any) => ({
-          id: step.id,
-          step_name: step.step_name,
-          step_order: step.step_order,
-          description: step.description,
-          is_completed: step.is_completed,
-          is_expert_step: true,
-          created_by_expert_id: step.created_by_expert_id
-        })))
+        return
       }
+
+      const steps = expertStepsData || []
+      if (steps.length === 0 && application.license_type_id && application.state) {
+        const { data: licenseType } = await supabase
+          .from('license_types')
+          .select('name')
+          .eq('id', application.license_type_id)
+          .maybeSingle()
+        if (licenseType?.name) {
+          await copyExpertStepsFromRequirementToApplication(application.id, application.state, licenseType.name)
+          const { data: refetched, error: refetchErr } = await supabase
+            .from('application_steps')
+            .select('*')
+            .eq('application_id', application.id)
+            .eq('is_expert_step', true)
+            .order('step_order', { ascending: true })
+          if (!refetchErr && refetched?.length) {
+            setExpertSteps(refetched.map((step: any) => ({
+              id: step.id,
+              step_name: step.step_name,
+              step_order: step.step_order,
+              description: step.description,
+              is_completed: step.is_completed,
+              is_expert_step: true,
+              created_by_expert_id: step.created_by_expert_id
+            })))
+            return
+          }
+        }
+      }
+
+      setExpertSteps(steps.map((step: any) => ({
+        id: step.id,
+        step_name: step.step_name,
+        step_order: step.step_order,
+        description: step.description,
+        is_completed: step.is_completed,
+        is_expert_step: true,
+        created_by_expert_id: step.created_by_expert_id
+      })))
     } catch (error) {
       console.error('Error fetching expert steps:', error)
       setExpertSteps([])
     } finally {
       setIsLoadingExpertSteps(false)
     }
-  }, [application.id, supabase])
+  }, [application.id, application.license_type_id, application.state, supabase])
 
   useEffect(() => {
     if (activeTab === 'expert-process') {
@@ -1110,8 +1142,9 @@ export default function ApplicationDetailContent({
     const linked = getLinkedDocument(rd.id)
     if (documentFilter === 'all') return true
     if (documentFilter === 'completed') return linked && (linked.status === 'approved' || linked.status === 'completed')
-    if (documentFilter === 'pending') return linked && linked.status === 'rejected'
-    if (documentFilter === 'drafts') return linked && linked.status === 'pending'
+    if (documentFilter === 'pending') return linked && linked.status === 'pending'
+    // Drafts: show requirement slots with no upload yet OR with a draft/rejected upload
+    if (documentFilter === 'drafts') return !linked || linked.status === 'draft' || linked.status === 'rejected'
     return true
   })
 
@@ -1119,8 +1152,8 @@ export default function ApplicationDetailContent({
   const filteredDocuments = documents.filter(doc => {
     if (documentFilter === 'all') return true
     if (documentFilter === 'completed') return doc.status === 'approved' || doc.status === 'completed'
-    if (documentFilter === 'pending') return doc.status === 'rejected'
-    if (documentFilter === 'drafts') return doc.status === 'pending'
+    if (documentFilter === 'pending') return doc.status === 'pending'
+    if (documentFilter === 'drafts') return doc.status === 'draft' || doc.status === 'rejected'
     return true
   })
 
@@ -1148,15 +1181,46 @@ export default function ApplicationDetailContent({
     })
   }
 
-  // UI status: draft = just uploaded (DB pending), pending = expert rejected (DB rejected), completed = expert approved (DB approved)
+  // UI status: draft = just uploaded; pending = submitted for expert review; completed = expert approved. Expert reject sets back to draft.
   const getDocumentStatus = (status: string) => {
     if (status === 'approved' || status === 'completed') return 'completed'
-    if (status === 'pending') return 'draft'
-    if (status === 'rejected') return 'pending'
-    return 'draft'
+    if (status === 'pending') return 'pending'
+    if (status === 'rejected') return 'draft' // legacy or expert rejected -> show as draft so owner can resubmit
+    return status === 'draft' ? 'draft' : 'draft'
   }
 
-  // Handle document approval/rejection by expert
+  // Owner submits document for expert review (draft -> pending); notifies assigned expert
+  const [submittingDocumentId, setSubmittingDocumentId] = useState<string | null>(null)
+  const handleSubmitDocument = async (documentId: string) => {
+    if (!application?.id || submittingDocumentId) return
+    setSubmittingDocumentId(documentId)
+    try {
+      const { data: app } = await supabase
+        .from('applications')
+        .select('assigned_expert_id')
+        .eq('id', application.id)
+        .single()
+      if (!app?.assigned_expert_id) {
+        alert('An expert must be assigned to this application before you can submit documents. Please contact support.')
+        return
+      }
+      const { error } = await supabase
+        .from('application_documents')
+        .update({ status: 'pending' })
+        .eq('id', documentId)
+        .eq('application_id', application.id)
+
+      if (error) throw error
+      await refreshDocuments()
+    } catch (error: any) {
+      console.error('Error submitting document:', error)
+      alert('Failed to submit document: ' + (error.message || 'Unknown error'))
+    } finally {
+      setSubmittingDocumentId(null)
+    }
+  }
+
+  // Handle document approval/rejection by expert: approve -> completed (approved); reject -> back to draft
   const handleDocumentReview = async (action: 'approve' | 'reject') => {
     if (!selectedDocumentForReview || !currentUserId || isReviewing) return
 
@@ -1165,7 +1229,7 @@ export default function ApplicationDetailContent({
       const { error } = await supabase
         .from('application_documents')
         .update({
-          status: action === 'approve' ? 'approved' : 'rejected',
+          status: action === 'approve' ? 'approved' : 'draft',
           expert_review_notes: reviewNotes.trim() || null
         })
         .eq('id', selectedDocumentForReview.id)
@@ -1585,7 +1649,7 @@ export default function ApplicationDetailContent({
                     <div className="text-sm font-medium text-gray-600">In Progress</div>
                   </div>
                   <div className="text-3xl font-bold text-gray-900">
-                    {documents.filter(d => getDocumentStatus(d.status) === 'draft').length}
+                    {documents.filter(d => d.status === 'draft' || d.status === 'rejected').length}
                   </div>
                 </div>
 
@@ -1595,7 +1659,7 @@ export default function ApplicationDetailContent({
                     <div className="text-sm font-medium text-gray-600">Pending</div>
                   </div>
                   <div className="text-3xl font-bold text-gray-900">
-                    {documents.filter(d => getDocumentStatus(d.status) === 'pending').length}
+                    {documents.filter(d => d.status === 'pending').length}
                   </div>
                 </div>
               </div> */}
@@ -1650,9 +1714,10 @@ export default function ApplicationDetailContent({
                       <div className="space-y-4">
                         {filteredRequirementDocuments.map((reqDoc) => {
                           const linked = getLinkedDocument(reqDoc.id)
-                          const status = linked ? getDocumentStatus(linked.status) : 'pending'
+                          const status = linked ? getDocumentStatus(linked.status) : 'draft'
                           const isExpert = currentUserRole === 'expert'
-                          const isDraft = linked?.status === 'pending'
+                          const isPendingReview = linked?.status === 'pending' // submitted, expert can review
+                          const canOwnerSubmit = linked && (linked.status === 'draft' || linked.status === 'rejected')
                           const displayName = linked?.document_name ?? reqDoc.document_name
                           const categoryLabel = reqDoc.document_type || reqDoc.document_name.split(/[\s_]+/)[0] || 'Document'
                           return (
@@ -1706,6 +1771,18 @@ export default function ApplicationDetailContent({
                                       Upload
                                     </button>
                                   )}
+                                  {currentUserRole === 'company_owner' && canOwnerSubmit && (
+                                    <button
+                                      onClick={() => handleSubmitDocument(linked.id)}
+                                      disabled={!!submittingDocumentId}
+                                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                      {submittingDocumentId === linked.id ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : null}
+                                      Submit
+                                    </button>
+                                  )}
                                   {linked && (
                                     <button
                                       onClick={() => handleDownload(linked.document_url, linked.document_name)}
@@ -1715,15 +1792,15 @@ export default function ApplicationDetailContent({
                                       Download
                                     </button>
                                   )}
-                                  {isExpert && linked && isDraft && (
+                                  {isExpert && linked && isPendingReview && (
                                     <button
                                       onClick={() => {
                                         setSelectedDocumentForReview(linked)
                                         setReviewNotes('')
                                       }}
-                                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-2"
+                                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
                                     >
-                                      <X className="w-4 h-4" />
+                                      <Check className="w-4 h-4" />
                                       Review
                                     </button>
                                   )}
@@ -1745,7 +1822,8 @@ export default function ApplicationDetailContent({
                       {filteredDocuments.map((doc) => {
                         const status = getDocumentStatus(doc.status)
                         const isExpert = currentUserRole === 'expert'
-                        const isDraft = doc.status === 'pending'
+                        const isPendingReview = doc.status === 'pending'
+                        const canOwnerSubmit = doc.status === 'draft' || doc.status === 'rejected'
                         return (
                           <div
                             key={doc.id}
@@ -1780,6 +1858,18 @@ export default function ApplicationDetailContent({
                                 }`}>
                                   {status}
                                 </span>
+                                {currentUserRole === 'company_owner' && canOwnerSubmit && (
+                                  <button
+                                    onClick={() => handleSubmitDocument(doc.id)}
+                                    disabled={!!submittingDocumentId}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+                                  >
+                                    {submittingDocumentId === doc.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : null}
+                                    Submit
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleDownload(doc.document_url, doc.document_name)}
                                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2"
@@ -1787,15 +1877,15 @@ export default function ApplicationDetailContent({
                                   <Download className="w-4 h-4" />
                                   Download
                                 </button>
-                                {isExpert && isDraft && (
+                                {isExpert && isPendingReview && (
                                   <button
                                     onClick={() => {
                                       setSelectedDocumentForReview(doc)
                                       setReviewNotes('')
                                     }}
-                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-2"
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
                                   >
-                                    <X className="w-4 h-4" />
+                                    <Check className="w-4 h-4" />
                                     Review
                                   </button>
                                 )}

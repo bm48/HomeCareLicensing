@@ -10,8 +10,8 @@ import {
   getLicenseRequirementId,
   updateStep,
   updateDocument,
-  updateExpertStepForRequirement,
-  deleteExpertStepForRequirement,
+  updateExpertStepTemplate,
+  deleteExpertStepTemplate,
   deleteStep,
   deleteDocument,
 } from '@/app/actions/license-requirements'
@@ -585,24 +585,16 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
 
   const handleUpdateExpertStep = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingExpertStep || !requirementId) return
-    const step = expertSteps.find(s => s.id === editingExpertStep)
-    if (!step) return
+    if (!editingExpertStep) return
 
     setIsSubmitting(true)
     setError(null)
 
-    const result = await updateExpertStepForRequirement(
-      requirementId,
-      step.step_name,
-      step.description ?? null,
-      step.phase ?? null,
-      {
-        phase: expertFormData.phase,
-        stepTitle: expertFormData.stepTitle,
-        description: expertFormData.description,
-      }
-    )
+    const result = await updateExpertStepTemplate(editingExpertStep, {
+      phase: expertFormData.phase,
+      stepTitle: expertFormData.stepTitle,
+      description: expertFormData.description,
+    })
 
     if (result.error) {
       setError(result.error)
@@ -648,16 +640,10 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   }
 
   const handleDeleteExpertStep = async (step: Step) => {
-    if (!confirm('Are you sure you want to delete this expert step from all applications of this license type?')) return
-    if (!requirementId) return
+    if (!confirm('Are you sure you want to delete this expert step from the template? Existing applications will keep their current expert steps.')) return
 
     setIsSubmitting(true)
-    const result = await deleteExpertStepForRequirement(
-      requirementId,
-      step.step_name,
-      step.description ?? null,
-      step.phase ?? null
-    )
+    const result = await deleteExpertStepTemplate(step.id)
 
     if (result.error) {
       setError(result.error)
