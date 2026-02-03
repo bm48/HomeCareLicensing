@@ -341,6 +341,7 @@ function LoginPageContent() {
                       {...register('email')}
                       placeholder="you@example.com"
                       className="block w-full pl-12 pr-4 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all"
+                      suppressHydrationWarning
                     />
                   </div>
                   {errors.email && (
@@ -363,6 +364,7 @@ function LoginPageContent() {
                       {...register('password')}
                       placeholder="••••••••"
                       className="block w-full pl-12 pr-4 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all"
+                      suppressHydrationWarning
                     />
                   </div>
                   {errors.password && (

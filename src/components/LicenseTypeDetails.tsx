@@ -10,15 +10,15 @@ import {
   getLicenseRequirementId,
   updateStep,
   updateDocument,
-  updateExpertStep,
+  updateExpertStepForRequirement,
+  deleteExpertStepForRequirement,
   deleteStep,
   deleteDocument,
-  deleteExpertStep
 } from '@/app/actions/license-requirements'
 import { updateLicenseType } from '@/app/actions/configuration'
 import ExpertProcessComingSoonModal from '@/components/ExpertProcessComingSoonModal'
 import Modal from '@/components/Modal'
-import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, copySteps, copyDocuments, getAllStepsWithRequirementInfo, getAllDocumentsWithRequirementInfo, type StepWithRequirementInfo, type DocumentWithRequirementInfo } from '@/app/actions/license-requirements'
+import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, getExpertStepsFromRequirement, copySteps, copyDocuments, copyExpertSteps, getAllStepsWithRequirementInfo, getAllDocumentsWithRequirementInfo, getAllExpertStepsWithRequirementInfo, type StepWithRequirementInfo, type DocumentWithRequirementInfo, type ExpertStepWithRequirementInfo } from '@/app/actions/license-requirements'
 
 interface LicenseType {
   id: string
@@ -118,6 +118,15 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [selectedBrowseDocumentIds, setSelectedBrowseDocumentIds] = useState<Set<string>>(new Set())
   const [isLoadingBrowseDocuments, setIsLoadingBrowseDocuments] = useState(false)
   const [browseDocumentsError, setBrowseDocumentsError] = useState<string | null>(null)
+  
+  // Copy/Browse Expert Steps (inside Add Expert Step modal)
+  const [availableExpertSteps, setAvailableExpertSteps] = useState<Step[]>([])
+  const [selectedExpertStepIds, setSelectedExpertStepIds] = useState<Set<string>>(new Set())
+  const [browseExpertStepsSearch, setBrowseExpertStepsSearch] = useState('')
+  const [allBrowseExpertSteps, setAllBrowseExpertSteps] = useState<ExpertStepWithRequirementInfo[]>([])
+  const [selectedBrowseExpertStepIds, setSelectedBrowseExpertStepIds] = useState<Set<string>>(new Set())
+  const [isLoadingBrowseExpertSteps, setIsLoadingBrowseExpertSteps] = useState(false)
+  const [browseExpertStepsError, setBrowseExpertStepsError] = useState<string | null>(null)
   
   // Edit states
   const [editingStep, setEditingStep] = useState<string | null>(null)
@@ -317,34 +326,37 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       const reqId = reqResult.data
       setRequirementId(reqId)
 
-      // Load steps and documents data
-      const [stepsResult, docsResult] = await Promise.all([
+      // Load steps, documents, and expert steps (expert steps live in application_steps)
+      const [stepsResult, docsResult, expertResult] = await Promise.all([
         supabase
           .from('license_requirement_steps')
           .select('*')
           .eq('license_requirement_id', reqId)
+          .eq('is_expert_step', false)
           .order('step_order', { ascending: true }),
         supabase
           .from('license_requirement_documents')
           .select('*')
           .eq('license_requirement_id', reqId)
           .order('document_name', { ascending: true }),
+        getExpertStepsFromRequirement(reqId),
       ])
 
       if (stepsResult.data) {
-        // Separate regular steps from expert steps
-        const regularSteps = stepsResult.data.filter(s => !s.is_expert_step || s.is_expert_step === false)
-        const expertStepsData = stepsResult.data.filter(s => s.is_expert_step === true)
-        
-        setSteps(regularSteps)
-        setExpertSteps(expertStepsData)
-        setStepsCount(regularSteps.length)
-        setExpertStepsCount(expertStepsData.length)
+        setSteps(stepsResult.data)
+        setStepsCount(stepsResult.data.length)
       } else {
         setSteps([])
-        setExpertSteps([])
         setStepsCount(0)
+      }
+
+      if (expertResult.error) {
+        setExpertSteps([])
         setExpertStepsCount(0)
+      } else {
+        const expertStepsData = expertResult.data ?? []
+        setExpertSteps(expertStepsData)
+        setExpertStepsCount(expertStepsData.length)
       }
 
       if (docsResult.data) {
@@ -573,16 +585,24 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
 
   const handleUpdateExpertStep = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingExpertStep) return
+    if (!editingExpertStep || !requirementId) return
+    const step = expertSteps.find(s => s.id === editingExpertStep)
+    if (!step) return
 
     setIsSubmitting(true)
     setError(null)
 
-    const result = await updateExpertStep(editingExpertStep, {
-      phase: expertFormData.phase,
-      stepTitle: expertFormData.stepTitle,
-      description: expertFormData.description,
-    })
+    const result = await updateExpertStepForRequirement(
+      requirementId,
+      step.step_name,
+      step.description ?? null,
+      step.phase ?? null,
+      {
+        phase: expertFormData.phase,
+        stepTitle: expertFormData.stepTitle,
+        description: expertFormData.description,
+      }
+    )
 
     if (result.error) {
       setError(result.error)
@@ -627,11 +647,17 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     }
   }
 
-  const handleDeleteExpertStep = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this expert step?')) return
+  const handleDeleteExpertStep = async (step: Step) => {
+    if (!confirm('Are you sure you want to delete this expert step from all applications of this license type?')) return
+    if (!requirementId) return
 
     setIsSubmitting(true)
-    const result = await deleteExpertStep(id)
+    const result = await deleteExpertStepForRequirement(
+      requirementId,
+      step.step_name,
+      step.description ?? null,
+      step.phase ?? null
+    )
 
     if (result.error) {
       setError(result.error)
@@ -884,6 +910,141 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     setAddExpertStepModalTab('new')
     setShowExpertForm(false)
     setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+    setAvailableExpertSteps([])
+    setSelectedExpertStepIds(new Set())
+    setBrowseExpertStepsSearch('')
+    setAllBrowseExpertSteps([])
+    setSelectedBrowseExpertStepIds(new Set())
+    setBrowseExpertStepsError(null)
+  }
+
+  const loadCopyExpertStepsData = async () => {
+    setSelectedSourceRequirementId('')
+    setAvailableExpertSteps([])
+    setSelectedExpertStepIds(new Set())
+    setError(null)
+    setIsLoadingCopyData(true)
+    try {
+      const result = await getAllLicenseRequirements()
+      if (result.error) {
+        setError(result.error)
+      } else {
+        const filtered = result.data?.filter(req => req.id !== requirementId) || []
+        setAvailableLicenseRequirements(filtered)
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load license requirements')
+    } finally {
+      setIsLoadingCopyData(false)
+    }
+  }
+
+  const handleSourceRequirementChangeForExpertSteps = async (reqId: string) => {
+    setSelectedSourceRequirementId(reqId)
+    setSelectedExpertStepIds(new Set())
+    if (!reqId) {
+      setAvailableExpertSteps([])
+      return
+    }
+    setIsLoadingCopyData(true)
+    try {
+      const result = await getExpertStepsFromRequirement(reqId)
+      if (result.error) {
+        setError(result.error)
+        setAvailableExpertSteps([])
+      } else {
+        setAvailableExpertSteps(result.data || [])
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load expert steps')
+      setAvailableExpertSteps([])
+    } finally {
+      setIsLoadingCopyData(false)
+    }
+  }
+
+  const toggleExpertStepSelection = (stepId: string) => {
+    const next = new Set(selectedExpertStepIds)
+    if (next.has(stepId)) next.delete(stepId)
+    else next.add(stepId)
+    setSelectedExpertStepIds(next)
+  }
+
+  const handleCopyExpertSteps = async () => {
+    if (!requirementId || selectedExpertStepIds.size === 0) return
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      const result = await copyExpertSteps(requirementId, Array.from(selectedExpertStepIds))
+      if (result.error) {
+        setError(result.error)
+      } else {
+        closeAddExpertStepModal()
+        await loadData()
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to copy expert steps')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const loadBrowseExpertStepsData = async () => {
+    setBrowseExpertStepsSearch('')
+    setSelectedBrowseExpertStepIds(new Set())
+    setBrowseExpertStepsError(null)
+    setIsLoadingBrowseExpertSteps(true)
+    try {
+      const result = await getAllExpertStepsWithRequirementInfo(requirementId ?? undefined)
+      if (result.error) {
+        setBrowseExpertStepsError(result.error)
+        setAllBrowseExpertSteps([])
+      } else {
+        setAllBrowseExpertSteps(result.data ?? [])
+      }
+    } catch (err: unknown) {
+      setBrowseExpertStepsError(err instanceof Error ? err.message : 'Failed to load expert steps')
+      setAllBrowseExpertSteps([])
+    } finally {
+      setIsLoadingBrowseExpertSteps(false)
+    }
+  }
+
+  const filteredBrowseExpertSteps = browseExpertStepsSearch.trim()
+    ? allBrowseExpertSteps.filter(
+        (s) =>
+          s.step_name.toLowerCase().includes(browseExpertStepsSearch.toLowerCase()) ||
+          (s.description?.toLowerCase().includes(browseExpertStepsSearch.toLowerCase()) ?? false) ||
+          (s.phase?.toLowerCase().includes(browseExpertStepsSearch.toLowerCase()) ?? false) ||
+          s.state.toLowerCase().includes(browseExpertStepsSearch.toLowerCase()) ||
+          s.license_type.toLowerCase().includes(browseExpertStepsSearch.toLowerCase())
+      )
+    : allBrowseExpertSteps
+
+  const toggleBrowseExpertStepSelection = (stepId: string) => {
+    const next = new Set(selectedBrowseExpertStepIds)
+    if (next.has(stepId)) next.delete(stepId)
+    else next.add(stepId)
+    setSelectedBrowseExpertStepIds(next)
+  }
+
+  const handleAddBrowseExpertSteps = async () => {
+    if (!requirementId || selectedBrowseExpertStepIds.size === 0) return
+    setIsSubmitting(true)
+    setBrowseExpertStepsError(null)
+    try {
+      const result = await copyExpertSteps(requirementId, Array.from(selectedBrowseExpertStepIds))
+      if (result.error) {
+        setBrowseExpertStepsError(result.error)
+      } else {
+        closeAddExpertStepModal()
+        await loadData()
+      }
+    } catch (err: unknown) {
+      setBrowseExpertStepsError(err instanceof Error ? err.message : 'Failed to add expert steps')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleAddBrowseDocuments = async () => {
@@ -2104,7 +2265,10 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAddExpertStepModalTab('copy')}
+                    onClick={() => {
+                      setAddExpertStepModalTab('copy')
+                      if (availableLicenseRequirements.length === 0) loadCopyExpertStepsData()
+                    }}
                     className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
                       addExpertStepModalTab === 'copy'
                         ? 'border-blue-600 text-blue-600'
@@ -2116,7 +2280,10 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAddExpertStepModalTab('browse')}
+                    onClick={() => {
+                      setAddExpertStepModalTab('browse')
+                      if (allBrowseExpertSteps.length === 0 && !isLoadingBrowseExpertSteps) loadBrowseExpertStepsData()
+                    }}
                     className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
                       addExpertStepModalTab === 'browse'
                         ? 'border-blue-600 text-blue-600'
@@ -2191,25 +2358,172 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 )}
 
                 {addExpertStepModalTab === 'copy' && (
-                  <div className="py-6 text-center text-gray-500">
-                    <Copy className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="font-medium">Copy from Another License</p>
-                    <p className="text-sm mt-1">This feature is coming soon for Expert Process steps.</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowExpertComingSoonModal(true)}
-                      className="mt-4 text-blue-600 hover:underline text-sm"
+                  <div className="py-2 space-y-4">
+                    <h4 className="text-base font-semibold text-gray-900">Select License Type to Copy From</h4>
+                    <select
+                      value={selectedSourceRequirementId}
+                      onChange={(e) => handleSourceRequirementChangeForExpertSteps(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isLoadingCopyData}
                     >
-                      Learn more
-                    </button>
+                      <option value="">Select a license type...</option>
+                      {availableLicenseRequirements.map((req) => (
+                        <option key={req.id} value={req.id}>
+                          {req.state} - {req.license_type}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedSourceRequirementId && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Select Expert Steps to Copy ({selectedExpertStepIds.size} selected)
+                        </label>
+                        <div className="border border-gray-300 rounded-lg max-h-[300px] overflow-y-auto bg-white">
+                          {isLoadingCopyData ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                            </div>
+                          ) : availableExpertSteps.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                              <p>No expert steps available for this license type</p>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-gray-200">
+                              {availableExpertSteps.map((step) => (
+                                <label
+                                  key={step.id}
+                                  className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedExpertStepIds.has(step.id)}
+                                    onChange={() => toggleExpertStepSelection(step.id)}
+                                    className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {step.step_order}. {step.step_name}
+                                    </span>
+                                    {step.phase && (
+                                      <span className="ml-2 text-xs text-gray-500">
+                                        ({step.phase})
+                                      </span>
+                                    )}
+                                    {step.description && (
+                                      <p className="text-sm text-gray-600 mt-0.5">{step.description}</p>
+                                    )}
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-3 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={handleCopyExpertSteps}
+                        disabled={isSubmitting || selectedExpertStepIds.size === 0 || isLoadingCopyData}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy {selectedExpertStepIds.size} {selectedExpertStepIds.size === 1 ? 'Step' : 'Steps'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeAddExpertStepModal}
+                        className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {addExpertStepModalTab === 'browse' && (
-                  <div className="py-6 text-center text-gray-500">
-                    <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="font-medium">Browse All Expert Steps</p>
-                    <p className="text-sm mt-1">This feature is coming soon.</p>
+                  <div className="py-2 flex flex-col gap-4 max-h-[60vh]">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Search Expert Steps</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="text"
+                          value={browseExpertStepsSearch}
+                          onChange={(e) => setBrowseExpertStepsSearch(e.target.value)}
+                          placeholder="Search by title, description, phase, state, or license type..."
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Select Expert Steps to Add ({selectedBrowseExpertStepIds.size} selected)
+                    </p>
+                    {browseExpertStepsError && (
+                      <p className="text-sm text-red-600">{browseExpertStepsError}</p>
+                    )}
+                    <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50/50">
+                      {isLoadingBrowseExpertSteps ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                        </div>
+                      ) : filteredBrowseExpertSteps.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500">
+                          <p className="text-sm">No expert steps found</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-200 p-2">
+                          {filteredBrowseExpertSteps.map((step) => (
+                            <label
+                              key={step.id}
+                              className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer rounded-lg"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedBrowseExpertStepIds.has(step.id)}
+                                onChange={() => toggleBrowseExpertStepSelection(step.id)}
+                                className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-gray-900">{step.step_name}</div>
+                                {step.description && (
+                                  <p className="text-sm text-gray-600 mt-1">{step.description}</p>
+                                )}
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {step.phase && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-100 text-xs text-blue-700">
+                                      {step.phase}
+                                    </span>
+                                  )}
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                    {step.state}
+                                  </span>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                    {step.license_type}
+                                  </span>
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-3 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={handleAddBrowseExpertSteps}
+                        disabled={isSubmitting || selectedBrowseExpertStepIds.size === 0 || isLoadingBrowseExpertSteps}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy {selectedBrowseExpertStepIds.size} {selectedBrowseExpertStepIds.size === 1 ? 'Step' : 'Steps'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeAddExpertStepModal}
+                        className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2336,7 +2650,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => handleDeleteExpertStep(step.id)}
+                                onClick={() => handleDeleteExpertStep(step)}
                                 disabled={isSubmitting}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                                 title="Delete expert step"
@@ -2380,7 +2694,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => handleDeleteExpertStep(step.id)}
+                                onClick={() => handleDeleteExpertStep(step)}
                                 disabled={isSubmitting}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                                 title="Delete expert step"
@@ -2434,7 +2748,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => handleDeleteExpertStep(step.id)}
+                                onClick={() => handleDeleteExpertStep(step)}
                                 disabled={isSubmitting}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                                 title="Delete expert step"

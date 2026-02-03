@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Modal from './Modal'
 import { Upload, X, Loader2, FileText } from 'lucide-react'
@@ -11,13 +11,19 @@ interface UploadDocumentModalProps {
   onClose: () => void
   applicationId: string
   onSuccess?: () => void
+  licenseRequirementDocumentId?: string
+  defaultDocumentName?: string
+  defaultDocumentType?: string
 }
 
 export default function UploadDocumentModal({
   isOpen,
   onClose,
   applicationId,
-  onSuccess
+  onSuccess,
+  licenseRequirementDocumentId,
+  defaultDocumentName,
+  defaultDocumentType
 }: UploadDocumentModalProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -27,6 +33,14 @@ export default function UploadDocumentModal({
   const [description, setDescription] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Pre-fill when opening for a specific license requirement document
+  useEffect(() => {
+    if (isOpen) {
+      if (defaultDocumentName) setDocumentName(defaultDocumentName)
+      if (defaultDocumentType) setDocumentType(defaultDocumentType)
+    }
+  }, [isOpen, defaultDocumentName, defaultDocumentType])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -84,17 +98,21 @@ export default function UploadDocumentModal({
         .from('application-documents')
         .getPublicUrl(filePath)
 
-      // Create document record in database
+      // Create document record in database (link to license requirement document when provided)
+      const insertPayload: Record<string, unknown> = {
+        application_id: applicationId,
+        document_name: documentName,
+        document_url: publicUrl,
+        document_type: documentType || null,
+        description: description.trim() || null,
+        status: 'pending'
+      }
+      if (licenseRequirementDocumentId) {
+        insertPayload.license_requirement_document_id = licenseRequirementDocumentId
+      }
       const { error: insertError } = await supabase
         .from('application_documents')
-        .insert({
-          application_id: applicationId,
-          document_name: documentName,
-          document_url: publicUrl,
-          document_type: documentType || null,
-          description: description.trim() || null,
-          status: 'pending'
-        })
+        .insert(insertPayload)
 
       if (insertError) {
         // If insert fails, try to delete the uploaded file

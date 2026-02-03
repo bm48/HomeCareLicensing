@@ -119,42 +119,75 @@ export async function createDocument(data: CreateDocumentData) {
   return { error: null, data: document }
 }
 
+// Get application ids that match a license requirement (state + license_type)
+async function getApplicationIdsForRequirement(supabase: Awaited<ReturnType<typeof createClient>>, licenseRequirementId: string): Promise<string[]> {
+  const { data: lr, error: lrError } = await supabase
+    .from('license_requirements')
+    .select('state, license_type')
+    .eq('id', licenseRequirementId)
+    .maybeSingle()
+  if (lrError || !lr) return []
+
+  const { data: apps, error: appsError } = await supabase
+    .from('applications')
+    .select('id, license_type_id')
+    .eq('state', lr.state)
+  if (appsError || !apps?.length) return []
+
+  // Filter to applications whose license_types.name matches license_requirement.license_type
+  const { data: licenseTypes } = await supabase
+    .from('license_types')
+    .select('id')
+    .eq('name', lr.license_type)
+  const licenseTypeIds = new Set((licenseTypes || []).map((lt: { id: string }) => lt.id))
+  const matching = (apps as { id: string; license_type_id?: string | null }[]).filter(
+    (a) => a.license_type_id && licenseTypeIds.has(a.license_type_id)
+  )
+  return matching.map((a) => a.id)
+}
+
 export async function createExpertStep(data: CreateExpertStepData) {
   const supabase = await createClient()
 
-  // Get the highest step_order for expert steps in this requirement
-  const { data: existingSteps } = await supabase
-    .from('license_requirement_steps')
-    .select('step_order')
-    .eq('license_requirement_id', data.licenseRequirementId)
-    .eq('is_expert_step', true)
-    .order('step_order', { ascending: false })
-    .limit(1)
+  const applicationIds = await getApplicationIdsForRequirement(supabase, data.licenseRequirementId)
+  if (applicationIds.length === 0) {
+    return { error: 'No applications found for this license type and state', data: null }
+  }
 
-  const nextOrder = existingSteps && existingSteps.length > 0 
-    ? existingSteps[0].step_order + 1 
-    : 1
+  const inserted: { id: string }[] = []
+  for (const applicationId of applicationIds) {
+    const { data: existingSteps } = await supabase
+      .from('application_steps')
+      .select('step_order')
+      .eq('application_id', applicationId)
+      .eq('is_expert_step', true)
+      .order('step_order', { ascending: false })
+      .limit(1)
 
-  // Store expert step with is_expert_step flag and phase
-  const { data: step, error } = await supabase
-    .from('license_requirement_steps')
-    .insert({
-      license_requirement_id: data.licenseRequirementId,
-      step_name: data.stepTitle,
-      step_order: nextOrder,
-      description: data.description,
-      is_expert_step: true,
-      phase: data.phase,
-    })
-    .select()
-    .single()
+    const nextOrder = existingSteps?.length ? (existingSteps[0].step_order + 1) : 1
 
-  if (error) {
-    return { error: error.message, data: null }
+    const { data: step, error } = await supabase
+      .from('application_steps')
+      .insert({
+        application_id: applicationId,
+        step_name: data.stepTitle,
+        step_order: nextOrder,
+        description: data.description || null,
+        is_expert_step: true,
+        phase: data.phase || null,
+        is_completed: false,
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+    if (step) inserted.push(step)
   }
 
   revalidatePath('/admin/license-requirements')
-  return { error: null, data: step }
+  return { error: null, data: inserted[0] ?? null }
 }
 
 // Update functions
@@ -207,13 +240,14 @@ export async function updateExpertStep(id: string, data: { phase: string; stepTi
   const supabase = await createClient()
 
   const { data: step, error } = await supabase
-    .from('license_requirement_steps')
+    .from('application_steps')
     .update({
       step_name: data.stepTitle,
-      description: data.description,
-      phase: data.phase,
+      description: data.description ?? null,
+      phase: data.phase || null,
     })
     .eq('id', id)
+    .eq('is_expert_step', true)
     .select()
     .single()
 
@@ -223,6 +257,40 @@ export async function updateExpertStep(id: string, data: { phase: string; stepTi
 
   revalidatePath('/admin/license-requirements')
   return { error: null, data: step }
+}
+
+// Update all application_steps rows that match this template step (for license requirement detail page)
+export async function updateExpertStepForRequirement(
+  requirementId: string,
+  stepName: string,
+  description: string | null,
+  phase: string | null,
+  data: { phase: string; stepTitle: string; description: string }
+) {
+  const supabase = await createClient()
+  const applicationIds = await getApplicationIdsForRequirement(supabase, requirementId)
+  if (applicationIds.length === 0) return { error: 'No applications found for this requirement', data: null }
+
+  // Match by step_name, description, phase (null-safe)
+  let query = supabase
+    .from('application_steps')
+    .update({
+      step_name: data.stepTitle,
+      description: data.description ?? null,
+      phase: data.phase || null,
+    })
+    .eq('is_expert_step', true)
+    .in('application_id', applicationIds)
+    .eq('step_name', stepName)
+  if (description != null) query = query.eq('description', description)
+  else query = query.is('description', null)
+  if (phase != null) query = query.eq('phase', phase)
+  else query = query.is('phase', null)
+
+  const { error } = await query
+  if (error) return { error: error.message, data: null }
+  revalidatePath('/admin/license-requirements')
+  return { error: null, data: true }
 }
 
 // Delete functions
@@ -262,14 +330,43 @@ export async function deleteExpertStep(id: string) {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from('license_requirement_steps')
+    .from('application_steps')
     .delete()
     .eq('id', id)
+    .eq('is_expert_step', true)
 
   if (error) {
     return { error: error.message }
   }
 
+  revalidatePath('/admin/license-requirements')
+  return { error: null }
+}
+
+// Delete all application_steps rows that match this template step (for license requirement detail page)
+export async function deleteExpertStepForRequirement(
+  requirementId: string,
+  stepName: string,
+  description: string | null,
+  phase: string | null
+) {
+  const supabase = await createClient()
+  const applicationIds = await getApplicationIdsForRequirement(supabase, requirementId)
+  if (applicationIds.length === 0) return { error: null }
+
+  let query = supabase
+    .from('application_steps')
+    .delete()
+    .eq('is_expert_step', true)
+    .in('application_id', applicationIds)
+    .eq('step_name', stepName)
+  if (description != null) query = query.eq('description', description)
+  else query = query.is('description', null)
+  if (phase != null) query = query.eq('phase', phase)
+  else query = query.is('phase', null)
+
+  const { error } = await query
+  if (error) return { error: error.message }
   revalidatePath('/admin/license-requirements')
   return { error: null }
 }
@@ -540,4 +637,173 @@ export async function copyDocuments(targetRequirementId: string, sourceDocumentI
   
   revalidatePath('/admin/license-requirements')
   return { error: null, data: copiedDocuments }
+}
+
+// Get expert steps for a license requirement: from application_steps for all applications of this requirement (deduplicated by step_name, description, phase)
+export async function getExpertStepsFromRequirement(requirementId: string) {
+  const supabase = await createClient()
+  const applicationIds = await getApplicationIdsForRequirement(supabase, requirementId)
+  if (applicationIds.length === 0) return { error: null, data: [] }
+
+  const { data: rows, error } = await supabase
+    .from('application_steps')
+    .select('id, step_name, step_order, description, phase')
+    .eq('is_expert_step', true)
+    .in('application_id', applicationIds)
+    .order('step_order', { ascending: true })
+
+  if (error) return { error: error.message, data: null }
+
+  // Deduplicate by (step_name, description, phase), keep first occurrence for id/step_order
+  const seen = new Set<string>()
+  const steps = (rows || []).filter((row: { step_name: string; description: string | null; phase: string | null }) => {
+    const key = `${row.step_name}\n${row.description ?? ''}\n${row.phase ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  return { error: null, data: steps }
+}
+
+// Expert step with state and license_type for Browse All Expert Steps
+export type ExpertStepWithRequirementInfo = {
+  id: string
+  step_name: string
+  step_order: number
+  description: string | null
+  phase?: string | null
+  license_requirement_id: string
+  state: string
+  license_type: string
+}
+
+export async function getAllExpertStepsWithRequirementInfo(currentRequirementId?: string | null): Promise<{ error: string | null; data: ExpertStepWithRequirementInfo[] | null }> {
+  const supabase = await createClient()
+
+  const { data: rows, error } = await supabase
+    .from('application_steps')
+    .select('id, step_name, step_order, description, phase, application_id')
+    .eq('is_expert_step', true)
+    .order('step_order', { ascending: true })
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  if (!rows?.length) return { error: null, data: [] }
+
+  const appIds = [...new Set((rows as { application_id: string }[]).map((r) => r.application_id))]
+  const { data: apps } = await supabase
+    .from('applications')
+    .select('id, state, license_type_id')
+    .in('id', appIds)
+  const appMap = new Map<string, { state: string; license_type_id: string | null }>()
+  for (const a of apps || []) {
+    appMap.set((a as { id: string }).id, {
+      state: (a as { state: string }).state,
+      license_type_id: (a as { license_type_id: string | null }).license_type_id ?? null,
+    })
+  }
+  const ltIds = [...new Set(Array.from(appMap.values()).map((a) => a.license_type_id).filter(Boolean) as string[])]
+  const { data: lts } = await supabase.from('license_types').select('id, name').in('id', ltIds)
+  const ltMap = new Map<string, string>()
+  for (const lt of lts || []) {
+    ltMap.set((lt as { id: string }).id, (lt as { name: string }).name)
+  }
+  const reqIdByStateType = new Map<string, string>()
+  const steps: ExpertStepWithRequirementInfo[] = []
+  const seen = new Set<string>()
+
+  for (const row of rows as { id: string; step_name: string; step_order: number; description: string | null; phase: string | null; application_id: string }[]) {
+    const app = appMap.get(row.application_id)
+    if (!app?.license_type_id) continue
+    const state = app.state
+    const licenseTypeName = ltMap.get(app.license_type_id) ?? ''
+    if (!licenseTypeName) continue
+    const key = `${row.step_name}\n${row.description ?? ''}\n${row.phase ?? ''}\n${state}\n${licenseTypeName}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    let licenseRequirementId = reqIdByStateType.get(`${state}\n${licenseTypeName}`)
+    if (licenseRequirementId == null) {
+      const { data: lr } = await supabase
+        .from('license_requirements')
+        .select('id')
+        .eq('state', state)
+        .eq('license_type', licenseTypeName)
+        .maybeSingle()
+      licenseRequirementId = (lr as { id: string } | null)?.id ?? ''
+      if (licenseRequirementId) reqIdByStateType.set(`${state}\n${licenseTypeName}`, licenseRequirementId)
+    }
+    if (currentRequirementId && licenseRequirementId === currentRequirementId) continue
+    steps.push({
+      id: row.id,
+      step_name: row.step_name,
+      step_order: row.step_order,
+      description: row.description ?? null,
+      phase: row.phase ?? null,
+      license_requirement_id: licenseRequirementId,
+      state,
+      license_type: licenseTypeName,
+    })
+  }
+
+  return { error: null, data: steps }
+}
+
+// Copy expert steps (from application_steps) to all applications of target requirement
+export async function copyExpertSteps(targetRequirementId: string, sourceExpertStepIds: string[]) {
+  const supabase = await createClient()
+
+  if (sourceExpertStepIds.length === 0) {
+    return { error: 'No expert steps selected', data: null }
+  }
+
+  const { data: sourceSteps, error: fetchError } = await supabase
+    .from('application_steps')
+    .select('step_name, description, phase')
+    .in('id', sourceExpertStepIds)
+    .eq('is_expert_step', true)
+
+  if (fetchError || !sourceSteps || sourceSteps.length === 0) {
+    return { error: fetchError?.message || 'Failed to fetch source expert steps', data: null }
+  }
+
+  const targetApplicationIds = await getApplicationIdsForRequirement(supabase, targetRequirementId)
+  if (targetApplicationIds.length === 0) {
+    return { error: 'No applications found for target license type and state', data: null }
+  }
+
+  const inserted: { id: string }[] = []
+  for (const applicationId of targetApplicationIds) {
+    const { data: existingSteps } = await supabase
+      .from('application_steps')
+      .select('step_order')
+      .eq('application_id', applicationId)
+      .eq('is_expert_step', true)
+      .order('step_order', { ascending: false })
+      .limit(1)
+    let nextOrder = existingSteps?.length ? existingSteps[0].step_order + 1 : 1
+
+    for (const step of sourceSteps as { step_name: string; description: string | null; phase: string | null }[]) {
+      const { data: one, error: insertError } = await supabase
+        .from('application_steps')
+        .insert({
+          application_id: applicationId,
+          step_name: step.step_name,
+          step_order: nextOrder++,
+          description: step.description ?? null,
+          phase: step.phase ?? null,
+          is_expert_step: true,
+          is_completed: false,
+        })
+        .select('id')
+        .single()
+      if (insertError) return { error: insertError.message, data: null }
+      if (one) inserted.push(one)
+    }
+  }
+
+  revalidatePath('/admin/license-requirements')
+  return { error: null, data: inserted }
 }
