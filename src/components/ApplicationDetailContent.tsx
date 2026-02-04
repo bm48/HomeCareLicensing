@@ -138,6 +138,7 @@ export default function ApplicationDetailContent({
   const [isSubmittingExpertStep, setIsSubmittingExpertStep] = useState(false)
   const [showAddExpertStepModal, setShowAddExpertStepModal] = useState(false)
   const [addExpertStepModalTab, setAddExpertStepModalTab] = useState<'new' | 'copy' | 'browse'>('new')
+  const [togglingExpertStepId, setTogglingExpertStepId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
@@ -499,6 +500,32 @@ export default function ApplicationDetailContent({
       alert('Failed to add expert step: ' + (error.message || 'Unknown error'))
     } finally {
       setIsSubmittingExpertStep(false)
+    }
+  }
+
+  const handleToggleExpertStepComplete = async (step: Step) => {
+    if (!application.id || currentUserRole !== 'expert') return
+    setTogglingExpertStepId(step.id)
+    try {
+      const newCompleted = !step.is_completed
+      const { error } = await supabase
+        .from('application_steps')
+        .update({
+          is_completed: newCompleted,
+          ...(newCompleted ? { completed_at: new Date().toISOString() } : { completed_at: null })
+        })
+        .eq('id', step.id)
+        .eq('application_id', application.id)
+
+      if (error) throw error
+      setExpertSteps((prev) =>
+        prev.map((s) => (s.id === step.id ? { ...s, is_completed: newCompleted } : s))
+      )
+    } catch (error: any) {
+      console.error('Error toggling expert step:', error)
+      alert('Failed to update step: ' + (error.message || 'Unknown error'))
+    } finally {
+      setTogglingExpertStepId(null)
     }
   }
 
@@ -2286,11 +2313,32 @@ export default function ApplicationDetailContent({
                         : 'bg-gray-50 border-gray-200'
                     }`}
                   >
-                    <div className="mt-1">
-                      {step.is_completed ? (
-                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <div className="mt-1 flex-shrink-0">
+                      {currentUserRole === 'expert' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExpertStepComplete(step)}
+                          disabled={togglingExpertStepId === step.id}
+                          className="p-0.5 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={step.is_completed ? 'Mark as not completed' : 'Mark as completed'}
+                          aria-label={step.is_completed ? 'Uncomplete step' : 'Complete step'}
+                        >
+                          {togglingExpertStepId === step.id ? (
+                            <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+                          ) : step.is_completed ? (
+                            <CheckCircle2 className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                          )}
+                        </button>
                       ) : (
-                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                        <>
+                          {step.is_completed ? (
+                            <CheckCircle2 className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="flex-1">
