@@ -16,7 +16,7 @@ const signupSchema = z
     email: z.string().email('Please enter a valid email address'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string().min(6, 'Please confirm your password'),
-    role: z.enum(['company_owner', 'staff_member', 'admin', 'expert']),
+    role: z.enum(['company_owner', 'expert', 'admin']), // Expert in middle for balanced UI; staff_member (Caregiver) commented out
     rememberMe: z.boolean().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -26,11 +26,12 @@ const signupSchema = z
 
 type SignupFormData = z.infer<typeof signupSchema>
 
+// Order: Agency Admin | Expert (center) | Admin — for balanced signup UI
 const ROLE_OPTIONS = [
   { value: 'company_owner', label: 'Agency Admin', description: 'Full access to manage your company' },
-  { value: 'staff_member', label: 'Caregiver', description: 'Access to assigned tasks and resources' },
-  { value: 'admin', label: 'Admin', description: 'Administrative access to the platform' },
   { value: 'expert', label: 'Expert', description: 'Expert consultant access' },
+  { value: 'admin', label: 'Admin', description: 'Administrative access to the platform' },
+  // { value: 'staff_member', label: 'Caregiver', description: 'Access to assigned tasks and resources' },
 ]
 
 export default function SignupPage() {
@@ -47,7 +48,7 @@ export default function SignupPage() {
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      role: 'staff_member',
+      role: 'company_owner',
       rememberMe: false,
     },
   })
@@ -299,7 +300,7 @@ export default function SignupPage() {
                   <label className="block text-sm font-semibold text-white/90 mb-3">
                     I am a...
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {ROLE_OPTIONS.map((role) => (
                       <label
                         key={role.value}

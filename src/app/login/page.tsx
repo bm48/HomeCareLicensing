@@ -107,8 +107,12 @@ function LoginPageContent() {
     }
     
     if (errorParam) {
-      setError(errorParam)
-      // Clear URL parameters after displaying error
+      // Hide raw PKCE error when magic link was sent from server (e.g. add caregiver);
+      // user can still sign in with email/password.
+      const isPkceError =
+        errorParam.includes('PKCE') || errorParam.toLowerCase().includes('code verifier')
+      setError(isPkceError ? null : errorParam)
+      // Always clear error from URL so it doesn't show on refresh
       const url = new URL(window.location.href)
       url.searchParams.delete('error')
       window.history.replaceState({}, '', url)
@@ -337,6 +341,7 @@ function LoginPageContent() {
                       {...register('email')}
                       placeholder="you@example.com"
                       className="block w-full pl-12 pr-4 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all"
+                      suppressHydrationWarning
                     />
                   </div>
                   {errors.email && (
@@ -359,6 +364,7 @@ function LoginPageContent() {
                       {...register('password')}
                       placeholder="••••••••"
                       className="block w-full pl-12 pr-4 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all"
+                      suppressHydrationWarning
                     />
                   </div>
                   {errors.password && (

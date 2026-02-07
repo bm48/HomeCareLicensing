@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 export async function toggleUserStatus(userId: string, isActive: boolean) {
@@ -85,34 +86,46 @@ export async function createStaffUserAccount(
   firstName: string,
   lastName: string
 ) {
-  const supabase = await createClient()
+  // Use admin client for user creation so the current user's session is NEVER overwritten.
+  // signUp() with the cookie-based client would set the new user's session and log out the agency admin.
+  let supabaseAdmin
+  try {
+    supabaseAdmin = createAdminClient()
+  } catch (e: any) {
+    return {
+      error:
+        e?.message ||
+        'Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local for creating staff accounts.',
+      data: null,
+    }
+  }
+  const supabaseCookie = await createClient()
 
   try {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
     const normalizedEmail = email.toLowerCase().trim()
 
-    // First, try to create user with password (this will fail if user exists)
-    const { data: newUser, error: signUpError } = await supabase.auth.signUp({
+    // Create user via Admin API (no session change; never touches cookie client auth)
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: normalizedEmail,
-      password: password,
-      options: {
-        emailRedirectTo: `${siteUrl}/auth/callback?type=signup`,
-        data: {
-          full_name: `${firstName} ${lastName}`,
-          role: 'staff_member',
-        },
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: `${firstName} ${lastName}`,
+        role: 'staff_member',
       },
     })
 
     let userId: string | null = null
 
-    if (signUpError) {
-      // Check if user already exists
-      if (signUpError.message.includes('already registered') || 
-          signUpError.message.includes('already exists') ||
-          signUpError.message.includes('User already registered')) {
-        // Get existing user ID from user_profiles
-        const { data: existingProfile } = await supabase
+    if (createError) {
+      // User might already exist
+      if (
+        createError.message.includes('already registered') ||
+        createError.message.includes('already exists') ||
+        createError.message.includes('User already registered')
+      ) {
+        const { data: existingProfile } = await supabaseAdmin
           .from('user_profiles')
           .select('id')
           .eq('email', normalizedEmail)
@@ -120,8 +133,8 @@ export async function createStaffUserAccount(
 
         userId = existingProfile?.id || null
 
-        // User exists, send magic link for login
-        const { error: magicLinkError } = await supabase.auth.signInWithOtp({
+        // Send magic link using cookie client (only sends email; does not set session)
+        const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
           email: normalizedEmail,
           options: {
             emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink`,
@@ -129,9 +142,9 @@ export async function createStaffUserAccount(
         })
 
         if (magicLinkError) {
-          return { 
-            error: `User already exists. Failed to send login link: ${magicLinkError.message}`, 
-            data: null 
+          return {
+            error: `User already exists. Failed to send login link: ${magicLinkError.message}`,
+            data: null,
           }
         }
 
@@ -144,13 +157,15 @@ export async function createStaffUserAccount(
           },
         }
       }
-      
-      // Provide more helpful error messages
-      let errorMessage = signUpError.message
-      if (signUpError.message.includes('Database error') || signUpError.message.includes('database')) {
-        errorMessage = 'Database error creating user account. Please ensure the database migration 033_fix_handle_new_user_for_staff_members.sql has been applied.'
+
+      let errorMessage = createError.message
+      if (
+        createError.message.includes('Database error') ||
+        createError.message.includes('database')
+      ) {
+        errorMessage =
+          'Database error creating user account. Please ensure the database migration 033_fix_handle_new_user_for_staff_members.sql has been applied.'
       }
-      
       return { error: `Failed to create user: ${errorMessage}`, data: null }
     }
 
@@ -160,18 +175,15 @@ export async function createStaffUserAccount(
 
     userId = newUser.user.id
 
-    // Ensure we have a valid userId
     if (!userId) {
       return { error: 'Failed to create user account - user ID is missing', data: null }
     }
 
-    // Wait a moment for the trigger to create the user_profiles record
-    // The handle_new_user trigger creates the user_profiles record
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Wait for handle_new_user trigger to create user_profiles
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
-    // Verify user profile was created and get the userId from there as a double-check
     let verifiedUserId = userId
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('user_profiles')
       .select('id, role')
       .eq('id', userId)
@@ -179,43 +191,32 @@ export async function createStaffUserAccount(
 
     if (profileError || !profile) {
       console.warn('User profile not found after creation:', profileError)
-      // Try to find by email as fallback
-      const { data: profileByEmail } = await supabase
+      const { data: profileByEmail } = await supabaseAdmin
         .from('user_profiles')
         .select('id')
         .eq('email', normalizedEmail)
         .single()
-      
+
       if (profileByEmail?.id) {
         verifiedUserId = profileByEmail.id
-        console.log('Found user profile by email, using ID:', verifiedUserId)
-      } else {
-        console.error('Could not find user profile after user creation')
-        // Still continue with the userId from auth
       }
     } else {
       verifiedUserId = profile.id
     }
 
-    // Use verified userId
     userId = verifiedUserId
 
-    // Send magic link for immediate login (this will work even if email confirmation is required)
-    // The magic link will authenticate the user directly
-    const { error: magicLinkError } = await supabase.auth.signInWithOtp({
+    // Optional: send magic link via cookie client (sends email only; does not set session)
+    const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
         emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink`,
       },
     })
-
-    // If magic link fails, user can still use the confirmation email or login with password
     if (magicLinkError) {
       console.warn('Failed to send magic link:', magicLinkError.message)
-      // Still return success since user was created and can use confirmation email or password
     }
 
-    // Ensure userId is not null before returning
     if (!userId) {
       return { error: 'Failed to get user ID after account creation', data: null }
     }
@@ -224,7 +225,7 @@ export async function createStaffUserAccount(
       error: null,
       data: {
         success: true,
-        userId: userId, // This must be a valid UUID string
+        userId,
         message: `User account created. Login link sent to ${email}. Password: ${password}`,
       },
     }

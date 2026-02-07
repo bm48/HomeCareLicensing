@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from './DashboardLayout'
 import ApplicationDetailContent from './ApplicationDetailContent'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 
 interface Application {
   id: string
@@ -48,7 +48,9 @@ export default function ApplicationDetailWrapper({
   profile,
   unreadNotifications = 0
 }: ApplicationDetailWrapperProps) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message' | 'expert-process'>('next-steps')
+  const [isNavigatingBack, setIsNavigatingBack] = useState(false)
 
   // Map activeTab to a valid license tab type for DashboardLayout
   const getLicenseTab = (tab: typeof activeTab): 'overview' | 'checklist' | 'documents' | 'ai-assistant' => {
@@ -68,6 +70,11 @@ export default function ApplicationDetailWrapper({
     setActiveTab(tab)
   }
 
+  const handleBackToLicenses = () => {
+    setIsNavigatingBack(true)
+    router.push('/dashboard/licenses')
+  }
+
   return (
     <DashboardLayout
       user={user}
@@ -82,13 +89,24 @@ export default function ApplicationDetailWrapper({
       onLicenseTabChange={handleLicenseTabChange}
     >
       
-      <Link
-          href="/dashboard/licenses"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+      <button
+          type="button"
+          onClick={handleBackToLicenses}
+          disabled={isNavigatingBack}
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Licenses
-        </Link>
+          {isNavigatingBack ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading...
+            </>
+          ) : (
+            <>
+              <ArrowLeft className="w-4 h-4" />
+              Back to Licenses
+            </>
+          )}
+        </button>
       <ApplicationDetailContent
         application={application}
         documents={documents}

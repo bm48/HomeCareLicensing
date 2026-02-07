@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
 import {
   FileText,
   Download,
@@ -19,7 +20,8 @@ import {
   Users,
   Send,
   Copy,
-  CheckSquare
+  CheckSquare,
+  Plus
 } from 'lucide-react'
 import Modal from './Modal'
 
@@ -56,6 +58,15 @@ interface Document {
   document_type: string | null
   status: string
   created_at: string
+  license_requirement_document_id?: string | null
+}
+
+interface RequirementDocument {
+  id: string
+  document_name: string
+  document_type: string | null
+  description: string | null
+  is_required: boolean
 }
 
 interface ApplicationStep {
@@ -85,9 +96,10 @@ export default function AdminApplicationDetailContent({
   const fromNotification = searchParams?.get('fromNotification') === 'true'
   const [activeTab, setActiveTab] = useState<TabType>('steps')
   const [documents, setDocuments] = useState<Document[]>(initialDocuments)
+  const [requirementDocuments, setRequirementDocuments] = useState<RequirementDocument[]>([])
+  const [isLoadingRequirementDocuments, setIsLoadingRequirementDocuments] = useState(false)
   const [steps, setSteps] = useState<ApplicationStep[]>([])
   const [isLoadingSteps, setIsLoadingSteps] = useState(false)
-  const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
   const [isCompletingStep, setIsCompletingStep] = useState(false)
   const [expertSteps, setExpertSteps] = useState<ApplicationStep[]>([])
   const [isLoadingExpertSteps, setIsLoadingExpertSteps] = useState(false)
@@ -97,6 +109,9 @@ export default function AdminApplicationDetailContent({
   const [availableApplications, setAvailableApplications] = useState<Array<{id: string, application_name: string, state: string}>>([])
   const [selectedTargetApplicationId, setSelectedTargetApplicationId] = useState<string>('')
   const [isLoadingApplications, setIsLoadingApplications] = useState(false)
+  const [showAddExpertStepModal, setShowAddExpertStepModal] = useState(false)
+  const [expertStepFormData, setExpertStepFormData] = useState({ stepName: '', description: '', phase: 'Pre-Application' })
+  const [isSubmittingExpertStep, setIsSubmittingExpertStep] = useState(false)
   const [messages, setMessages] = useState<any[]>([])
   const [messageContent, setMessageContent] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
@@ -176,11 +191,11 @@ export default function AdminApplicationDetailContent({
       }
 
       // If no application_steps exist, fetch required steps from license_requirement_steps
-      if (application.license_type_id && application.state) {
-        // Get license type name
+      if (application.license_type_id) {
+        // Get license type name and state (match same license_requirement as admin config)
         const { data: licenseType, error: licenseTypeError } = await supabase
           .from('license_types')
-          .select('name')
+          .select('name, state')
           .eq('id', application.license_type_id)
           .maybeSingle()
 
@@ -190,11 +205,18 @@ export default function AdminApplicationDetailContent({
           return
         }
 
-        // Find license_requirement_id for this state and license type
+        const requirementState = licenseType.state ?? application.state
+        if (!requirementState) {
+          setSteps([])
+          setIsLoadingSteps(false)
+          return
+        }
+
+        // Find license_requirement_id by license type's (state, name)
         const { data: licenseRequirement, error: reqError } = await supabase
           .from('license_requirements')
           .select('id')
-          .eq('state', application.state)
+          .eq('state', requirementState)
           .eq('license_type', licenseType.name)
           .maybeSingle()
 
@@ -239,7 +261,73 @@ export default function AdminApplicationDetailContent({
     fetchSteps()
   }, [fetchSteps])
 
-  // Fetch expert steps
+  // Fetch license requirement documents (template for Documents tab)
+  const fetchRequirementDocuments = useCallback(async () => {
+    if (!application?.license_type_id) {
+      setRequirementDocuments([])
+      return
+    }
+    setIsLoadingRequirementDocuments(true)
+    try {
+      const { data: licenseTypeRow, error: licenseTypeError } = await supabase
+        .from('license_types')
+        .select('name, state')
+        .eq('id', application.license_type_id)
+        .maybeSingle()
+      if (licenseTypeError || !licenseTypeRow?.name) {
+        setRequirementDocuments([])
+        return
+      }
+      const requirementState = licenseTypeRow.state ?? application.state
+      if (!requirementState) {
+        setRequirementDocuments([])
+        return
+      }
+      const { data: licenseRequirement, error: reqError } = await supabase
+        .from('license_requirements')
+        .select('id')
+        .eq('state', requirementState)
+        .eq('license_type', licenseTypeRow.name)
+        .maybeSingle()
+      if (reqError || !licenseRequirement) {
+        setRequirementDocuments([])
+        return
+      }
+      const { data: reqDocs, error: docsError } = await supabase
+        .from('license_requirement_documents')
+        .select('id, document_name, document_type, is_required')
+        .eq('license_requirement_id', licenseRequirement.id)
+        .order('document_name', { ascending: true })
+      if (docsError) {
+        setRequirementDocuments([])
+        return
+      }
+      setRequirementDocuments((reqDocs || []).map((d: any) => ({
+        id: d.id,
+        document_name: d.document_name,
+        document_type: d.document_type ?? null,
+        description: null,
+        is_required: d.is_required ?? true
+      })))
+    } catch (e) {
+      console.error('Error fetching requirement documents:', e)
+      setRequirementDocuments([])
+    } finally {
+      setIsLoadingRequirementDocuments(false)
+    }
+  }, [application?.license_type_id, application?.state, supabase])
+
+  useEffect(() => {
+    fetchRequirementDocuments()
+  }, [fetchRequirementDocuments])
+
+  useEffect(() => {
+    if (activeTab === 'documents' && application?.license_type_id) {
+      fetchRequirementDocuments()
+    }
+  }, [activeTab, application?.license_type_id, fetchRequirementDocuments])
+
+  // Fetch expert steps. If application has a license type but no expert steps yet, copy from requirement (backfill).
   const fetchExpertSteps = useCallback(async () => {
     if (!application.id) return
     
@@ -255,30 +343,105 @@ export default function AdminApplicationDetailContent({
       if (error) {
         console.error('Error fetching expert steps:', error)
         setExpertSteps([])
-      } else {
-        setExpertSteps((expertStepsData || []).map((step: any) => ({
-          id: step.id,
-          step_name: step.step_name,
-          step_order: step.step_order,
-          description: step.description,
-          is_completed: step.is_completed,
-          is_expert_step: true,
-          created_by_expert_id: step.created_by_expert_id
-        })))
+        return
       }
+
+      const steps = expertStepsData || []
+      if (steps.length === 0 && application.license_type_id && application.state) {
+        const { data: licenseType } = await supabase
+          .from('license_types')
+          .select('name')
+          .eq('id', application.license_type_id)
+          .maybeSingle()
+        if (licenseType?.name) {
+          await copyExpertStepsFromRequirementToApplication(application.id, application.state, licenseType.name)
+          const { data: refetched, error: refetchErr } = await supabase
+            .from('application_steps')
+            .select('*')
+            .eq('application_id', application.id)
+            .eq('is_expert_step', true)
+            .order('step_order', { ascending: true })
+          if (!refetchErr && refetched?.length) {
+            setExpertSteps(refetched.map((step: any) => ({
+              id: step.id,
+              step_name: step.step_name,
+              step_order: step.step_order,
+              description: step.description,
+              is_completed: step.is_completed,
+              is_expert_step: true,
+              created_by_expert_id: step.created_by_expert_id
+            })))
+            return
+          }
+        }
+      }
+
+      setExpertSteps(steps.map((step: any) => ({
+        id: step.id,
+        step_name: step.step_name,
+        step_order: step.step_order,
+        description: step.description,
+        is_completed: step.is_completed,
+        is_expert_step: true,
+        created_by_expert_id: step.created_by_expert_id
+      })))
     } catch (error) {
       console.error('Error fetching expert steps:', error)
       setExpertSteps([])
     } finally {
       setIsLoadingExpertSteps(false)
     }
-  }, [application.id, supabase])
+  }, [application.id, application.license_type_id, application.state, supabase])
 
   useEffect(() => {
     if (activeTab === 'expert-process') {
       fetchExpertSteps()
     }
   }, [activeTab, fetchExpertSteps])
+
+  const openAddExpertStepModal = () => {
+    setShowAddExpertStepModal(true)
+    setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
+  }
+  const closeAddExpertStepModal = () => {
+    setShowAddExpertStepModal(false)
+    setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
+  }
+
+  const handleAddExpertStep = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!application.id || !expertStepFormData.stepName.trim() || isSubmittingExpertStep) return
+    setIsSubmittingExpertStep(true)
+    try {
+      const { data: existingSteps } = await supabase
+        .from('application_steps')
+        .select('step_order')
+        .eq('application_id', application.id)
+        .eq('is_expert_step', true)
+        .order('step_order', { ascending: false })
+        .limit(1)
+      const nextOrder = existingSteps?.length ? existingSteps[0].step_order + 1 : 1
+      const { error } = await supabase
+        .from('application_steps')
+        .insert({
+          application_id: application.id,
+          step_name: expertStepFormData.stepName.trim(),
+          step_order: nextOrder,
+          description: expertStepFormData.description.trim() || null,
+          phase: expertStepFormData.phase || null,
+          is_expert_step: true,
+          is_completed: false,
+        })
+      if (error) throw error
+      closeAddExpertStepModal()
+      await fetchExpertSteps()
+    } catch (err) {
+      console.error('Error adding expert step:', err)
+      alert('Failed to add expert step')
+    } finally {
+      setIsSubmittingExpertStep(false)
+    }
+  }
 
   // Handle copying expert steps to another application
   const handleCopyExpertSteps = async (targetApplicationId: string) => {
@@ -671,41 +834,44 @@ export default function AdminApplicationDetailContent({
   const completedSteps = steps.filter(s => s.is_completed).length
   const totalSteps = steps.length
 
-  // Handle step completion
-  const handleCompleteStep = async () => {
-    if (!selectedStepId || !application.id || isCompletingStep) return
+  const useTemplateForDocuments = !!application?.license_type_id
+  const totalDocuments = useTemplateForDocuments ? requirementDocuments.length : documents.length
+  const completedDocuments = useTemplateForDocuments
+    ? requirementDocuments.filter(rd => documents.some(d => d.license_requirement_document_id === rd.id && (d.status === 'approved' || d.status === 'completed'))).length
+    : documents.filter(d => d.status === 'approved' || d.status === 'completed').length
+  const getLinkedDocument = (requirementDocId: string) =>
+    documents.find(d => d.license_requirement_document_id === requirementDocId)
+
+  // Handle step completion (toggle by clicking the step itself, like owner dashboard)
+  const handleCompleteStep = async (isCompleted: boolean, stepId: string) => {
+    if (!stepId || !application.id || isCompletingStep) return
 
     setIsCompletingStep(true)
     try {
-      // Find the selected step
-      const selectedStep = steps.find(s => s.id === selectedStepId)
+      const selectedStep = steps.find(s => s.id === stepId)
       if (!selectedStep) {
         throw new Error('Step not found')
       }
 
-      // First, check if an application_steps entry exists with this ID
       const { data: existingAppStep } = await supabase
         .from('application_steps')
         .select('id')
         .eq('application_id', application.id)
-        .eq('id', selectedStepId)
+        .eq('id', stepId)
         .maybeSingle()
 
       if (existingAppStep) {
-        // Update existing application_steps entry
         const { error: updateError } = await supabase
           .from('application_steps')
           .update({
-            is_completed: true,
-            completed_at: new Date().toISOString()
+            is_completed: isCompleted,
+            completed_at: isCompleted ? new Date().toISOString() : null
           })
-          .eq('id', selectedStepId)
+          .eq('id', stepId)
           .eq('application_id', application.id)
 
         if (updateError) throw updateError
       } else {
-        // Step doesn't exist in application_steps yet
-        // Check if it exists by step_name and step_order
         const { data: existingByName } = await supabase
           .from('application_steps')
           .select('id')
@@ -715,19 +881,19 @@ export default function AdminApplicationDetailContent({
           .maybeSingle()
 
         if (existingByName) {
-          // Update by step_name and step_order
           const { error: updateError } = await supabase
             .from('application_steps')
             .update({
-              is_completed: true,
-              completed_at: new Date().toISOString()
+              is_completed: isCompleted,
+              completed_at: isCompleted ? new Date().toISOString() : null
             })
             .eq('id', existingByName.id)
             .eq('application_id', application.id)
 
           if (updateError) throw updateError
         } else {
-          // Create new application_steps entry
+          // Only insert when completing (no row exists yet)
+          if (!isCompleted) return
           const { error: insertError } = await supabase
             .from('application_steps')
             .insert({
@@ -743,11 +909,7 @@ export default function AdminApplicationDetailContent({
         }
       }
 
-      // Refresh steps to reflect the update
       await fetchSteps()
-      
-      // Clear selection
-      setSelectedStepId(null)
     } catch (error: any) {
       console.error('Error completing step:', error)
       alert('Failed to complete step: ' + (error.message || 'Unknown error'))
@@ -885,7 +1047,7 @@ export default function AdminApplicationDetailContent({
             <div className="text-sm font-medium text-gray-600">Documents</div>
             <FileText className="w-5 h-5 text-purple-600" />
           </div>
-          <div className="text-3xl font-bold text-gray-900">{documents.length}</div>
+          <div className="text-3xl font-bold text-gray-900">{completedDocuments} of {totalDocuments}</div>
         </div>
       </div>
 
@@ -930,17 +1092,20 @@ export default function AdminApplicationDetailContent({
           ) : (
             <div className="space-y-3">
               {steps.map((step) => {
-                const isSelected = selectedStepId === step.id
                 const isCompleted = step.is_completed
                 return (
                   <div
                     key={step.id}
-                    onClick={() => !isCompleted && setSelectedStepId(step.id === selectedStepId ? null : step.id)}
+                    onClick={() => {
+                      if (!isCompleted) {
+                        handleCompleteStep(true, step.id)
+                      } else {
+                        handleCompleteStep(false, step.id)
+                      }
+                    }}
                     className={`flex items-start gap-3 p-4 border rounded-lg transition-all ${
                       isCompleted
-                        ? 'bg-green-50 border-green-200'
-                        : isSelected
-                        ? 'bg-blue-50 border-blue-500 shadow-md cursor-pointer'
+                        ? 'bg-green-50 border-green-200 cursor-pointer'
                         : 'bg-gray-50 border-gray-200 hover:border-gray-300 hover:bg-gray-100 cursor-pointer'
                     }`}
                   >
@@ -948,17 +1113,7 @@ export default function AdminApplicationDetailContent({
                       {isCompleted ? (
                         <CheckCircle2 className="w-5 h-5 text-green-600" />
                       ) : (
-                        <div className={`w-5 h-5 border-2 rounded-full ${
-                          isSelected
-                            ? 'border-blue-500 bg-blue-500'
-                            : 'border-gray-300'
-                        }`}>
-                          {isSelected && (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <div className="w-2 h-2 bg-white rounded-full" />
-                            </div>
-                          )}
-                        </div>
+                        <div className="w-5 h-5 border-2 rounded-full border-gray-300" />
                       )}
                     </div>
                     <div className="flex-1">
@@ -975,49 +1130,73 @@ export default function AdminApplicationDetailContent({
               })}
             </div>
           )}
-
-          {/* Complete Button - appears when step is selected */}
-          {selectedStepId && (
-            <div className="mt-6 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    Selected: {steps.find(s => s.id === selectedStepId)?.step_name}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Click Complete to mark this step as finished
-                  </p>
-                </div>
-                <button
-                  onClick={handleCompleteStep}
-                  disabled={isCompletingStep}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
-                >
-                  {isCompletingStep ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Completing...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-5 h-5" />
-                      Complete
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       {activeTab === 'documents' && (
         <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Application Documents</h2>
-          {documents.length === 0 ? (
+          {isLoadingRequirementDocuments ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+            </div>
+          ) : useTemplateForDocuments && requirementDocuments.length > 0 ? (
+            <div className="space-y-3">
+              {requirementDocuments.map((reqDoc) => {
+                const linked = getLinkedDocument(reqDoc.id)
+                const displayName = linked?.document_name ?? reqDoc.document_name
+                const categoryLabel = reqDoc.document_type || reqDoc.document_name.split(/[\s_]+/)[0] || 'Document'
+                const status = linked ? (linked.status === 'approved' || linked.status === 'completed' ? 'approved' : linked.status) : 'pending'
+                return (
+                  <div
+                    key={reqDoc.id}
+                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900">{displayName}</div>
+                        <div className="text-sm text-gray-500 mb-1">{categoryLabel}</div>
+                        {linked && (
+                          <div className="text-sm text-gray-500">
+                            Uploaded {formatDate(linked.created_at)}
+                            {linked.document_type && ` • ${linked.document_type}`}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${
+                        status === 'approved' || status === 'completed'
+                          ? 'bg-green-100 text-green-700'
+                          : status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                      </span>
+                    </div>
+                    {linked ? (
+                      <button
+                        onClick={() => handleDownload(linked.document_url, linked.document_name)}
+                        className="ml-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 flex-shrink-0"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download
+                      </button>
+                    ) : (
+                      <span className="ml-4 text-sm text-gray-400 flex-shrink-0">Not uploaded</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : documents.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-              <p className="text-sm">No documents uploaded yet</p>
+              <p className="text-sm">
+                {useTemplateForDocuments && requirementDocuments.length === 0
+                  ? 'No required documents have been defined for this license type yet.'
+                  : 'No documents uploaded yet'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1171,31 +1350,104 @@ export default function AdminApplicationDetailContent({
           <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">Expert Process Steps</h2>
-              {selectedExpertStepIds.size > 0 && (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={async () => {
-                    setIsLoadingApplications(true)
-                    setShowCopyExpertStepsModal(true)
-                    // Get all applications for the admin to select target
-                    const { data: allApplications } = await supabase
-                      .from('applications')
-                      .select('id, application_name, state')
-                      .neq('id', application.id)
-                      .order('created_at', { ascending: false })
-                      .limit(100)
-
-                    if (allApplications) {
-                      setAvailableApplications(allApplications)
-                    }
-                    setIsLoadingApplications(false)
-                  }}
+                  type="button"
+                  onClick={openAddExpertStepModal}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
                 >
-                  <Copy className="w-4 h-4" />
-                  Copy Selected ({selectedExpertStepIds.size})
+                  <Plus className="w-4 h-4" />
+                  Add Step
                 </button>
-              )}
+                {selectedExpertStepIds.size > 0 && (
+                  <button
+                    onClick={async () => {
+                      setIsLoadingApplications(true)
+                      setShowCopyExpertStepsModal(true)
+                      // Get all applications for the admin to select target
+                      const { data: allApplications } = await supabase
+                        .from('applications')
+                        .select('id, application_name, state')
+                        .neq('id', application.id)
+                        .order('created_at', { ascending: false })
+                        .limit(100)
+
+                      if (allApplications) {
+                        setAvailableApplications(allApplications)
+                      }
+                      setIsLoadingApplications(false)
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy Selected ({selectedExpertStepIds.size})
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Add Expert Step modal */}
+            <Modal
+              isOpen={showAddExpertStepModal}
+              onClose={closeAddExpertStepModal}
+              title="Add Expert Step"
+              size="lg"
+            >
+              <form onSubmit={handleAddExpertStep} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
+                  <select
+                    value={expertStepFormData.phase}
+                    onChange={(e) => setExpertStepFormData({ ...expertStepFormData, phase: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="Pre-Application">Pre-Application</option>
+                    <option value="Post-Application">Post-Application</option>
+                    <option value="Application">Application</option>
+                    <option value="Review">Review</option>
+                    <option value="Post-Approval">Post-Approval</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
+                  <input
+                    type="text"
+                    value={expertStepFormData.stepName}
+                    onChange={(e) => setExpertStepFormData({ ...expertStepFormData, stepName: e.target.value })}
+                    placeholder="e.g., Initial Client Consultation"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    value={expertStepFormData.description}
+                    onChange={(e) => setExpertStepFormData({ ...expertStepFormData, description: e.target.value })}
+                    placeholder="Detailed description of this step"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingExpertStep}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSubmittingExpertStep ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Save Step
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeAddExpertStepModal}
+                    className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </Modal>
 
             {isLoadingExpertSteps ? (
               <div className="flex items-center justify-center py-8">

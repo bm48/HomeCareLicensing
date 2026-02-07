@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { 
   FileText, 
@@ -74,6 +73,7 @@ export default function LicensesContent({
   const [selectedState, setSelectedState] = useState<string>('')
   const [selectedLicenseType, setSelectedLicenseType] = useState<LicenseType | null>(null)
   const [loadingLicenseId, setLoadingLicenseId] = useState<string | null>(null)
+  const [loadingApplicationId, setLoadingApplicationId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [downloadingApplicationId, setDownloadingApplicationId] = useState<string | null>(null)
   const [downloadingLicenseId, setDownloadingLicenseId] = useState<string | null>(null)
@@ -182,6 +182,11 @@ export default function LicensesContent({
   const handleViewLicenseDetails = (licenseId: string) => {
     setLoadingLicenseId(licenseId)
     router.push(`/dashboard/licenses/${licenseId}`)
+  }
+
+  const handleViewApplicationDetails = (applicationId: string) => {
+    setLoadingApplicationId(applicationId)
+    router.push(`/dashboard/applications/${applicationId}`)
   }
 
   const handleDownloadLatestDocument = async (applicationId: string, e: React.MouseEvent) => {
@@ -715,12 +720,18 @@ export default function LicensesContent({
                     <tbody className="bg-white divide-y divide-gray-200">
                       {/* Filtered Applications */}
                       {getFilteredApplications().map((application) => (
-                        <tr key={application.id} className="hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => router.push(`/dashboard/applications/${application.id}`)}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                              {getStateAbbr(application.state)}
-                            </div>
+                          <tr key={application.id} className={`hover:bg-gray-50 transition-colors cursor-pointer ${loadingApplicationId === application.id ? 'bg-blue-50/50' : ''}`}
+                        onClick={() => handleViewApplicationDetails(application.id)}>
+                          <td className="px-6 py-4 whitespace-nowrap relative">
+                            {loadingApplicationId === application.id ? (
+                              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-100">
+                                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                              </div>
+                            ) : (
+                              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                                {getStateAbbr(application.state)}
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-semibold text-gray-900">{application.application_name}</div>
@@ -779,13 +790,24 @@ export default function LicensesContent({
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex flex-col items-end gap-2">
-                              <Link
-                                href={`/dashboard/applications/${application.id}`}
-                                className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleViewApplicationDetails(application.id); }}
+                                disabled={loadingApplicationId === application.id}
+                                className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                View Details
-                                <ArrowRight className="w-4 h-4" />
-                              </Link>
+                                {loadingApplicationId === application.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Loading...
+                                  </>
+                                ) : (
+                                  <>
+                                    View Details
+                                    <ArrowRight className="w-4 h-4" />
+                                  </>
+                                )}
+                              </button>
                               {application.status === 'needs_revision' && (
                                 <button
                                   onClick={() => handleResubmit(application.id)}
@@ -892,12 +914,18 @@ export default function LicensesContent({
                         
                         return (
                           <tr key={license.id} 
-                          className="hover:bg-gray-50 transition-colors cursor-pointer"
-                          onClick={() => router.push(`/dashboard/licenses/${license.id}`)}>
+                          className={`hover:bg-gray-50 transition-colors cursor-pointer ${loadingLicenseId === license.id ? 'bg-blue-50/50' : ''}`}
+                          onClick={() => handleViewLicenseDetails(license.id)}>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                                {getStateAbbr(license.state)}
-                              </div>
+                              {loadingLicenseId === license.id ? (
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-100">
+                                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                                </div>
+                              ) : (
+                                <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                                  {getStateAbbr(license.state)}
+                                </div>
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-semibold text-gray-900">{license.license_name}</div>

@@ -6,6 +6,7 @@ import Modal from './Modal'
 import { Heart, Users, MapPin, DollarSign, Clock, RefreshCw, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LicenseType } from '@/types/license'
+import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
 
 interface ReviewLicenseRequestModalProps {
   isOpen: boolean
@@ -69,6 +70,9 @@ export default function ReviewLicenseRequestModal({
       if (insertError) {
         throw insertError
       }
+
+      // Copy expert step template from license requirement into this application (snapshot at creation; requirement changes won't alter this application's steps)
+      await copyExpertStepsFromRequirementToApplication(application.id, state, licenseType.name)
 
       // Close modal and refresh
       onClose()

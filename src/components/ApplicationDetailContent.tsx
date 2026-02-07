@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
 import {
   FileText,
   Download,
@@ -22,7 +23,9 @@ import {
   Plus,
   Edit2,
   Trash2,
-  ChevronDown
+  ChevronDown,
+  Copy,
+  Search
 } from 'lucide-react'
 import UploadDocumentModal from './UploadDocumentModal'
 import Modal from './Modal'
@@ -50,6 +53,15 @@ interface Document {
   created_at: string
   description?: string | null
   expert_review_notes?: string | null
+  license_requirement_document_id?: string | null
+}
+
+interface RequirementDocument {
+  id: string
+  document_name: string
+  document_type: string | null
+  description: string | null
+  is_required: boolean
 }
 
 interface Step {
@@ -93,10 +105,13 @@ export default function ApplicationDetailContent({
     }
   }
   const [documents, setDocuments] = useState(initialDocuments)
+  const [requirementDocuments, setRequirementDocuments] = useState<RequirementDocument[]>([])
+  const [isLoadingRequirementDocuments, setIsLoadingRequirementDocuments] = useState(false)
   const [steps, setSteps] = useState<Step[]>([])
   const [isLoadingSteps, setIsLoadingSteps] = useState(false)
   const [documentFilter, setDocumentFilter] = useState<'all' | 'pending' | 'drafts' | 'completed'>('all')
   const [licenseType, setLicenseType] = useState<any>(null)
+  const [uploadForRequirementDoc, setUploadForRequirementDoc] = useState<RequirementDocument | null>(null)
   const [isLoadingLicenseType, setIsLoadingLicenseType] = useState(false)
   const [expertProfile, setExpertProfile] = useState<{ id: string; full_name: string | null; email: string | null } | null>(null)
   const [isLoadingExpert, setIsLoadingExpert] = useState(false)
@@ -121,6 +136,9 @@ export default function ApplicationDetailContent({
   const [expertStepFormData, setExpertStepFormData] = useState({ stepName: '', description: '' })
   const [editingExpertStep, setEditingExpertStep] = useState<string | null>(null)
   const [isSubmittingExpertStep, setIsSubmittingExpertStep] = useState(false)
+  const [showAddExpertStepModal, setShowAddExpertStepModal] = useState(false)
+  const [addExpertStepModalTab, setAddExpertStepModalTab] = useState<'new' | 'copy' | 'browse'>('new')
+  const [togglingExpertStepId, setTogglingExpertStepId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
@@ -143,7 +161,8 @@ export default function ApplicationDetailContent({
           status: doc.status,
           created_at: doc.created_at,
           description: doc.description || null,
-          expert_review_notes: doc.expert_review_notes || null
+          expert_review_notes: doc.expert_review_notes || null,
+          license_requirement_document_id: doc.license_requirement_document_id ?? null
         })))
       }
     } catch (error) {
@@ -210,11 +229,11 @@ export default function ApplicationDetailContent({
       }
 
       // If no application_steps exist, fetch required steps from license_requirement_steps
-      if (application.license_type_id && application.state) {
-        // Get license type name
+      if (application.license_type_id) {
+        // Get license type name and state (match same license_requirement as admin)
         const { data: licenseType, error: licenseTypeError } = await supabase
           .from('license_types')
-          .select('name')
+          .select('name, state')
           .eq('id', application.license_type_id)
           .maybeSingle()
 
@@ -224,11 +243,18 @@ export default function ApplicationDetailContent({
           return
         }
 
-        // Find license_requirement_id for this state and license type
+        const requirementState = licenseType.state ?? application.state
+        if (!requirementState) {
+          setSteps([])
+          setIsLoadingSteps(false)
+          return
+        }
+
+        // Find license_requirement_id by license type's (state, name)
         const { data: licenseRequirement, error: reqError } = await supabase
           .from('license_requirements')
           .select('id')
-          .eq('state', application.state)
+          .eq('state', requirementState)
           .eq('license_type', licenseType.name)
           .maybeSingle()
 
@@ -273,7 +299,76 @@ export default function ApplicationDetailContent({
     fetchSteps()
   }, [fetchSteps])
 
-  // Fetch expert steps separately
+  // Fetch license requirement documents (template for Documents tab)
+  // Match license_requirements by license type's (state, name), same as admin dashboard
+  const fetchRequirementDocuments = useCallback(async () => {
+    if (!application?.license_type_id) {
+      setRequirementDocuments([])
+      return
+    }
+    setIsLoadingRequirementDocuments(true)
+    try {
+      const { data: licenseTypeRow, error: licenseTypeError } = await supabase
+        .from('license_types')
+        .select('name, state')
+        .eq('id', application.license_type_id)
+        .maybeSingle()
+      if (licenseTypeError || !licenseTypeRow?.name) {
+        setRequirementDocuments([])
+        return
+      }
+      // Use license type's state (and name) so we match the same license_requirement as admin
+      const requirementState = licenseTypeRow.state ?? application.state
+      if (!requirementState) {
+        setRequirementDocuments([])
+        return
+      }
+      const { data: licenseRequirement, error: reqError } = await supabase
+        .from('license_requirements')
+        .select('id')
+        .eq('state', requirementState)
+        .eq('license_type', licenseTypeRow.name)
+        .maybeSingle()
+      if (reqError || !licenseRequirement) {
+        setRequirementDocuments([])
+        return
+      }
+      const { data: reqDocs, error: docsError } = await supabase
+        .from('license_requirement_documents')
+        .select('id, document_name, document_type, is_required')
+        .eq('license_requirement_id', licenseRequirement.id)
+        .order('document_name', { ascending: true })
+      if (docsError) {
+        setRequirementDocuments([])
+        return
+      }
+      setRequirementDocuments((reqDocs || []).map((d: any) => ({
+        id: d.id,
+        document_name: d.document_name,
+        document_type: d.document_type ?? null,
+        description: null,
+        is_required: d.is_required ?? true
+      })))
+    } catch (e) {
+      console.error('Error fetching requirement documents:', e)
+      setRequirementDocuments([])
+    } finally {
+      setIsLoadingRequirementDocuments(false)
+    }
+  }, [application?.license_type_id, application?.state, supabase])
+
+  useEffect(() => {
+    fetchRequirementDocuments()
+  }, [fetchRequirementDocuments])
+
+  // Re-fetch requirement documents when user opens Documents tab so current application always shows template
+  useEffect(() => {
+    if (activeTab === 'documents' && application?.license_type_id && application?.state) {
+      fetchRequirementDocuments()
+    }
+  }, [activeTab, application?.license_type_id, application?.state, fetchRequirementDocuments])
+
+  // Fetch expert steps separately. If application has a license type but no expert steps yet, copy from requirement (e.g. backfill for existing apps or when license type was assigned later).
   const fetchExpertSteps = useCallback(async () => {
     if (!application.id) return
     
@@ -289,30 +384,73 @@ export default function ApplicationDetailContent({
       if (error) {
         console.error('Error fetching expert steps:', error)
         setExpertSteps([])
-      } else {
-        setExpertSteps((expertStepsData || []).map((step: any) => ({
-          id: step.id,
-          step_name: step.step_name,
-          step_order: step.step_order,
-          description: step.description,
-          is_completed: step.is_completed,
-          is_expert_step: true,
-          created_by_expert_id: step.created_by_expert_id
-        })))
+        return
       }
+
+      const steps = expertStepsData || []
+      if (steps.length === 0 && application.license_type_id && application.state) {
+        const { data: licenseType } = await supabase
+          .from('license_types')
+          .select('name')
+          .eq('id', application.license_type_id)
+          .maybeSingle()
+        if (licenseType?.name) {
+          await copyExpertStepsFromRequirementToApplication(application.id, application.state, licenseType.name)
+          const { data: refetched, error: refetchErr } = await supabase
+            .from('application_steps')
+            .select('*')
+            .eq('application_id', application.id)
+            .eq('is_expert_step', true)
+            .order('step_order', { ascending: true })
+          if (!refetchErr && refetched?.length) {
+            setExpertSteps(refetched.map((step: any) => ({
+              id: step.id,
+              step_name: step.step_name,
+              step_order: step.step_order,
+              description: step.description,
+              is_completed: step.is_completed,
+              is_expert_step: true,
+              created_by_expert_id: step.created_by_expert_id
+            })))
+            return
+          }
+        }
+      }
+
+      setExpertSteps(steps.map((step: any) => ({
+        id: step.id,
+        step_name: step.step_name,
+        step_order: step.step_order,
+        description: step.description,
+        is_completed: step.is_completed,
+        is_expert_step: true,
+        created_by_expert_id: step.created_by_expert_id
+      })))
     } catch (error) {
       console.error('Error fetching expert steps:', error)
       setExpertSteps([])
     } finally {
       setIsLoadingExpertSteps(false)
     }
-  }, [application.id, supabase])
+  }, [application.id, application.license_type_id, application.state, supabase])
 
   useEffect(() => {
     if (activeTab === 'expert-process') {
       fetchExpertSteps()
     }
   }, [activeTab, fetchExpertSteps])
+
+  const openAddExpertStepModal = () => {
+    setShowAddExpertStepModal(true)
+    setAddExpertStepModalTab('new')
+    setExpertStepFormData({ stepName: '', description: '' })
+  }
+
+  const closeAddExpertStepModal = () => {
+    setShowAddExpertStepModal(false)
+    setAddExpertStepModalTab('new')
+    setExpertStepFormData({ stepName: '', description: '' })
+  }
 
   // Handle expert step operations
   const handleAddExpertStep = async (e: React.FormEvent) => {
@@ -352,15 +490,42 @@ export default function ApplicationDetailContent({
 
       if (insertError) throw insertError
 
-      // Reset form and refresh
+      // Reset form, close modal, and refresh
       setExpertStepFormData({ stepName: '', description: '' })
       setShowExpertStepForm(false)
+      closeAddExpertStepModal()
       await fetchExpertSteps()
     } catch (error: any) {
       console.error('Error adding expert step:', error)
       alert('Failed to add expert step: ' + (error.message || 'Unknown error'))
     } finally {
       setIsSubmittingExpertStep(false)
+    }
+  }
+
+  const handleToggleExpertStepComplete = async (step: Step) => {
+    if (!application.id || currentUserRole !== 'expert') return
+    setTogglingExpertStepId(step.id)
+    try {
+      const newCompleted = !step.is_completed
+      const { error } = await supabase
+        .from('application_steps')
+        .update({
+          is_completed: newCompleted,
+          ...(newCompleted ? { completed_at: new Date().toISOString() } : { completed_at: null })
+        })
+        .eq('id', step.id)
+        .eq('application_id', application.id)
+
+      if (error) throw error
+      setExpertSteps((prev) =>
+        prev.map((s) => (s.id === step.id ? { ...s, is_completed: newCompleted } : s))
+      )
+    } catch (error: any) {
+      console.error('Error toggling expert step:', error)
+      alert('Failed to update step: ' + (error.message || 'Unknown error'))
+    } finally {
+      setTogglingExpertStepId(null)
     }
   }
 
@@ -989,16 +1154,33 @@ export default function ApplicationDetailContent({
   const completedSteps = steps.filter(s => s.is_completed).length
   const totalSteps = steps.length
   const pendingTasks = totalSteps - completedSteps
-  const completedDocuments = documents.filter(d => d.status === 'approved' || d.status === 'completed').length
-  const totalDocuments = documents.length
+  // When we have requirement documents (template), count completed as requirement slots with an approved upload
+  // Use template for Documents whenever current application has a license (state + license_type_id)
+  const useTemplateForDocuments = !!(application?.license_type_id && application?.state)
+  const totalDocuments = useTemplateForDocuments ? requirementDocuments.length : documents.length
+  const completedDocuments = useTemplateForDocuments
+    ? requirementDocuments.filter(rd => documents.some(d => d.license_requirement_document_id === rd.id && (d.status === 'approved' || d.status === 'completed'))).length
+    : documents.filter(d => d.status === 'approved' || d.status === 'completed').length
 
-  // Filter documents based on selected filter
-  // draft = just uploaded (DB pending), pending = expert rejected (DB rejected), completed = expert approved (DB approved)
+  // For template view: each row is a requirement doc; linked upload may exist. Filter rows by linked doc status.
+  const getLinkedDocument = (requirementDocId: string) =>
+    documents.find(d => d.license_requirement_document_id === requirementDocId)
+  const filteredRequirementDocuments = requirementDocuments.filter(rd => {
+    const linked = getLinkedDocument(rd.id)
+    if (documentFilter === 'all') return true
+    if (documentFilter === 'completed') return linked && (linked.status === 'approved' || linked.status === 'completed')
+    if (documentFilter === 'pending') return linked && linked.status === 'pending'
+    // Drafts: show requirement slots with no upload yet OR with a draft/rejected upload
+    if (documentFilter === 'drafts') return !linked || linked.status === 'draft' || linked.status === 'rejected'
+    return true
+  })
+
+  // Filter documents (legacy list when no requirement template) based on selected filter
   const filteredDocuments = documents.filter(doc => {
     if (documentFilter === 'all') return true
     if (documentFilter === 'completed') return doc.status === 'approved' || doc.status === 'completed'
-    if (documentFilter === 'pending') return doc.status === 'rejected'
-    if (documentFilter === 'drafts') return doc.status === 'pending'
+    if (documentFilter === 'pending') return doc.status === 'pending'
+    if (documentFilter === 'drafts') return doc.status === 'draft' || doc.status === 'rejected'
     return true
   })
 
@@ -1026,15 +1208,46 @@ export default function ApplicationDetailContent({
     })
   }
 
-  // UI status: draft = just uploaded (DB pending), pending = expert rejected (DB rejected), completed = expert approved (DB approved)
+  // UI status: draft = just uploaded; pending = submitted for expert review; completed = expert approved. Expert reject sets back to draft.
   const getDocumentStatus = (status: string) => {
     if (status === 'approved' || status === 'completed') return 'completed'
-    if (status === 'pending') return 'draft'
-    if (status === 'rejected') return 'pending'
-    return 'draft'
+    if (status === 'pending') return 'pending'
+    if (status === 'rejected') return 'draft' // legacy or expert rejected -> show as draft so owner can resubmit
+    return status === 'draft' ? 'draft' : 'draft'
   }
 
-  // Handle document approval/rejection by expert
+  // Owner submits document for expert review (draft -> pending); notifies assigned expert
+  const [submittingDocumentId, setSubmittingDocumentId] = useState<string | null>(null)
+  const handleSubmitDocument = async (documentId: string) => {
+    if (!application?.id || submittingDocumentId) return
+    setSubmittingDocumentId(documentId)
+    try {
+      const { data: app } = await supabase
+        .from('applications')
+        .select('assigned_expert_id')
+        .eq('id', application.id)
+        .single()
+      if (!app?.assigned_expert_id) {
+        alert('An expert must be assigned to this application before you can submit documents. Please contact support.')
+        return
+      }
+      const { error } = await supabase
+        .from('application_documents')
+        .update({ status: 'pending' })
+        .eq('id', documentId)
+        .eq('application_id', application.id)
+
+      if (error) throw error
+      await refreshDocuments()
+    } catch (error: any) {
+      console.error('Error submitting document:', error)
+      alert('Failed to submit document: ' + (error.message || 'Unknown error'))
+    } finally {
+      setSubmittingDocumentId(null)
+    }
+  }
+
+  // Handle document approval/rejection by expert: approve -> completed (approved); reject -> back to draft
   const handleDocumentReview = async (action: 'approve' | 'reject') => {
     if (!selectedDocumentForReview || !currentUserId || isReviewing) return
 
@@ -1043,7 +1256,7 @@ export default function ApplicationDetailContent({
       const { error } = await supabase
         .from('application_documents')
         .update({
-          status: action === 'approve' ? 'approved' : 'rejected',
+          status: action === 'approve' ? 'approved' : 'draft',
           expert_review_notes: reviewNotes.trim() || null
         })
         .eq('id', selectedDocumentForReview.id)
@@ -1463,7 +1676,7 @@ export default function ApplicationDetailContent({
                     <div className="text-sm font-medium text-gray-600">In Progress</div>
                   </div>
                   <div className="text-3xl font-bold text-gray-900">
-                    {documents.filter(d => getDocumentStatus(d.status) === 'draft').length}
+                    {documents.filter(d => d.status === 'draft' || d.status === 'rejected').length}
                   </div>
                 </div>
 
@@ -1473,7 +1686,7 @@ export default function ApplicationDetailContent({
                     <div className="text-sm font-medium text-gray-600">Pending</div>
                   </div>
                   <div className="text-3xl font-bold text-gray-900">
-                    {documents.filter(d => getDocumentStatus(d.status) === 'pending').length}
+                    {documents.filter(d => d.status === 'pending').length}
                   </div>
                 </div>
               </div> */}
@@ -1485,7 +1698,7 @@ export default function ApplicationDetailContent({
                   <div className="relative flex items-center gap-4">
                     
                 {/* Upload button - only for clients (company owners) */}
-                {currentUserRole === 'company_owner' && (
+                {/* {currentUserRole === 'company_owner' && (
                   <button
                     onClick={() => setIsUploadModalOpen(true)}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
@@ -1493,7 +1706,7 @@ export default function ApplicationDetailContent({
                     <Upload className="w-5 h-5" />
                     Upload Document
                   </button>
-                )}
+                )} */}
                     <select
                       value={documentFilter}
                       onChange={(e) => setDocumentFilter(e.target.value as typeof documentFilter)}
@@ -1508,19 +1721,136 @@ export default function ApplicationDetailContent({
                   </div>
                 </div>
 
-                {/* Documents List */}
+                {/* Documents List: template (license requirement documents) for current application when it has a license */}
                 <div className="p-6">
-                  {filteredDocuments.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                      <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                      <p>No documents found</p>
+                  {isLoadingRequirementDocuments ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
                     </div>
+                  ) : useTemplateForDocuments ? (
+                    filteredRequirementDocuments.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500">
+                        <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                        <p>
+                          {requirementDocuments.length === 0
+                            ? 'No required documents have been defined for this license type yet.'
+                            : 'No documents match the current filter'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {filteredRequirementDocuments.map((reqDoc) => {
+                          const linked = getLinkedDocument(reqDoc.id)
+                          const status = linked ? getDocumentStatus(linked.status) : 'draft'
+                          const isExpert = currentUserRole === 'expert'
+                          const isPendingReview = linked?.status === 'pending' // submitted, expert can review
+                          const canOwnerSubmit = linked && (linked.status === 'draft' || linked.status === 'rejected')
+                          const displayName = linked?.document_name ?? reqDoc.document_name
+                          const categoryLabel = reqDoc.document_type || reqDoc.document_name.split(/[\s_]+/)[0] || 'Document'
+                          return (
+                            <div
+                              key={reqDoc.id}
+                              className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start gap-4 flex-1">
+                                  <FileText className="w-6 h-6 text-gray-400 mt-1 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-gray-900 mb-1">{displayName}</div>
+                                    <div className="text-sm text-gray-500 mb-2">{categoryLabel}</div>
+                                    {linked && (
+                                      <>
+                                        {linked.description && (
+                                          <div className="text-sm text-gray-600 mb-1">{linked.description}</div>
+                                        )}
+                                        <div className="text-sm text-gray-500">
+                                          {linked.document_type || 'Document'} • Uploaded {formatDate(linked.created_at)}
+                                        </div>
+                                        {linked.expert_review_notes && (
+                                          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-gray-700">
+                                            <span className="font-medium">Expert Review: </span>
+                                            {linked.expert_review_notes}
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3 flex-shrink-0">
+                                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                                    status === 'completed'
+                                      ? 'bg-green-100 text-green-700'
+                                      : status === 'pending'
+                                      ? 'bg-orange-100 text-orange-700'
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {status}
+                                  </span>
+                                  {currentUserRole === 'company_owner' && (
+                                    <button
+                                      onClick={() => {
+                                        setUploadForRequirementDoc(reqDoc)
+                                        setIsUploadModalOpen(true)
+                                      }}
+                                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2"
+                                    >
+                                      <Upload className="w-4 h-4" />
+                                      Upload
+                                    </button>
+                                  )}
+                                  {currentUserRole === 'company_owner' && canOwnerSubmit && (
+                                    <button
+                                      onClick={() => handleSubmitDocument(linked.id)}
+                                      disabled={!!submittingDocumentId}
+                                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                      {submittingDocumentId === linked.id ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : null}
+                                      Submit
+                                    </button>
+                                  )}
+                                  {linked && (
+                                    <button
+                                      onClick={() => handleDownload(linked.document_url, linked.document_name)}
+                                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                      Download
+                                    </button>
+                                  )}
+                                  {isExpert && linked && isPendingReview && (
+                                    <button
+                                      onClick={() => {
+                                        setSelectedDocumentForReview(linked)
+                                        setReviewNotes('')
+                                      }}
+                                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                      Review
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
                   ) : (
+                    filteredDocuments.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500">
+                        <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                        <p>No documents found</p>
+                      </div>
+                    ) : (
                     <div className="space-y-4">
                       {filteredDocuments.map((doc) => {
                         const status = getDocumentStatus(doc.status)
                         const isExpert = currentUserRole === 'expert'
-                        const isDraft = doc.status === 'pending' // draft = just uploaded, awaiting expert review
+                        const isPendingReview = doc.status === 'pending'
+                        const canOwnerSubmit = doc.status === 'draft' || doc.status === 'rejected'
                         return (
                           <div
                             key={doc.id}
@@ -1555,6 +1885,18 @@ export default function ApplicationDetailContent({
                                 }`}>
                                   {status}
                                 </span>
+                                {currentUserRole === 'company_owner' && canOwnerSubmit && (
+                                  <button
+                                    onClick={() => handleSubmitDocument(doc.id)}
+                                    disabled={!!submittingDocumentId}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+                                  >
+                                    {submittingDocumentId === doc.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : null}
+                                    Submit
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleDownload(doc.document_url, doc.document_name)}
                                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center gap-2"
@@ -1562,30 +1904,28 @@ export default function ApplicationDetailContent({
                                   <Download className="w-4 h-4" />
                                   Download
                                 </button>
-                                {/* Expert review buttons - only show for experts on draft documents (awaiting review) */}
-                                {isExpert && isDraft && (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        setSelectedDocumentForReview(doc)
-                                        setReviewNotes('')
-                                      }}
-                                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-2"
-                                    >
-                                      <X className="w-4 h-4" />
-                                      Review
-                                    </button>
-                                  </>
+                                {isExpert && isPendingReview && (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedDocumentForReview(doc)
+                                      setReviewNotes('')
+                                    }}
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    Review
+                                  </button>
                                 )}
                               </div>
                             </div>
                           </div>
                         )
                       })}
-            </div>
-          )}
-        </div>
-      </div>
+                    </div>
+                    )
+                  )}
+                </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex gap-4">
@@ -1760,11 +2100,7 @@ export default function ApplicationDetailContent({
               <h2 className="text-lg font-semibold text-gray-900">Expert Process Steps</h2>
               {currentUserRole === 'expert' && (
                 <button
-                  onClick={() => {
-                    setShowExpertStepForm(!showExpertStepForm)
-                    setExpertStepFormData({ stepName: '', description: '' })
-                    setEditingExpertStep(null)
-                  }}
+                  onClick={openAddExpertStepModal}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -1773,13 +2109,133 @@ export default function ApplicationDetailContent({
               )}
             </div>
 
-            {/* Add/Edit Expert Step Form */}
-            {showExpertStepForm && currentUserRole === 'expert' && (
+            {/* Add Step modal with 3 tabs (same as admin side) */}
+            {currentUserRole === 'expert' && (
+              <Modal
+                isOpen={showAddExpertStepModal}
+                onClose={closeAddExpertStepModal}
+                title="Add Step"
+                size="xl"
+              >
+                <div className="flex flex-col gap-4">
+                  <div className="flex border-b border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setAddExpertStepModalTab('new')}
+                      className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                        addExpertStepModalTab === 'new'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <Plus className="w-4 h-4" />
+                      New
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddExpertStepModalTab('copy')}
+                      className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                        addExpertStepModalTab === 'copy'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy from Another License
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddExpertStepModalTab('browse')}
+                      className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
+                        addExpertStepModalTab === 'browse'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <Search className="w-4 h-4" />
+                      Browse All Steps
+                    </button>
+                  </div>
+
+                  {addExpertStepModalTab === 'new' && (
+                    <div className="py-2">
+                      <h4 className="text-base font-semibold text-gray-900 mb-4">Create New Expert Step</h4>
+                      <form onSubmit={handleAddExpertStep} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Step Name</label>
+                          <input
+                            type="text"
+                            value={expertStepFormData.stepName}
+                            onChange={(e) => setExpertStepFormData({ ...expertStepFormData, stepName: e.target.value })}
+                            placeholder="e.g., Initial Client Consultation"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                          <textarea
+                            value={expertStepFormData.description}
+                            onChange={(e) => setExpertStepFormData({ ...expertStepFormData, description: e.target.value })}
+                            placeholder="Detailed description of this step"
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                          />
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            type="submit"
+                            disabled={isSubmittingExpertStep}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {isSubmittingExpertStep ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-4 h-4" />
+                                Save Step
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={closeAddExpertStepModal}
+                            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {addExpertStepModalTab === 'copy' && (
+                    <div className="py-6 text-center text-gray-500">
+                      <Copy className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p className="font-medium">Copy from Another License</p>
+                      <p className="text-sm mt-1">This feature is coming soon for Expert Process steps.</p>
+                    </div>
+                  )}
+
+                  {addExpertStepModalTab === 'browse' && (
+                    <div className="py-6 text-center text-gray-500">
+                      <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p className="font-medium">Browse All Expert Steps</p>
+                      <p className="text-sm mt-1">This feature is coming soon.</p>
+                    </div>
+                  )}
+                </div>
+              </Modal>
+            )}
+
+            {/* Edit Expert Step Form (inline when editing) */}
+            {showExpertStepForm && currentUserRole === 'expert' && editingExpertStep && (
               <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  {editingExpertStep ? 'Edit Expert Step' : 'Add New Expert Step'}
-                </h3>
-                <form onSubmit={editingExpertStep ? handleUpdateExpertStep : handleAddExpertStep} className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Expert Step</h3>
+                <form onSubmit={handleUpdateExpertStep} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Step Name</label>
                     <input
@@ -1857,11 +2313,32 @@ export default function ApplicationDetailContent({
                         : 'bg-gray-50 border-gray-200'
                     }`}
                   >
-                    <div className="mt-1">
-                      {step.is_completed ? (
-                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <div className="mt-1 flex-shrink-0">
+                      {currentUserRole === 'expert' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExpertStepComplete(step)}
+                          disabled={togglingExpertStepId === step.id}
+                          className="p-0.5 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={step.is_completed ? 'Mark as not completed' : 'Mark as completed'}
+                          aria-label={step.is_completed ? 'Uncomplete step' : 'Complete step'}
+                        >
+                          {togglingExpertStepId === step.id ? (
+                            <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+                          ) : step.is_completed ? (
+                            <CheckCircle2 className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                          )}
+                        </button>
                       ) : (
-                        <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                        <>
+                          {step.is_completed ? (
+                            <CheckCircle2 className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="flex-1">
@@ -2011,9 +2488,15 @@ export default function ApplicationDetailContent({
       {/* Upload Document Modal */}
       <UploadDocumentModal
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+        onClose={() => {
+          setIsUploadModalOpen(false)
+          setUploadForRequirementDoc(null)
+        }}
         applicationId={application.id}
         onSuccess={refreshDocuments}
+        licenseRequirementDocumentId={uploadForRequirementDoc?.id ?? undefined}
+        defaultDocumentName={uploadForRequirementDoc?.document_name ?? undefined}
+        defaultDocumentType={uploadForRequirementDoc?.document_type ?? undefined}
       />
 
       {/* Document Review Modal for Experts */}
