@@ -2408,14 +2408,17 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Select File</label>
-                    <div className="flex items-center gap-2">
+                    <label className="block w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent min-h-[42px] flex items-center">
                       <input
                         type="file"
                         accept=".pdf,.doc,.docx,.xls,.xlsx"
                         onChange={(e) => setTemplateFile(e.target.files?.[0] ?? null)}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                        className="sr-only"
                       />
-                    </div>
+                      <span className="text-sm text-gray-700 pointer-events-none">
+                        {templateFile ? templateFile.name : ''}
+                      </span>
+                    </label>
                     <p className="text-xs text-gray-500 mt-1">Accepted formats: PDF, DOC, DOCX, XLS, XLSX.</p>
                   </div>
                   <div className="flex gap-3 pt-2">
