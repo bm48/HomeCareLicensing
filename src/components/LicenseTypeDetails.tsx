@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2, GripVertical, Users2, Copy, Search, ChevronDown } from 'lucide-react'
+import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2, GripVertical, Users2, Copy, Search, ChevronDown, Upload } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { 
   createStep, 
@@ -13,7 +13,10 @@ import {
   updateExpertStep,
   deleteStep,
   deleteDocument,
-  deleteExpertStep
+  deleteExpertStep,
+  createTemplate,
+  updateTemplate,
+  deleteTemplate
 } from '@/app/actions/license-requirements'
 import { updateLicenseType } from '@/app/actions/configuration'
 import ExpertProcessComingSoonModal from '@/components/ExpertProcessComingSoonModal'
@@ -36,7 +39,7 @@ interface LicenseTypeDetailsProps {
   selectedState: string
 }
 
-type TabType = 'general' | 'steps' | 'documents' | 'expert'
+type TabType = 'general' | 'steps' | 'documents' | 'templates' | 'expert'
 
 
 interface Step {
@@ -58,6 +61,15 @@ interface Document {
   is_required: boolean
 }
 
+interface Template {
+  id: string
+  template_name: string
+  description: string | null
+  file_url: string
+  file_name: string
+  created_at: string
+}
+
 
 export default function LicenseTypeDetails({ licenseType, selectedState }: LicenseTypeDetailsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('general')
@@ -65,9 +77,11 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [stepsCount, setStepsCount] = useState(0)
   const [expertStepsCount, setExpertStepsCount] = useState(0)
   const [documentsCount, setDocumentsCount] = useState(0)
+  const [templatesCount, setTemplatesCount] = useState(0)
   const [steps, setSteps] = useState<Step[]>([])
   const [expertSteps, setExpertSteps] = useState<Step[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [templates, setTemplates] = useState<Template[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [requirementId, setRequirementId] = useState<string | null>(null)
   
@@ -105,11 +119,18 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [editingStep, setEditingStep] = useState<string | null>(null)
   const [editingDocument, setEditingDocument] = useState<string | null>(null)
   const [editingExpertStep, setEditingExpertStep] = useState<string | null>(null)
+  const [editingTemplate, setEditingTemplate] = useState<string | null>(null)
+  
+  // Template form / upload modal
+  const [showUploadTemplateModal, setShowUploadTemplateModal] = useState(false)
+  const [templateFormData, setTemplateFormData] = useState({ templateName: '', description: '' })
+  const [templateFile, setTemplateFile] = useState<File | null>(null)
   
   // Form data
   const [stepFormData, setStepFormData] = useState({ stepName: '', description: '', estimatedDays: '', isRequired: true })
   const [documentFormData, setDocumentFormData] = useState({ documentName: '', description: '', isRequired: true })
   const [expertFormData, setExpertFormData] = useState({ phase: 'Pre-Application', stepTitle: '', description: '' })
+  const [templateEditData, setTemplateEditData] = useState({ templateName: '', description: '' })
   
   // Overview tab editable fields
   const [overviewFields, setOverviewFields] = useState({
@@ -299,8 +320,8 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       const reqId = reqResult.data
       setRequirementId(reqId)
 
-      // Load steps and documents data
-      const [stepsResult, docsResult] = await Promise.all([
+      // Load steps, documents, and templates data
+      const [stepsResult, docsResult, templatesResult] = await Promise.all([
         supabase
           .from('license_requirement_steps')
           .select('*')
@@ -311,6 +332,11 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           .select('*')
           .eq('license_requirement_id', reqId)
           .order('document_name', { ascending: true }),
+        supabase
+          .from('license_requirement_templates')
+          .select('*')
+          .eq('license_requirement_id', reqId)
+          .order('template_name', { ascending: true }),
       ])
 
       if (stepsResult.data) {
@@ -336,11 +362,21 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
         setDocuments([])
         setDocumentsCount(0)
       }
+
+      if (templatesResult.data) {
+        setTemplates(templatesResult.data)
+        setTemplatesCount(templatesResult.data.length)
+      } else {
+        setTemplates([])
+        setTemplatesCount(0)
+      }
     } catch (error) {
       setStepsCount(0)
       setDocumentsCount(0)
+      setTemplatesCount(0)
       setSteps([])
       setDocuments([])
+      setTemplates([])
     } finally {
       setIsLoading(false)
     }
@@ -360,9 +396,11 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setSteps([])
       setExpertSteps([])
       setDocuments([])
+      setTemplates([])
       setStepsCount(0)
       setExpertStepsCount(0)
       setDocumentsCount(0)
+      setTemplatesCount(0)
       setIsLoading(false)
       setRequirementId(null)
     }
@@ -373,7 +411,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   }, [licenseType, selectedState]) // Removed activeTab and loadData from dependencies
 
   useEffect(() => {
-    if (licenseType && (activeTab === 'steps' || activeTab === 'documents' || activeTab === 'expert')) {
+    if (licenseType && (activeTab === 'steps' || activeTab === 'documents' || activeTab === 'templates' || activeTab === 'expert')) {
       loadData()
     }
   }, [activeTab, licenseType, loadData])
@@ -612,6 +650,91 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     setIsSubmitting(true)
     const result = await deleteExpertStep(id)
 
+    if (result.error) {
+      setError(result.error)
+      setIsSubmitting(false)
+    } else {
+      await loadData()
+      setIsSubmitting(false)
+    }
+  }
+
+  // Template handlers
+  const handleUploadTemplate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!requirementId || !templateFile) return
+
+    console.log('uploading template', templateFile)
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      const fileExt = templateFile.name.split('.').pop()
+      const filePath = `${requirementId}/${Date.now()}.${fileExt}`
+      console.log('filePath', filePath)
+      const { error: uploadError } = await supabase.storage
+        .from('license-templates')
+        .upload(filePath, templateFile, {
+          upsert: false,
+          contentType: templateFile.type || 'application/octet-stream',
+          cacheControl: '3600',
+        })
+        console.log('uploadError', uploadError)
+      if (uploadError) {
+        setError(uploadError.message || 'Failed to upload file')
+        setIsSubmitting(false)
+        return
+      }
+      const { data: { publicUrl } } = supabase.storage.from('license-templates').getPublicUrl(filePath)
+      const result = await createTemplate({
+        licenseRequirementId: requirementId,
+        templateName: templateFormData.templateName,
+        description: templateFormData.description,
+        fileUrl: publicUrl,
+        fileName: templateFile.name,
+      })
+      if (result.error) {
+        setError(result.error)
+        setIsSubmitting(false)
+        return
+      }
+      setShowUploadTemplateModal(false)
+      setTemplateFormData({ templateName: '', description: '' })
+      setTemplateFile(null)
+      await loadData()
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleEditTemplate = (tpl: Template) => {
+    setEditingTemplate(tpl.id)
+    setTemplateEditData({ templateName: tpl.template_name, description: tpl.description || '' })
+  }
+
+  const handleUpdateTemplateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingTemplate) return
+    setIsSubmitting(true)
+    setError(null)
+    const result = await updateTemplate(editingTemplate, {
+      templateName: templateEditData.templateName,
+      description: templateEditData.description,
+    })
+    if (result.error) {
+      setError(result.error)
+      setIsSubmitting(false)
+    } else {
+      setEditingTemplate(null)
+      setTemplateEditData({ templateName: '', description: '' })
+      await loadData()
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDeleteTemplate = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this template?')) return
+    setIsSubmitting(true)
+    const result = await deleteTemplate(id)
     if (result.error) {
       setError(result.error)
       setIsSubmitting(false)
@@ -913,6 +1036,16 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
             }`}
           >
             Documents {documentsCount > 0 && `(${documentsCount})`}
+          </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'templates'
+                ? 'border-blue-600 text-blue-600 bg-gray-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Templates {templatesCount > 0 && `(${templatesCount})`}
           </button>
           <button
             onClick={() => setActiveTab('expert')}
@@ -1847,6 +1980,221 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                         disabled={isSubmitting}
                         className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                         title="Delete document"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'templates' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Document Templates</h3>
+                <p className="text-sm text-gray-600 mt-1">Upload sample documents and templates that Agency Admins can download when their application is approved.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowUploadTemplateModal(true)
+                  setTemplateFormData({ templateName: '', description: '' })
+                  setTemplateFile(null)
+                  setError(null)
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                Upload Template
+              </button>
+            </div>
+
+            {showUploadTemplateModal && (
+              <Modal
+                isOpen={showUploadTemplateModal}
+                onClose={() => {
+                  setShowUploadTemplateModal(false)
+                  setTemplateFormData({ templateName: '', description: '' })
+                  setTemplateFile(null)
+                  setError(null)
+                }}
+                title="Upload Template"
+                size="lg"
+              >
+                <form onSubmit={handleUploadTemplate} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Template Name</label>
+                    <input
+                      type="text"
+                      value={templateFormData.templateName}
+                      onChange={(e) => setTemplateFormData({ ...templateFormData, templateName: e.target.value })}
+                      placeholder="e.g., Sample Application Form"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      value={templateFormData.description}
+                      onChange={(e) => setTemplateFormData({ ...templateFormData, description: e.target.value })}
+                      placeholder="Brief description of this template"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select File</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx"
+                        onChange={(e) => setTemplateFile(e.target.files?.[0] ?? null)}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Accepted formats: PDF, DOC, DOCX, XLS, XLSX.</p>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !templateFile}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Upload
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUploadTemplateModal(false)
+                        setTemplateFormData({ templateName: '', description: '' })
+                        setTemplateFile(null)
+                        setError(null)
+                      }}
+                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </Modal>
+            )}
+
+            {editingTemplate && (
+              <Modal
+                isOpen={!!editingTemplate}
+                onClose={() => {
+                  setEditingTemplate(null)
+                  setTemplateEditData({ templateName: '', description: '' })
+                  setError(null)
+                }}
+                title="Edit Template"
+                size="md"
+              >
+                <form onSubmit={handleUpdateTemplateSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Template Name</label>
+                    <input
+                      type="text"
+                      value={templateEditData.templateName}
+                      onChange={(e) => setTemplateEditData({ ...templateEditData, templateName: e.target.value })}
+                      placeholder="e.g., Sample Application Form"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      value={templateEditData.description}
+                      onChange={(e) => setTemplateEditData({ ...templateEditData, description: e.target.value })}
+                      placeholder="Brief description of this template"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTemplate(null)
+                        setTemplateEditData({ templateName: '', description: '' })
+                        setError(null)
+                      }}
+                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </Modal>
+            )}
+
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                  <p className="text-sm text-gray-600">Loading templates...</p>
+                </div>
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No templates uploaded yet.</p>
+                <p className="text-sm text-gray-400 mt-2">Upload sample documents for Agency Admins to download.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {templates.map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-gray-900">{tpl.template_name}</h4>
+                      {tpl.description && (
+                        <p className="text-sm text-gray-600 mt-0.5">{tpl.description}</p>
+                      )}
+                      <p className="text-sm text-gray-500 mt-1">
+                        {tpl.file_name}
+                        <span className="ml-2 text-gray-400">
+                          {new Date(tpl.created_at).toLocaleDateString()}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <a
+                        href={tpl.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                        title="Download"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </a>
+                      <button
+                        onClick={() => handleEditTemplate(tpl)}
+                        className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                        title="Edit template"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTemplate(tpl.id)}
+                        disabled={isSubmitting}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                        title="Delete template"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

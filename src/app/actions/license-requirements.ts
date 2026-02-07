@@ -25,6 +25,14 @@ export interface CreateExpertStepData {
   description: string
 }
 
+export interface CreateTemplateData {
+  licenseRequirementId: string
+  templateName: string
+  description: string
+  fileUrl: string
+  fileName: string
+}
+
 // Get or create license requirement
 async function getOrCreateLicenseRequirement(state: string, licenseTypeName: string) {
   const supabase = await createClient()
@@ -391,6 +399,83 @@ export async function getDocumentsFromRequirement(requirementId: string) {
   }
   
   return { error: null, data: documents || [] }
+}
+
+// Get templates from a license requirement
+export async function getTemplatesFromRequirement(requirementId: string) {
+  const supabase = await createClient()
+
+  const { data: templates, error } = await supabase
+    .from('license_requirement_templates')
+    .select('*')
+    .eq('license_requirement_id', requirementId)
+    .order('template_name', { ascending: true })
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  return { error: null, data: templates || [] }
+}
+
+export async function createTemplate(data: CreateTemplateData) {
+  const supabase = await createClient()
+
+  const { data: template, error } = await supabase
+    .from('license_requirement_templates')
+    .insert({
+      license_requirement_id: data.licenseRequirementId,
+      template_name: data.templateName,
+      description: data.description || null,
+      file_url: data.fileUrl,
+      file_name: data.fileName,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath('/admin/license-requirements')
+  return { error: null, data: template }
+}
+
+export async function updateTemplate(id: string, data: { templateName: string; description: string }) {
+  const supabase = await createClient()
+
+  const { data: template, error } = await supabase
+    .from('license_requirement_templates')
+    .update({
+      template_name: data.templateName,
+      description: data.description || null,
+    })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath('/admin/license-requirements')
+  return { error: null, data: template }
+}
+
+export async function deleteTemplate(id: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('license_requirement_templates')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/admin/license-requirements')
+  return { error: null }
 }
 
 // Copy steps from one requirement to another
