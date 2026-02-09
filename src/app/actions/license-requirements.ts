@@ -209,6 +209,24 @@ export async function updateStep(id: string, data: { stepName: string; descripti
   return { error: null, data: step }
 }
 
+/** Reorder steps for a requirement. orderedStepIds = step ids in desired order (1-based step_order). Only non-expert steps. */
+export async function reorderSteps(licenseRequirementId: string, orderedStepIds: string[]) {
+  const supabase = await createClient()
+  for (let i = 0; i < orderedStepIds.length; i++) {
+    const { error } = await supabase
+      .from('license_requirement_steps')
+      .update({ step_order: i + 1 })
+      .eq('id', orderedStepIds[i])
+      .eq('license_requirement_id', licenseRequirementId)
+      .eq('is_expert_step', false)
+    if (error) {
+      return { error: error.message }
+    }
+  }
+  revalidatePath('/admin/license-requirements')
+  return { error: null }
+}
+
 export async function updateDocument(id: string, data: { documentName: string; description: string; isRequired: boolean }) {
   const supabase = await createClient()
 

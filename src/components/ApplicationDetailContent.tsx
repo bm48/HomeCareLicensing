@@ -1113,8 +1113,8 @@ export default function ApplicationDetailContent({
           const { error: updateError } = await supabase
             .from('application_steps')
             .update({
-              is_completed: true,
-              completed_at: new Date().toISOString()
+              is_completed: isCompleted,
+              completed_at: isCompleted ? new Date().toISOString() : null
             })
             .eq('id', existingByName.id)
             .eq('application_id', application.id)
@@ -1129,19 +1129,20 @@ export default function ApplicationDetailContent({
               step_name: selectedStep.step_name,
               step_order: selectedStep.step_order,
               description: selectedStep.description,
-              is_completed: true,
-              completed_at: new Date().toISOString()
+              is_completed: isCompleted,
+              completed_at: isCompleted ? new Date().toISOString() : null
             })
 
           if (insertError) throw insertError
         }
       }
 
-      // Refresh steps to reflect the update
-      await fetchSteps()
-      
-      // Clear selection
-      // setSelectedStepId(null)
+      // Optimistic update: update local state so UI updates without full refetch (avoids page "refresh" / loading spinner)
+      setSteps((prev) =>
+        prev.map((s) =>
+          s.id === stepId ? { ...s, is_completed: isCompleted } : s
+        )
+      )
     } catch (error: any) {
       console.error('Error completing step:', error)
       alert('Failed to complete step: ' + (error.message || 'Unknown error'))
@@ -2350,7 +2351,7 @@ export default function ApplicationDetailContent({
                         Step {step.step_order} of {expertSteps.length}
                       </div>
                     </div>
-                    {currentUserRole === 'expert' && (
+                    {/* {currentUserRole === 'expert' && (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEditExpertStep(step)}
@@ -2367,7 +2368,7 @@ export default function ApplicationDetailContent({
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    )}
+                    )} */}
                   </div>
                 ))}
               </div>

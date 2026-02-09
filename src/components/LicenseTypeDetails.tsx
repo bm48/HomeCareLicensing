@@ -15,6 +15,7 @@ import {
   deleteStep,
   deleteDocument,
   deleteExpertStep,
+  reorderSteps,
   createTemplate,
   updateTemplate,
   deleteTemplate
@@ -148,6 +149,8 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [editingDocument, setEditingDocument] = useState<string | null>(null)
   const [editingExpertStep, setEditingExpertStep] = useState<string | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null)
+  const [draggedStepId, setDraggedStepId] = useState<string | null>(null)
+  const [dragOverStepId, setDragOverStepId] = useState<string | null>(null)
   
   // Template form / upload modal
   const [showUploadTemplateModal, setShowUploadTemplateModal] = useState(false)
@@ -663,6 +666,44 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       await loadData()
       setIsSubmitting(false)
     }
+  }
+
+  const handleStepDragStart = (e: React.DragEvent, stepId: string) => {
+    setDraggedStepId(stepId)
+    e.dataTransfer.setData('text/plain', stepId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const handleStepDragEnd = () => {
+    setDraggedStepId(null)
+    setDragOverStepId(null)
+  }
+  const handleStepDragOver = (e: React.DragEvent, _targetStepId: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverStepId(_targetStepId)
+  }
+  const handleStepDragLeave = () => {
+    setDragOverStepId(null)
+  }
+  const handleStepDrop = async (e: React.DragEvent, targetStepId: string) => {
+    e.preventDefault()
+    setDragOverStepId(null)
+    const draggedId = e.dataTransfer.getData('text/plain')
+    if (!draggedId || draggedId === targetStepId || !requirementId) return
+    const fromIndex = steps.findIndex((s) => s.id === draggedId)
+    const toIndex = steps.findIndex((s) => s.id === targetStepId)
+    if (fromIndex === -1 || toIndex === -1) return
+    const newSteps = [...steps]
+    const [removed] = newSteps.splice(fromIndex, 1)
+    newSteps.splice(toIndex, 0, removed)
+    const reorderedWithOrder = newSteps.map((s, i) => ({ ...s, step_order: i + 1 }))
+    setSteps(reorderedWithOrder)
+    const result = await reorderSteps(requirementId, reorderedWithOrder.map((s) => s.id))
+    if (result.error) {
+      setError(result.error)
+      await loadData()
+    }
+    setDraggedStepId(null)
   }
 
   const handleDeleteDocument = async (id: string) => {
@@ -1877,9 +1918,23 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 {steps.map((step) => (
                   <div
                     key={step.id}
-                    className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    draggable={false}
+                    onDragOver={(e) => handleStepDragOver(e, step.id)}
+                    onDragLeave={handleStepDragLeave}
+                    onDrop={(e) => handleStepDrop(e, step.id)}
+                    className={`flex items-start gap-4 p-4 bg-white border rounded-lg transition-colors ${
+                      draggedStepId === step.id ? 'opacity-50 border-blue-300' : dragOverStepId === step.id ? 'border-blue-400 border-2 bg-blue-50/50' : 'border-gray-200 hover:bg-gray-50'
+                    }`}
                   >
-                    <GripVertical className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0 cursor-move" />
+                    <div
+                      draggable
+                      onDragStart={(e) => handleStepDragStart(e, step.id)}
+                      onDragEnd={handleStepDragEnd}
+                      className="mt-1 flex-shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-5 h-5 text-gray-400" />
+                    </div>
                     <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-sm font-semibold text-white">{step.step_order}</span>
                     </div>
