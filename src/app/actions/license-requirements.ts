@@ -367,49 +367,102 @@ export async function getLicenseRequirementId(state: string, licenseTypeName: st
   return { error: null, data: result.id }
 }
 
+// Returns expert step templates for a state + license type. Plain data only (no Error objects) so RSC serialization never hits "frame.join is not a function". Client uses this then inserts into application_steps via Supabase client.
+export type ExpertStepTemplate = {
+  step_name: string
+  step_order: number
+  description: string | null
+  phase: string | null
+}
+
+export async function getExpertStepTemplates(
+  state: string,
+  licenseTypeName: string
+): Promise<{ steps: ExpertStepTemplate[] | null; error: string | null }> {
+  try {
+    const supabase = await createClient()
+    const reqResult = await getOrCreateLicenseRequirement(state, licenseTypeName)
+    if ('error' in reqResult) {
+      return { steps: null, error: String(reqResult.error) }
+    }
+    const requirementId = reqResult.id
+
+    const { data: templateSteps, error: fetchError } = await supabase
+      .from('license_requirement_steps')
+      .select('step_name, step_order, description, phase')
+      .eq('license_requirement_id', requirementId)
+      .eq('is_expert_step', true)
+      .order('step_order', { ascending: true })
+
+    if (fetchError) {
+      return { steps: null, error: String(fetchError.message) }
+    }
+    if (!templateSteps?.length) {
+      return { steps: [], error: null }
+    }
+
+    const steps: ExpertStepTemplate[] = templateSteps.map((step) => ({
+      step_name: String(step.step_name),
+      step_order: Number(step.step_order),
+      description: step.description != null ? String(step.description) : null,
+      phase: step.phase != null ? String(step.phase) : null,
+    }))
+    return { steps, error: null }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    return { steps: null, error: String(message) }
+  }
+}
+
 // Copy expert step template from a license requirement into an application. Called when an application is created with a license type so the application gets its own snapshot; later changes to the requirement template do not affect this application. Idempotent: does nothing if the application already has expert steps.
+// Never throws: returns { error } so RSC serialization never receives an Error object (avoids "frame.join is not a function").
 export async function copyExpertStepsFromRequirementToApplication(
   applicationId: string,
   state: string,
   licenseTypeName: string
-) {
-  const supabase = await createClient()
+): Promise<{ error: string | null }> {
+  try {
+    const supabase = await createClient()
 
-  const { data: existing } = await supabase
-    .from('application_steps')
-    .select('id')
-    .eq('application_id', applicationId)
-    .eq('is_expert_step', true)
-    .limit(1)
-  if (existing?.length) return { error: null }
+    const { data: existing } = await supabase
+      .from('application_steps')
+      .select('id')
+      .eq('application_id', applicationId)
+      .eq('is_expert_step', true)
+      .limit(1)
+    if (existing?.length) return { error: null }
 
-  const reqResult = await getOrCreateLicenseRequirement(state, licenseTypeName)
-  if ('error' in reqResult) return { error: reqResult.error }
-  const requirementId = reqResult.id
+    const reqResult = await getOrCreateLicenseRequirement(state, licenseTypeName)
+    if ('error' in reqResult) return { error: String(reqResult.error) }
+    const requirementId = reqResult.id
 
-  const { data: templateSteps, error: fetchError } = await supabase
-    .from('license_requirement_steps')
-    .select('step_name, step_order, description, phase')
-    .eq('license_requirement_id', requirementId)
-    .eq('is_expert_step', true)
-    .order('step_order', { ascending: true })
+    const { data: templateSteps, error: fetchError } = await supabase
+      .from('license_requirement_steps')
+      .select('step_name, step_order, description, phase')
+      .eq('license_requirement_id', requirementId)
+      .eq('is_expert_step', true)
+      .order('step_order', { ascending: true })
 
-  if (fetchError) return { error: fetchError.message }
-  if (!templateSteps?.length) return { error: null }
+    if (fetchError) return { error: String(fetchError.message) }
+    if (!templateSteps?.length) return { error: null }
 
-  const rows = templateSteps.map((step) => ({
-    application_id: applicationId,
-    step_name: step.step_name,
-    step_order: step.step_order,
-    description: step.description ?? null,
-    phase: step.phase ?? null,
-    is_expert_step: true,
-    is_completed: false,
-  }))
+    const rows = templateSteps.map((step) => ({
+      application_id: applicationId,
+      step_name: step.step_name,
+      step_order: step.step_order,
+      description: step.description ?? null,
+      phase: step.phase ?? null,
+      is_expert_step: true,
+      is_completed: false,
+    }))
 
-  const { error: insertError } = await supabase.from('application_steps').insert(rows)
-  if (insertError) return { error: insertError.message }
-  return { error: null }
+    const { error: insertError } = await supabase.from('application_steps').insert(rows)
+    if (insertError) return { error: String(insertError.message) }
+    return { error: null }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    return { error: String(message) }
+  }
 }
 
 // Get all license requirements for copying

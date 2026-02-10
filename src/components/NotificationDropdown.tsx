@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Bell, MessageSquare, Clock, FileText } from 'lucide-react'
+import { Bell, MessageSquare, Clock, FileText, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -496,12 +496,19 @@ export default function NotificationDropdown({
           }
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           // Refresh badge count when subscription is established
           refreshBadgeCount()
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('Real-time subscription error for channel:', channelName)
+          // Realtime requires messages/notifications in supabase_realtime publication (migration 072)
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(
+              'Realtime subscription failed for', channelName,
+              '— ensure migration 072_enable_realtime_messages_notifications has been applied.',
+              err?.message ?? ''
+            )
+          }
         }
       })
 
@@ -579,6 +586,22 @@ export default function NotificationDropdown({
     }
   }
 
+  const handleDeleteNotification = async (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation()
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId)
+        .eq('user_id', userId)
+      if (error) throw error
+      setAdminNotifications(prev => prev.filter(n => n.id !== notificationId))
+      setUnreadCount(prev => Math.max(0, prev - 1))
+    } catch (err) {
+      console.error('Error deleting notification:', err)
+    }
+  }
+
   const formatDate = (dateString: string) => {
     if (!dateString) return 'No messages'
     const date = new Date(dateString)
@@ -636,18 +659,24 @@ export default function NotificationDropdown({
                   onClick={() => {
                     handleAdminNotificationClick(notif.id)
                   }}
-                  className="p-4 hover:bg-gray-50 transition-colors cursor-pointer bg-amber-50/50"
+                  className="p-4 hover:bg-gray-50 transition-colors cursor-pointer bg-amber-50/50 flex items-start gap-2"
                 >
-                  <div className="flex items-start gap-3">
-                    <FileText className="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-600" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm text-gray-900">{notif.title}</div>
-                      <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                        <Clock className="w-3 h-3" />
-                        {formatDate(notif.created_at)}
-                      </div>
+                  <FileText className="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-600" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-gray-900">{notif.title}</div>
+                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                      <Clock className="w-3 h-3" />
+                      {formatDate(notif.created_at)}
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteNotification(e, notif.id)}
+                    className="flex-shrink-0 p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    aria-label="Delete notification"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>

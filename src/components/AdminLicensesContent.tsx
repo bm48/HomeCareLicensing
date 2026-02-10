@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   FileText, 
@@ -67,6 +67,10 @@ export default function AdminLicensesContent({
   const [assignExpertModalOpen, setAssignExpertModalOpen] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
   const [selectedExpertId, setSelectedExpertId] = useState<string>('')
+  // After assigning expert, keep Assign Expert button disabled until list refreshes and Approve enables
+  const [pendingAssignApplicationId, setPendingAssignApplicationId] = useState<string | null>(null)
+  // After clicking Approve, keep button disabled until list refreshes (application leaves requested list)
+  const [pendingApproveApplicationId, setPendingApproveApplicationId] = useState<string | null>(null)
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'N/A'
@@ -92,12 +96,15 @@ export default function AdminLicensesContent({
         return 'bg-green-100 text-green-700'
       case 'rejected':
         return 'bg-red-100 text-red-700'
+      case 'closed':
+        return 'bg-gray-100 text-gray-700'
       default:
         return 'bg-gray-100 text-gray-700'
     }
   }
 
   const getStatusDisplay = (status: string) => {
+    if (status === 'closed') return 'Closed'
     return status.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ')
@@ -145,6 +152,7 @@ export default function AdminLicensesContent({
       setAssignExpertModalOpen(false)
       setSelectedApplication(null)
       setSelectedExpertId('')
+      setPendingAssignApplicationId(selectedApplication.id)
       router.refresh()
     } catch (err: any) {
       console.error('Error assigning expert:', err)
@@ -153,6 +161,24 @@ export default function AdminLicensesContent({
       setIsLoading(null)
     }
   }
+
+  // Clear pending assign when list has refreshed and this application shows assigned_expert_id (Approve is then enabled)
+  useEffect(() => {
+    if (!pendingAssignApplicationId) return
+    const app = requestedApplications.find(a => a.id === pendingAssignApplicationId)
+    if (app?.assigned_expert_id) {
+      setPendingAssignApplicationId(null)
+    }
+  }, [pendingAssignApplicationId, requestedApplications])
+
+  // Clear pending approve when list has refreshed (approved application has left the requested list)
+  useEffect(() => {
+    if (!pendingApproveApplicationId) return
+    const stillInList = requestedApplications.some(a => a.id === pendingApproveApplicationId)
+    if (!stillInList) {
+      setPendingApproveApplicationId(null)
+    }
+  }, [pendingApproveApplicationId, requestedApplications])
 
   const handleApprove = async (applicationId: string) => {
     setIsLoading(applicationId)
@@ -181,6 +207,7 @@ export default function AdminLicensesContent({
         throw error
       }
 
+      setPendingApproveApplicationId(applicationId)
       router.refresh()
     } catch (err: any) {
       console.error('Error approving application:', err)
@@ -336,10 +363,15 @@ export default function AdminLicensesContent({
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => handleAssignExpert(application)}
-                        disabled={isLoading === application.id}
+                        disabled={isLoading === application.id || pendingAssignApplicationId === application.id}
                         className="px-4 py-2 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        title={pendingAssignApplicationId === application.id ? 'Waiting for update...' : undefined}
                       >
-                        <Users className="w-4 h-4" />
+                        {pendingAssignApplicationId === application.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Users className="w-4 h-4" />
+                        )}
                         {application.assigned_expert_id ? 'Change Expert' : 'Assign Expert'}
                       </button>
                       <button
@@ -358,11 +390,11 @@ export default function AdminLicensesContent({
                       </button>
                       <button
                         onClick={() => handleApprove(application.id)}
-                        disabled={isLoading === application.id || !application.assigned_expert_id}
+                        disabled={isLoading === application.id || !application.assigned_expert_id || pendingApproveApplicationId === application.id}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        title={!application.assigned_expert_id ? 'Please assign an expert first before approving' : ''}
+                        title={!application.assigned_expert_id ? 'Please assign an expert first before approving' : pendingApproveApplicationId === application.id ? 'Approved' : ''}
                       >
-                        {isLoading === application.id ? (
+                        {isLoading === application.id || pendingApproveApplicationId === application.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <>

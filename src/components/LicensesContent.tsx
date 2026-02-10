@@ -75,6 +75,7 @@ export default function LicensesContent({
   const [loadingLicenseId, setLoadingLicenseId] = useState<string | null>(null)
   const [loadingApplicationId, setLoadingApplicationId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set())
   const [downloadingApplicationId, setDownloadingApplicationId] = useState<string | null>(null)
   const [downloadingLicenseId, setDownloadingLicenseId] = useState<string | null>(null)
   
@@ -82,6 +83,11 @@ export default function LicensesContent({
   const [requestFilter, setRequestFilter] = useState<'pending' | 'cancelled' | 'all'>('pending')
   const [applicationFilter, setApplicationFilter] = useState<'active' | 'approved' | 'denied' | 'all'>('active')
   const [licenseFilter, setLicenseFilter] = useState<'active' | 'expired' | 'all'>('active')
+
+  // Clear optimistically cancelled ids when applications data updates (e.g. after router.refresh())
+  useEffect(() => {
+    setCancelledIds(new Set())
+  }, [applications])
 
   // Check for 'new' query parameter and open modal automatically
   useEffect(() => {
@@ -170,6 +176,8 @@ export default function LicensesContent({
 
       if (error) throw error
 
+      // Remove from list immediately so button stays disabled until row is gone
+      setCancelledIds(prev => new Set(prev).add(applicationId))
       router.refresh()
     } catch (error: any) {
       console.error('Error cancelling request:', error)
@@ -400,14 +408,15 @@ export default function LicensesContent({
     }
   }
 
-  // Filter requests based on selected filter
+  // Filter requests based on selected filter (exclude optimistically cancelled ids from pending list so row disappears immediately)
   const getFilteredRequests = () => {
+    const requestedWithoutCancelled = requestedApps.filter(a => !cancelledIds.has(a.id))
     if (requestFilter === 'pending') {
-      return requestedApps
+      return requestedWithoutCancelled
     } else if (requestFilter === 'cancelled') {
       return cancelledApps
     } else {
-      return [...requestedApps, ...cancelledApps]
+      return [...requestedWithoutCancelled, ...cancelledApps]
     }
   }
 
@@ -437,6 +446,7 @@ export default function LicensesContent({
       case 'denied':
         return 'bg-red-100 text-red-700'
       case 'cancelled':
+      case 'closed':
         return 'bg-gray-100 text-gray-700'
       default:
         return 'bg-gray-100 text-gray-700'
@@ -447,6 +457,7 @@ export default function LicensesContent({
   const getStatusDisplay = (status: string) => {
     if (status === 'cancelled') return 'Cancelled'
     if (status === 'rejected') return 'Denied'
+    if (status === 'closed') return 'Closed'
     return status.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ')

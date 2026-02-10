@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
+import { closeApplication } from '@/app/actions/applications'
 import {
   FileText,
   Download,
@@ -21,7 +22,8 @@ import {
   Send,
   Copy,
   CheckSquare,
-  Plus
+  Plus,
+  Lock
 } from 'lucide-react'
 import Modal from './Modal'
 
@@ -119,6 +121,25 @@ export default function AdminApplicationDetailContent({
   const [isLoadingConversation, setIsLoadingConversation] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
+  const router = useRouter()
+  const [isClosing, setIsClosing] = useState(false)
+  const canCloseApplication = (application.progress_percentage ?? 0) === 100 && application.status !== 'closed'
+
+  const handleCloseApplication = async () => {
+    if (!canCloseApplication || isClosing) return
+    if (!confirm('Close this application? It will be marked as closed.')) return
+    setIsClosing(true)
+    try {
+      const { error } = await closeApplication(application.id)
+      if (error) {
+        alert(error)
+        return
+      }
+      router.refresh()
+    } finally {
+      setIsClosing(false)
+    }
+  }
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'N/A'
@@ -140,12 +161,15 @@ export default function AdminApplicationDetailContent({
         return 'bg-green-100 text-green-700'
       case 'rejected':
         return 'bg-red-100 text-red-700'
+      case 'closed':
+        return 'bg-gray-100 text-gray-700'
       default:
         return 'bg-gray-100 text-gray-700'
     }
   }
 
   const getStatusDisplay = (status: string) => {
+    if (status === 'closed') return 'Closed'
     return status.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ')
@@ -953,9 +977,22 @@ export default function AdminApplicationDetailContent({
               </div>
             </div>
           </div>
-          <span className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${getStatusBadge(application.status)}`}>
-            {getStatusDisplay(application.status)}
-          </span>
+          <div className="flex items-center gap-3">
+            {canCloseApplication && (
+              <button
+                type="button"
+                onClick={handleCloseApplication}
+                disabled={isClosing}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isClosing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                Close application
+              </button>
+            )}
+            <span className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${getStatusBadge(application.status)}`}>
+              {getStatusDisplay(application.status)}
+            </span>
+          </div>
         </div>
 
         {/* Progress Bar */}

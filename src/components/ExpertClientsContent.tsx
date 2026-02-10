@@ -68,12 +68,15 @@ export default function ExpertClientsContent({
         return 'bg-green-100 text-green-700'
       case 'rejected':
         return 'bg-red-100 text-red-700'
+      case 'closed':
+        return 'bg-gray-100 text-gray-700'
       default:
         return 'bg-gray-100 text-gray-700'
     }
   }
 
   const getStatusDisplay = (status: string) => {
+    if (status === 'closed') return 'Closed'
     return status.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ')

@@ -6,7 +6,7 @@ import Modal from './Modal'
 import { Heart, Users, MapPin, DollarSign, Clock, RefreshCw, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LicenseType } from '@/types/license'
-import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
+import { getExpertStepTemplates } from '@/app/actions/license-requirements'
 
 interface ReviewLicenseRequestModalProps {
   isOpen: boolean
@@ -68,18 +68,43 @@ export default function ReviewLicenseRequestModal({
         .single()
 
       if (insertError) {
-        throw insertError
+        setError(insertError.message || 'Failed to create application. Please try again.')
+        setIsLoading(false)
+        return
       }
 
-      // Copy expert step template from license requirement into this application (snapshot at creation; requirement changes won't alter this application's steps)
-      await copyExpertStepsFromRequirementToApplication(application.id, state, licenseType.name)
+      // Copy expert step template into this application (fetch templates via server action, insert on client to avoid RSC serialization errors)
+      const templatesResult = await getExpertStepTemplates(state, licenseType.name)
+      if (templatesResult.error) {
+        setError(templatesResult.error)
+        setIsLoading(false)
+        return
+      }
+      if (templatesResult.steps?.length) {
+        const rows = templatesResult.steps.map((step) => ({
+          application_id: application.id,
+          step_name: step.step_name,
+          step_order: step.step_order,
+          description: step.description ?? null,
+          phase: step.phase ?? null,
+          is_expert_step: true,
+          is_completed: false,
+        }))
+        const { error: stepsError } = await supabase.from('application_steps').insert(rows)
+        if (stepsError) {
+          setError(stepsError.message || 'Failed to add application steps.')
+          setIsLoading(false)
+          return
+        }
+      }
 
       // Close modal and refresh
       onClose()
       router.refresh()
       router.push('/dashboard/licenses')
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit license request. Please try again.')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to submit license request. Please try again.'
+      setError(message)
     } finally {
       setIsLoading(false)
     }

@@ -25,8 +25,10 @@ import {
   Trash2,
   ChevronDown,
   Copy,
-  Search
+  Search,
+  Lock
 } from 'lucide-react'
+import { closeApplication } from '@/app/actions/applications'
 import UploadDocumentModal from './UploadDocumentModal'
 import Modal from './Modal'
 
@@ -139,8 +141,26 @@ export default function ApplicationDetailContent({
   const [showAddExpertStepModal, setShowAddExpertStepModal] = useState(false)
   const [addExpertStepModalTab, setAddExpertStepModalTab] = useState<'new' | 'copy' | 'browse'>('new')
   const [togglingExpertStepId, setTogglingExpertStepId] = useState<string | null>(null)
+  const [isClosing, setIsClosing] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
+  const canCloseApplication = currentUserRole === 'expert' && (application.progress_percentage ?? 0) === 100 && application.status !== 'closed'
+
+  const handleCloseApplication = async () => {
+    if (!canCloseApplication || isClosing) return
+    if (!confirm('Close this application? It will be marked as closed.')) return
+    setIsClosing(true)
+    try {
+      const { error } = await closeApplication(application.id)
+      if (error) {
+        alert(error)
+        return
+      }
+      router.refresh()
+    } finally {
+      setIsClosing(false)
+    }
+  }
 
   // Refresh documents
   const refreshDocuments = useCallback(async () => {
@@ -1282,10 +1302,23 @@ export default function ApplicationDetailContent({
   // Summary blocks - always shown
   const summaryBlocks = (
     <>
-      {/* Welcome Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">{application.application_name}</h1>
-        <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
+      {/* Welcome Header - title and Close button (expert, when 100%) */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{application.application_name}</h1>
+          <p className="text-gray-600">Here&apos;s your licensing progress for {application.state}</p>
+        </div>
+        {canCloseApplication && (
+          <button
+            type="button"
+            onClick={handleCloseApplication}
+            disabled={isClosing}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          >
+            {isClosing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+            Close application
+          </button>
+        )}
       </div>
 
       {/* Assigned Expert Block (for clients) or Client Info Block (for experts) */}
