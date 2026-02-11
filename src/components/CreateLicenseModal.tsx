@@ -228,6 +228,55 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
           )}
         </div>
 
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="activated_date" className="block text-sm font-semibold text-gray-700 mb-1">
+              Activated Date
+            </label>
+            <input
+              id="activated_date"
+              type="date"
+              {...register('activated_date')}
+              className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <div>
+            <label htmlFor="renewal_due_date" className="block text-sm font-semibold text-gray-700 mb-1">
+              Renewal Due Date
+            </label>
+            <input
+              id="renewal_due_date"
+              type="date"
+              {...register('renewal_due_date')}
+              className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-4 py-2.5 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="px-4 py-2.5 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'Create License'
+            )}
+          </button>
+        </div>
         {/* Optional document upload */}
         <div className="border-t border-gray-200 pt-4">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -308,55 +357,6 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
               </div>
             </div>
           )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="activated_date" className="block text-sm font-semibold text-gray-700 mb-1">
-              Activated Date
-            </label>
-            <input
-              id="activated_date"
-              type="date"
-              {...register('activated_date')}
-              className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            />
-          </div>
-          <div>
-            <label htmlFor="renewal_due_date" className="block text-sm font-semibold text-gray-700 mb-1">
-              Renewal Due Date
-            </label>
-            <input
-              id="renewal_due_date"
-              type="date"
-              {...register('renewal_due_date')}
-              className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="px-4 py-2.5 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="px-4 py-2.5 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 flex items-center gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              'Create License'
-            )}
-          </button>
         </div>
       </form>
     </Modal>
