@@ -14,7 +14,7 @@ const licenseSchema = z.object({
   license_number: z.string().optional(),
   state: z.string().min(1, 'State is required'),
   expiry_date: z.string().min(1, 'Expiry date is required'),
-  activated_date: z.string().optional(),
+  activated_date: z.string().min(1, 'Activated date is required'),
   renewal_due_date: z.string().optional(),
 })
 
@@ -43,6 +43,7 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [documentName, setDocumentName] = useState('')
   const [documentType, setDocumentType] = useState('')
+  const [documentTypeError, setDocumentTypeError] = useState<string | null>(null)
 
   const {
     register,
@@ -73,10 +74,16 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
     setSelectedFile(null)
     setDocumentName('')
     setDocumentType('')
+    setDocumentTypeError(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const onSubmit = async (data: CreateLicenseFormData) => {
+    setDocumentTypeError(null)
+    if (selectedFile && documentName.trim() && !documentType.trim()) {
+      setDocumentTypeError('Document type is required when uploading a document')
+      return
+    }
     setIsSubmitting(true)
     setSubmitError(null)
     try {
@@ -276,13 +283,18 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
               </div>
               <div>
                 <label htmlFor="create_license_doc_type" className="block text-xs font-medium text-gray-600 mb-1">
-                  Document type
+                  Document type <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="create_license_doc_type"
                   value={documentType}
-                  onChange={(e) => setDocumentType(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+                  onChange={(e) => {
+                    setDocumentType(e.target.value)
+                    setDocumentTypeError(null)
+                  }}
+                  className={`block w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white ${
+                    documentTypeError ? 'border-red-500 border' : 'border border-gray-300'
+                  }`}
                   disabled={isSubmitting}
                 >
                   <option value="">Select type</option>
@@ -293,6 +305,9 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
                   <option value="policy">Policy</option>
                   <option value="other">Other</option>
                 </select>
+                {documentTypeError && (
+                  <p className="mt-1 text-sm text-red-600">{documentTypeError}</p>
+                )}
               </div>
             </div>
           )}
@@ -317,7 +332,7 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="activated_date" className="block text-sm font-semibold text-gray-700 mb-1">
-              Activated Date
+              Activated Date <span className="text-red-500">*</span>
             </label>
             <input
               id="activated_date"
@@ -325,6 +340,9 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
               {...register('activated_date')}
               className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             />
+            {errors.activated_date && (
+              <p className="mt-1 text-sm text-red-600">{errors.activated_date.message}</p>
+            )}
           </div>
           <div>
             <label htmlFor="renewal_due_date" className="block text-sm font-semibold text-gray-700 mb-1">
