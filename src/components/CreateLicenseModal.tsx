@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Upload, X, FileText } from 'lucide-react'
 import Modal from './Modal'
 
 const licenseSchema = z.object({
@@ -38,6 +38,10 @@ interface CreateLicenseModalProps {
 export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: CreateLicenseModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [documentName, setDocumentName] = useState('')
+  const [documentType, setDocumentType] = useState('')
 
   const {
     register,
@@ -56,6 +60,21 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
     },
   })
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedFile(file)
+      if (!documentName) setDocumentName(file.name)
+    }
+  }
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null)
+    setDocumentName('')
+    setDocumentType('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   const onSubmit = async (data: CreateLicenseFormData) => {
     setIsSubmitting(true)
     setSubmitError(null)
@@ -67,7 +86,7 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
         return
       }
 
-      const { error } = await supabase
+      const { data: newLicense, error } = await supabase
         .from('licenses')
         .insert({
           company_owner_id: authUser.id,
@@ -83,8 +102,43 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
         .single()
 
       if (error) throw error
+      if (!newLicense?.id) throw new Error('License was created but no ID returned')
+
+      if (selectedFile && documentName.trim()) {
+        const fileExt = selectedFile.name.split('.').pop()
+        const fileName = `${newLicense.id}/${Date.now()}.${fileExt}`
+        const { error: uploadError } = await supabase.storage
+          .from('application-documents')
+          .upload(fileName, selectedFile, {
+            upsert: false,
+            contentType: selectedFile.type || `application/${fileExt}`,
+            cacheControl: '3600',
+          })
+        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('application-documents')
+          .getPublicUrl(fileName)
+
+        const docData: { license_id: string; document_name: string; document_url: string; document_type: string | null; expiry_date?: string } = {
+          license_id: newLicense.id,
+          document_name: documentName.trim(),
+          document_url: publicUrl,
+          document_type: documentType || null,
+        }
+        if (data.expiry_date) docData.expiry_date = data.expiry_date
+
+        const { error: docError } = await supabase
+          .from('license_documents')
+          .insert(docData)
+        if (docError) {
+          await supabase.storage.from('application-documents').remove([fileName])
+          throw new Error(`Document record failed: ${docError.message}`)
+        }
+      }
 
       reset()
+      handleRemoveFile()
       onClose()
       onSuccess()
     } catch (err: unknown) {
@@ -96,6 +150,7 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
 
   const handleClose = () => {
     reset()
+    handleRemoveFile()
     onClose()
   }
 
@@ -170,6 +225,88 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
           />
           {errors.expiry_date && (
             <p className="mt-1 text-sm text-red-600">{errors.expiry_date.message}</p>
+          )}
+        </div>
+
+        {/* Optional document upload */}
+        <div className="border-t border-gray-200 pt-4">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Upload document (optional)
+          </label>
+          {!selectedFile ? (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-colors"
+            >
+              <Upload className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+              <p className="text-gray-600 font-medium text-sm">Click to upload or drag and drop</p>
+              <p className="text-xs text-gray-500 mt-0.5">PDF, DOC, DOCX, JPG, PNG (max 10MB)</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileSelect}
+                className="hidden"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                disabled={isSubmitting}
+              />
+            </div>
+          ) : (
+            <div className="border border-gray-300 rounded-xl p-4 bg-gray-50 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <FileText className="w-8 h-8 text-blue-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900 truncate text-sm">{selectedFile.name}</p>
+                  <p className="text-xs text-gray-500">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveFile}
+                disabled={isSubmitting}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 shrink-0"
+                aria-label="Remove file"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+          )}
+          {selectedFile && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="create_license_doc_name" className="block text-xs font-medium text-gray-600 mb-1">
+                  Document name
+                </label>
+                <input
+                  id="create_license_doc_name"
+                  type="text"
+                  value={documentName}
+                  onChange={(e) => setDocumentName(e.target.value)}
+                  placeholder="e.g., License certificate"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label htmlFor="create_license_doc_type" className="block text-xs font-medium text-gray-600 mb-1">
+                  Document type
+                </label>
+                <select
+                  id="create_license_doc_type"
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select type</option>
+                  <option value="license">License</option>
+                  <option value="certificate">Certificate</option>
+                  <option value="insurance">Insurance</option>
+                  <option value="contract">Contract</option>
+                  <option value="policy">Policy</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
           )}
         </div>
 
