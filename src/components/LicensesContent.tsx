@@ -14,6 +14,7 @@ import {
   Clock,
   Plus,
   ClipboardList,
+  FileCheck,
   RefreshCw,
   Loader2,
   X,
@@ -23,6 +24,7 @@ import {
 import NewLicenseApplicationModal from './NewLicenseApplicationModal'
 import SelectLicenseTypeModal from './SelectLicenseTypeModal'
 import ReviewLicenseRequestModal from './ReviewLicenseRequestModal'
+import CreateLicenseModal from './CreateLicenseModal'
 import { LicenseType } from '@/types/license'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -70,6 +72,7 @@ export default function LicensesContent({
   const [isLicenseTypeModalOpen, setIsLicenseTypeModalOpen] = useState(false)
   const [resubmittingId, setResubmittingId] = useState<string | null>(null)
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
+  const [isCreateLicenseModalOpen, setIsCreateLicenseModalOpen] = useState(false)
   const [selectedState, setSelectedState] = useState<string>('')
   const [selectedLicenseType, setSelectedLicenseType] = useState<LicenseType | null>(null)
   const [loadingLicenseId, setLoadingLicenseId] = useState<string | null>(null)
@@ -474,13 +477,22 @@ export default function LicensesContent({
               Manage your license applications and active licenses
             </p>
           </div>
-          <button
-            onClick={() => setIsStateModalOpen(true)}
-            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-2 shadow-lg text-sm sm:text-base"
-          >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="whitespace-nowrap">New Application Request</span>
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => setIsCreateLicenseModalOpen(true)}
+              className="px-4 sm:px-5 py-2.5 sm:py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-all flex items-center justify-center gap-2 shadow-sm text-sm sm:text-base"
+            >
+              <FileCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="whitespace-nowrap">Create License Record</span>
+            </button>
+            <button
+              onClick={() => setIsStateModalOpen(true)}
+              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-2 shadow-lg text-sm sm:text-base"
+            >
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="whitespace-nowrap">New Application Request</span>
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -1121,6 +1133,16 @@ export default function LicensesContent({
           onBack={handleBackToLicenseTypes}
         />
       )}
+
+      {/* Create License Modal */}
+      <CreateLicenseModal
+        isOpen={isCreateLicenseModalOpen}
+        onClose={() => setIsCreateLicenseModalOpen(false)}
+        onSuccess={() => {
+          setActiveTab('licenses')
+          router.refresh()
+        }}
+      />
     </>
   )
 }

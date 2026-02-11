@@ -66,6 +66,15 @@ interface RequirementDocument {
   is_required: boolean
 }
 
+interface RequirementTemplate {
+  id: string
+  template_name: string
+  description: string | null
+  file_url: string
+  file_name: string
+  created_at: string
+}
+
 interface Step {
   id: string
   step_name: string
@@ -79,12 +88,12 @@ interface Step {
 interface ApplicationDetailContentProps {
   application: Application
   documents: Document[]
-  activeTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'message' | 'expert-process'
-  onTabChange?: (tab:  'next-steps' | 'quick-actions' | 'requirements' | 'message' | 'expert-process') => void
+  activeTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process'
+  onTabChange?: (tab:  'next-steps' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process') => void
   showInlineTabs?: boolean // If true, show tabs under summary blocks instead of in sidebar
 }
 
-type TabType =  'next-steps' | 'quick-actions' | 'requirements' | 'message' | 'expert-process'
+type TabType =  'next-steps' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process'
 
 export default function ApplicationDetailContent({
   application,
@@ -109,6 +118,8 @@ export default function ApplicationDetailContent({
   const [documents, setDocuments] = useState(initialDocuments)
   const [requirementDocuments, setRequirementDocuments] = useState<RequirementDocument[]>([])
   const [isLoadingRequirementDocuments, setIsLoadingRequirementDocuments] = useState(false)
+  const [templates, setTemplates] = useState<RequirementTemplate[]>([])
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false)
   const [steps, setSteps] = useState<Step[]>([])
   const [isLoadingSteps, setIsLoadingSteps] = useState(false)
   const [documentFilter, setDocumentFilter] = useState<'all' | 'pending' | 'drafts' | 'completed'>('all')
@@ -218,6 +229,7 @@ export default function ApplicationDetailContent({
       }
 
       // If application_steps exist, separate regular steps from expert steps
+      console.log('applicationSteps', applicationSteps?.length ?? 0, applicationSteps)
       if (applicationSteps && applicationSteps.length > 0) {
         const regularSteps = applicationSteps
           .filter((step: any) => !step.is_expert_step)
@@ -229,6 +241,7 @@ export default function ApplicationDetailContent({
             is_completed: step.is_completed,
             is_expert_step: false
           }))
+          console.log('regularSteps', regularSteps?.length ?? 0, regularSteps)
         
         const expertStepsData = applicationSteps
           .filter((step: any) => step.is_expert_step)
@@ -387,6 +400,73 @@ export default function ApplicationDetailContent({
       fetchRequirementDocuments()
     }
   }, [activeTab, application?.license_type_id, application?.state, fetchRequirementDocuments])
+
+  // Fetch license requirement templates (admin-uploaded templates for download)
+  const fetchRequirementTemplates = useCallback(async () => {
+    if (!application?.license_type_id) {
+      setTemplates([])
+      return
+    }
+    setIsLoadingTemplates(true)
+    try {
+      const { data: licenseTypeRow, error: licenseTypeError } = await supabase
+        .from('license_types')
+        .select('name, state')
+        .eq('id', application.license_type_id)
+        .maybeSingle()
+      if (licenseTypeError || !licenseTypeRow?.name) {
+        setTemplates([])
+        return
+      }
+      const requirementState = licenseTypeRow.state ?? application.state
+      if (!requirementState) {
+        setTemplates([])
+        return
+      }
+      const { data: licenseRequirement, error: reqError } = await supabase
+        .from('license_requirements')
+        .select('id')
+        .eq('state', requirementState)
+        .eq('license_type', licenseTypeRow.name)
+        .maybeSingle()
+      if (reqError || !licenseRequirement) {
+        setTemplates([])
+        return
+      }
+      const { data: templateRows, error: templatesError } = await supabase
+        .from('license_requirement_templates')
+        .select('id, template_name, description, file_url, file_name, created_at')
+        .eq('license_requirement_id', licenseRequirement.id)
+        .order('template_name', { ascending: true })
+      if (templatesError) {
+        setTemplates([])
+        return
+      }
+      setTemplates((templateRows || []).map((t: any) => ({
+        id: t.id,
+        template_name: t.template_name,
+        description: t.description ?? null,
+        file_url: t.file_url,
+        file_name: t.file_name,
+        created_at: t.created_at,
+      })))
+    } catch (e) {
+      console.error('Error fetching requirement templates:', e)
+      setTemplates([])
+    } finally {
+      setIsLoadingTemplates(false)
+    }
+  }, [application?.license_type_id, application?.state, supabase])
+
+  useEffect(() => {
+    fetchRequirementTemplates()
+  }, [fetchRequirementTemplates])
+
+  useEffect(() => {
+    if (activeTab === 'templates' && application?.license_type_id) {
+      fetchRequirementTemplates()
+    }
+  }, [activeTab, application?.license_type_id, fetchRequirementTemplates])
 
   // Fetch expert steps separately. If application has a license type but no expert steps yet, copy from requirement (e.g. backfill for existing apps or when license type was assigned later).
   const fetchExpertSteps = useCallback(async () => {
@@ -1150,7 +1230,9 @@ export default function ApplicationDetailContent({
               step_order: selectedStep.step_order,
               description: selectedStep.description,
               is_completed: isCompleted,
-              completed_at: isCompleted ? new Date().toISOString() : null
+              completed_at: isCompleted ? new Date().toISOString() : null,
+              is_expert_step: selectedStep.is_expert_step,
+              created_by_expert_id: selectedStep.created_by_expert_id
             })
 
           if (insertError) throw insertError
@@ -1405,6 +1487,7 @@ export default function ApplicationDetailContent({
           {[
             { id: 'next-steps', label: 'Next Steps' },
             { id: 'documents', label: 'Documents' },
+            { id: 'templates', label: 'Templates' },
             { id: 'requirements', label: 'State Info' },
             { id: 'message', label: 'Messages' },
             ...(currentUserRole === 'expert' ? [{ id: 'expert-process', label: 'Expert Process' }] : []),
@@ -2087,6 +2170,58 @@ export default function ApplicationDetailContent({
         </div>
       )}
 
+
+      {activeTab === 'templates' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Document Templates</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Download templates uploaded by the admin for this license type. Use these to complete your application documents.
+            </p>
+            {!application?.license_type_id ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">No license type assigned yet. Templates will appear here once your application has a license type.</p>
+              </div>
+            ) : isLoadingTemplates ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">No templates have been uploaded for this license type yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {templates.map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-gray-900">{tpl.template_name}</h4>
+                      {tpl.description && (
+                        <p className="text-sm text-gray-600 mt-0.5">{tpl.description}</p>
+                      )}
+                      <p className="text-sm text-gray-500 mt-1">{tpl.file_name}</p>
+                    </div>
+                    <a
+                      href={tpl.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={tpl.file_name}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex-shrink-0"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {activeTab === 'requirements' && (
         <div className="space-y-6">

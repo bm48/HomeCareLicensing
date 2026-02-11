@@ -978,7 +978,7 @@ export default function AdminApplicationDetailContent({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {canCloseApplication && (
+            {/* {canCloseApplication && (
               <button
                 type="button"
                 onClick={handleCloseApplication}
@@ -988,7 +988,7 @@ export default function AdminApplicationDetailContent({
                 {isClosing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
                 Close application
               </button>
-            )}
+            )} */}
             <span className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${getStatusBadge(application.status)}`}>
               {getStatusDisplay(application.status)}
             </span>

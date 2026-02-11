@@ -437,7 +437,7 @@ export default async function StaffDashboardPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No licenses yet</h3>
               <p className="text-gray-600 mb-4">Get started by adding your first license or certification</p>
               <Link
-                href="/staff-dashboard/my-licenses?action=add"
+                href="/staff-dashboard/my-certifications?action=add"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors"
               >
                 <Plus className="w-4 h-4" />
