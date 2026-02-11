@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import { revalidateLicensesPage } from '@/app/actions/licenses'
 import { Loader2, Upload, X, FileText } from 'lucide-react'
 import Modal from './Modal'
 
@@ -137,6 +138,7 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
         }
       }
 
+      await revalidateLicensesPage()
       reset()
       handleRemoveFile()
       onClose()
