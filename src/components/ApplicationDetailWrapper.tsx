@@ -66,7 +66,7 @@ export default function ApplicationDetailWrapper({
   }
 
   // Handle tab change from ApplicationDetailContent
-  const handleTabChange = (tab: 'next-steps' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process') => {
+  const handleTabChange = (tab: 'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process') => {
     setActiveTab(tab)
   }
 
