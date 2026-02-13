@@ -271,7 +271,7 @@ export default function UserManagementTabs({
             }`}
           >
             <Building2 className="w-4 h-4" />
-            Clients
+            Agency Admin
           </button>
           <button
             onClick={() => setActiveTab('experts')}

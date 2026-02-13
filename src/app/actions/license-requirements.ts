@@ -654,7 +654,7 @@ export async function getTemplatesFromRequirement(requirementId: string) {
   return { error: null, data: templates || [] }
 }
 
-export async function createTemplate(data: { licenseRequirementId: string; templateName: string; description: string; category: string; fileUrl: string; fileName: string }) {
+export async function createTemplate(data: { licenseRequirementId: string; templateName: string; description: string; fileUrl: string; fileName: string }) {
   const supabase = await createClient()
 
   const { data: template, error } = await supabase
@@ -663,7 +663,6 @@ export async function createTemplate(data: { licenseRequirementId: string; templ
       license_requirement_id: data.licenseRequirementId,
       template_name: data.templateName,
       description: data.description || null,
-      category: data.category || null,
       file_url: data.fileUrl,
       file_name: data.fileName,
     })

@@ -160,7 +160,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   // Form data
   const [stepFormData, setStepFormData] = useState({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
   const [documentFormData, setDocumentFormData] = useState({ documentName: '', description: '', isRequired: true })
-  const [expertFormData, setExpertFormData] = useState({ phase: 'Pre-Application', stepTitle: '', description: '' })
+  const [expertFormData, setExpertFormData] = useState({ phase: 'Client Intake', stepTitle: '', description: '' })
   const [templateEditData, setTemplateEditData] = useState({ templateName: '', description: '' })
   
   // Overview tab editable fields
@@ -767,7 +767,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
         licenseRequirementId: requirementId,
         templateName: templateFormData.templateName,
         description: templateFormData.description,
-        category: templateFormData.category,
         fileUrl: publicUrl,
         fileName: templateFile.name,
       })
@@ -2480,21 +2479,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                        <select
-                          value={templateFormData.category}
-                          onChange={(e) => setTemplateFormData({ ...templateFormData, category: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          required
-                        >
-                          <option value="Client Intake">Client Intake</option>
-                          <option value="Application Preparation">Preparation</option>
-                          <option value="Application Submission">Application Submission</option>
-                          <option value="Survey Preparation">Survey Preparation</option>
-                          <option value="Survey Guidance">Survey Guidance</option>
-                        </select>
-                      </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Select File</label>
                     <label className="block w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent min-h-[42px] flex items-center">
@@ -2736,11 +2720,11 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           required
                         >
-                          <option value="Pre-Application">Pre-Application</option>
-                          <option value="Post-Application">Post-Application</option>
-                          <option value="Application">Application</option>
-                          <option value="Review">Review</option>
-                          <option value="Post-Approval">Post-Approval</option>
+                          <option value="Client Intake">Client Intake</option>
+                          <option value="Application Preparation">Application Preparation</option>
+                          <option value="Application Submission">Application Submission</option>
+                          <option value="Survey Preparation">Survey Preparation</option>
+                          <option value="Survey Guidance">Survey Guidance</option>
                         </select>
                       </div>
                       <div>

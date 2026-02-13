@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { X, Plus } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { createUserAccount, type CreateUserRole } from '@/app/actions/users'
 
 interface AddUserModalProps {
   isOpen: boolean
@@ -44,26 +44,19 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
     }
 
     try {
-      const supabase = createClient()
+      const result = await createUserAccount(
+        formData.email,
+        formData.password,
+        formData.full_name,
+        formData.role as CreateUserRole
+      )
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.full_name,
-            role: formData.role
-          }
-        }
-      })
-
-      if (authError) {
-        setError(authError.message)
+      if (result.error) {
+        setError(result.error)
         setIsLoading(false)
         return
       }
 
-      // Reset
       setFormData({ full_name: '', email: '', password: '', confirmPassword: '', role: 'company_owner' })
       onSuccess?.()
       router.refresh()
@@ -98,6 +91,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg"
               placeholder="Jane Doe"
+              required
             />
           </div>
 
@@ -110,6 +104,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg"
               placeholder="user@example.com"
+              required
             />
           </div>
 
@@ -123,6 +118,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                 placeholder="••••••••"
+                required
               />
             </div>
 
@@ -135,6 +131,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                 placeholder="••••••••"
+                required
               />
             </div>
           </div>
@@ -142,7 +139,9 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
             <select name="role" value={formData.role} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
+              <option value="admin">Admin</option>
               <option value="company_owner">Agency Admin</option>
+              <option value="staff_member">Caregiver</option>
               <option value="expert">Expert</option>
             </select>
           </div>

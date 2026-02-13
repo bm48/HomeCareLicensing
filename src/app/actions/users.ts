@@ -80,6 +80,103 @@ export async function setUserPassword(userId: string, newPassword: string) {
   }
 }
 
+/** Role value for new users created from admin User Management */
+export type CreateUserRole = 'admin' | 'company_owner' | 'staff_member' | 'expert'
+
+/**
+ * Create a user account from admin User Management. Uses Admin API so the current
+ * admin's session is never overwritten (unlike signUp() which would log the admin out).
+ */
+export async function createUserAccount(
+  email: string,
+  password: string,
+  fullName: string,
+  role: CreateUserRole
+) {
+  let supabaseAdmin
+  try {
+    supabaseAdmin = createAdminClient()
+  } catch (e: any) {
+    return {
+      error:
+        e?.message ||
+        'Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local for creating user accounts.',
+      data: null,
+    }
+  }
+  const supabaseCookie = await createClient()
+
+  try {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const normalizedEmail = email.toLowerCase().trim()
+
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName.trim(),
+        role,
+      },
+    })
+
+    let userId: string | null = null
+
+    if (createError) {
+      if (
+        createError.message.includes('already registered') ||
+        createError.message.includes('already exists') ||
+        createError.message.includes('User already registered')
+      ) {
+        const { data: existingProfile } = await supabaseAdmin
+          .from('user_profiles')
+          .select('id')
+          .eq('email', normalizedEmail)
+          .single()
+        userId = existingProfile?.id || null
+        const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: { emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink` },
+        })
+        if (magicLinkError) {
+          return { error: `User already exists. Failed to send login link: ${magicLinkError.message}`, data: null }
+        }
+        revalidatePath('/admin/users')
+        return {
+          error: null,
+          data: { success: true, userId, message: `User already exists. Login link sent to ${email}.` },
+        }
+      }
+      const errorMessage =
+        createError.message.includes('Database error') || createError.message.includes('database')
+          ? 'Database error creating user. Ensure handle_new_user migration has been applied.'
+          : createError.message
+      return { error: `Failed to create user: ${errorMessage}`, data: null }
+    }
+
+    if (!newUser?.user?.id) {
+      return { error: 'Failed to create user account - no user returned', data: null }
+    }
+    userId = newUser.user.id
+
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: { emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink` },
+    })
+    if (magicLinkError) console.warn('Failed to send magic link:', magicLinkError.message)
+
+    revalidatePath('/admin/users')
+    return {
+      error: null,
+      data: { success: true, userId, message: `User created. Login link sent to ${email}.` },
+    }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to create user account', data: null }
+  }
+}
+
 export async function createStaffUserAccount(
   email: string,
   password: string,
