@@ -27,7 +27,7 @@ export default function UploadDocumentModal({
 }: UploadDocumentModalProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ id: string; file: File; name: string }>>([])
   const [documentName, setDocumentName] = useState('')
   const [documentType, setDocumentType] = useState('')
   const [description, setDescription] = useState('')
@@ -43,17 +43,31 @@ export default function UploadDocumentModal({
   }, [isOpen, defaultDocumentName, defaultDocumentType])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
-      if (!documentName) {
-        setDocumentName(file.name)
-      }
+    const files = e.target.files
+    if (files && files.length > 0) {
+      const newFiles: Array<{ id: string; file: File; name: string }> = Array.from(files).map((f, i) => ({
+        id: `${Date.now()}-${i}`,
+        file: f,
+        name: f.name
+      }))
+      setSelectedFiles(prev => {
+        // append new files
+        const merged = [...prev, ...newFiles]
+        // auto-fill documentName if empty and only one file selected total
+        if (!documentName && merged.length === 1) {
+          setDocumentName(merged[0].name)
+        }
+        return merged
+      })
     }
   }
 
-  const handleRemoveFile = () => {
-    setSelectedFile(null)
+  const handleRemoveFile = (id?: string) => {
+    if (!id) {
+      setSelectedFiles([])
+    } else {
+      setSelectedFiles(prev => prev.filter(p => p.id !== id))
+    }
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -61,8 +75,8 @@ export default function UploadDocumentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedFile || !documentName) {
-      setError('Please select a file and enter a document name')
+    if (selectedFiles.length === 0 || !documentName) {
+      setError('Please select at least one file and enter a document name')
       return
     }
 
@@ -80,46 +94,56 @@ export default function UploadDocumentModal({
         return
       }
 
-      // Upload file to Supabase Storage
-      const fileExt = selectedFile.name.split('.').pop()
-      const fileName = `${applicationId}/${Date.now()}.${fileExt}`
-      const filePath = fileName
+      // For multiple files, upload sequentially and insert records
+      const uploadedPaths: string[] = []
+      for (const fileItem of selectedFiles) {
+        // Upload file to Supabase Storage
+        const fileExt = fileItem.file.name.split('.').pop()
+        const fileName = `${applicationId}/${Date.now()}-${fileItem.id}.${fileExt}`
+        const filePath = fileName
 
-      const { error: uploadError } = await supabase.storage
-        .from('application-documents')
-        .upload(filePath, selectedFile)
-
-      if (uploadError) {
-        throw uploadError
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('application-documents')
-        .getPublicUrl(filePath)
-
-      // Create document record in database (link to license requirement document when provided)
-      const insertPayload: Record<string, unknown> = {
-        application_id: applicationId,
-        document_name: documentName,
-        document_url: publicUrl,
-        document_type: documentType || null,
-        description: description.trim() || null,
-        status: 'draft'
-      }
-      if (licenseRequirementDocumentId) {
-        insertPayload.license_requirement_document_id = licenseRequirementDocumentId
-      }
-      const { error: insertError } = await supabase
-        .from('application_documents')
-        .insert(insertPayload)
-
-      if (insertError) {
-        // If insert fails, try to delete the uploaded file
-        await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('application-documents')
-          .remove([filePath])
-        throw insertError
+          .upload(filePath, fileItem.file)
+
+        if (uploadError) {
+          // rollback previous uploads
+          if (uploadedPaths.length > 0) {
+            await supabase.storage.from('application-documents').remove(uploadedPaths)
+          }
+          throw uploadError
+        }
+
+        uploadedPaths.push(filePath)
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('application-documents')
+          .getPublicUrl(filePath)
+
+        // Create document record in database (link to license requirement document when provided)
+        const insertPayload: Record<string, unknown> = {
+          application_id: applicationId,
+          document_name: fileItem.name || documentName,
+          document_url: publicUrl,
+          document_type: documentType || null,
+          description: description.trim() || null,
+          status: 'draft'
+        }
+        if (licenseRequirementDocumentId) {
+          insertPayload.license_requirement_document_id = licenseRequirementDocumentId
+        }
+        const { error: insertError } = await supabase
+          .from('application_documents')
+          .insert(insertPayload)
+
+        if (insertError) {
+          // If insert fails, try to delete uploaded files
+          if (uploadedPaths.length > 0) {
+            await supabase.storage.from('application-documents').remove(uploadedPaths)
+          }
+          throw insertError
+        }
       }
 
       // Send email notification to expert if assigned
@@ -197,7 +221,7 @@ export default function UploadDocumentModal({
       }
 
       // Reset form
-      setSelectedFile(null)
+      setSelectedFiles([])
       setDocumentName('')
       setDocumentType('')
       setDescription('')
@@ -220,7 +244,7 @@ export default function UploadDocumentModal({
 
   const handleClose = () => {
     if (!isUploading) {
-      setSelectedFile(null)
+      setSelectedFiles([])
       setDocumentName('')
       setDocumentType('')
       setDescription('')
@@ -246,7 +270,7 @@ export default function UploadDocumentModal({
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Select File <span className="text-red-500">*</span>
           </label>
-          {!selectedFile ? (
+          {selectedFiles.length === 0 ? (
             <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors"
@@ -261,27 +285,34 @@ export default function UploadDocumentModal({
                 className="hidden"
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                 disabled={isUploading}
+                multiple
               />
             </div>
           ) : (
-            <div className="border border-gray-300 rounded-xl p-4 bg-gray-50 flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1">
-                <FileText className="w-8 h-8 text-blue-600" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{selectedFile.name}</p>
-                  <p className="text-sm text-gray-500">
-                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
+            <div className="space-y-2">
+              {selectedFiles.map((f) => (
+                <div key={f.id} className="border border-gray-300 rounded-xl p-3 bg-gray-50 flex items-center gap-3">
+                  <FileText className="w-8 h-8 text-blue-600" />
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={f.name}
+                      onChange={(e) => setSelectedFiles(prev => prev.map(p => p.id === f.id ? { ...p, name: e.target.value } : p))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"
+                      disabled={isUploading}
+                    />
+                    <p className="text-sm text-gray-500 mt-1">{(f.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFile(f.id)}
+                    disabled={isUploading}
+                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleRemoveFile}
-                disabled={isUploading}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+              ))}
             </div>
           )}
         </div>
@@ -353,7 +384,7 @@ export default function UploadDocumentModal({
           </button>
           <button
             type="submit"
-            disabled={isUploading || !selectedFile || !documentName}
+            disabled={isUploading || selectedFiles.length === 0 || !documentName}
             className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isUploading ? (
@@ -364,7 +395,7 @@ export default function UploadDocumentModal({
             ) : (
               <>
                 <Upload className="w-4 h-4" />
-                Upload Document
+                Upload Documents
               </>
             )}
           </button>

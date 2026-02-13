@@ -30,3 +30,6 @@ body {
 html {
   font-size: 14px; /* Base font size reduction */
 }
+textarea::placeholder {
+  white-space: pre-line; /* Preserve whitespace and line breaks in placeholders */
+}

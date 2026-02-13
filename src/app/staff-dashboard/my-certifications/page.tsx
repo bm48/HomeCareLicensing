@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StaffLayout from '@/components/StaffLayout'
 import AddCertificationModal from '@/components/AddCertificationModal'
@@ -32,6 +32,9 @@ function MyCertificationsContent() {
   const [certifications, setCertifications] = useState<Certification[]>([])
   const [certificationTypes, setCertificationTypes] = useState<Array<{ id: number; certification_type: string }>>([])
   const [isLoading, setIsLoading] = useState(true)
+  type Column = 'type' | 'status' | 'license_number' | 'issue_date' | 'expiration_date' | 'state'
+  const [sortBy, setSortBy] = useState<Column>('expiration_date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedCertification, setSelectedCertification] = useState<Certification | null>(null)
@@ -82,6 +85,7 @@ function MyCertificationsContent() {
       ])
 
       if (certsResult.data) {
+        console.log('Certifications loaded:', certsResult.data)
         setCertifications(certsResult.data as Certification[])
       }
       if (typesResult.data) {
@@ -160,6 +164,42 @@ function MyCertificationsContent() {
     return parts.join(' • ')
   }
 
+  const toggleSort = (col: Column) => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(col)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedCertifications = useMemo(() => {
+    const arr = [...certifications]
+    const dir = sortDir === 'asc' ? 1 : -1
+    arr.sort((a, b) => {
+      try {
+        if (sortBy === 'status') return a.status.localeCompare(b.status) * dir
+        if (sortBy === 'license_number') return (a.license_number || '').localeCompare(b.license_number || '') * dir
+        if (sortBy === 'type') return (a.type || '').localeCompare(b.type || '') * dir
+        if (sortBy === 'state') return (a.state || '').localeCompare(b.state || '') * dir
+        if (sortBy === 'issue_date') {
+          const da = a.issue_date ? new Date(a.issue_date).getTime() : 0
+          const db = b.issue_date ? new Date(b.issue_date).getTime() : 0
+          return (da - db) * dir
+        }
+        if (sortBy === 'expiration_date') {
+          const da = a.expiration_date ? new Date(a.expiration_date).getTime() : 0
+          const db = b.expiration_date ? new Date(b.expiration_date).getTime() : 0
+          return (da - db) * dir
+        }
+      } catch (e) {
+        return 0
+      }
+      return 0
+    })
+    return arr
+  }, [certifications, sortBy, sortDir])
+
   if (isLoading || !user || !profile) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -187,7 +227,7 @@ function MyCertificationsContent() {
         </div>
 
         {/* Add New Certification Button */}
-        <div>
+        <div className='flex justify-end'>
           <button
             onClick={() => setIsModalOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors"
@@ -199,40 +239,57 @@ function MyCertificationsContent() {
 
         {/* Certifications List */}
         {certifications.length > 0 ? (
-          <div className="space-y-4">
-            {certifications.map((cert) => (
-              <div
-                key={cert.id}
-                className="bg-white rounded-xl p-6 shadow-md border border-gray-100"
-              >
-                <div className="flex items-start gap-4">
-                  {/* Icon */}
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Award className="w-6 h-6 text-blue-600" />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between mb-3 relative">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                          {cert.type}
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          {formatCertificationId(cert)}
-                        </p>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 absolute right-[15.5rem] top-[0.4rem]">
-                        {getStatusBadge(cert.status, cert.expiration_date)}
-                      </div>
-
-                      
-                      {/* Actions */}
-                      <div className="flex items-center gap-3">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+            <table className="min-w-full table-auto">
+              <thead>
+                <tr className="text-left text-sm text-gray-600">
+                  <th className="px-6 py-4">Type
+                    <button onClick={() => toggleSort('type')} className="ml-2 text-xs text-gray-400">{sortBy === 'type' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</button>
+                  </th>
+                  <th className="px-6 py-4">Status
+                    <button onClick={() => toggleSort('status')} className="ml-2 text-xs text-gray-400">{sortBy === 'status' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</button>
+                  </th>
+                  <th className="px-6 py-4">License Number
+                    <button onClick={() => toggleSort('license_number')} className="ml-2 text-xs text-gray-400">{sortBy === 'license_number' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</button>
+                  </th>
+                  <th className="px-6 py-4">Issue Date
+                    <button onClick={() => toggleSort('issue_date')} className="ml-2 text-xs text-gray-400">{sortBy === 'issue_date' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</button>
+                  </th>
+                  <th className="px-6 py-4">Expiration Date
+                    {/* <button onClick={() => toggleSort('expiration_date')} className="ml-2 text-xs text-gray-400">{sortBy === 'expiration_date' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</button> */}
+                  </th>
+                  <th className="px-6 py-4">State
+                    <button onClick={() => toggleSort('state')} className="ml-2 text-xs text-gray-400">{sortBy === 'state' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</button>
+                  </th>
+                  <th className="px-6 py-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedCertifications.map((cert) => (
+                  <tr key={cert.id} className="border-t">
+                    <td className="px-6 py-4 align-top">
+                      <div className="font-medium text-gray-900">{cert.type}</div>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      {getStatusBadge(cert.status, cert.expiration_date)}
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <div className="text-sm text-gray-900">{cert.license_number}</div>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <div className="text-sm text-gray-900">{formatDate(cert.issue_date)}</div>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <div className="text-sm text-gray-900">{formatDate(cert.expiration_date)}</div>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <div className="text-sm text-gray-900">{cert.state ?? '—'}</div>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <div className="flex items-center gap-2">
                         <button 
                           onClick={() => handleEditClick(cert)}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm flex items-center gap-2"
+                          className="px-3 py-1 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm flex items-center gap-2"
                         >
                           <Edit className="w-4 h-4" />
                           Edit
@@ -240,7 +297,7 @@ function MyCertificationsContent() {
                         <button 
                           onClick={() => handleViewDetails(cert.id)}
                           disabled={loadingCertificationId === cert.id}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-3 py-1 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {loadingCertificationId === cert.id ? (
                             <>
@@ -250,33 +307,16 @@ function MyCertificationsContent() {
                           ) : (
                             <>
                               <Eye className="w-4 h-4" />
-                              View Details
+                              View
                             </>
                           )}
                         </button>
                       </div>
-
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Expiration Date</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {formatDate(cert.expiration_date)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Issuing Authority</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {cert.issuing_authority}
-                        </p>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              </div>
-            ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
           <div className="bg-white rounded-xl p-12 text-center shadow-md border border-gray-100">

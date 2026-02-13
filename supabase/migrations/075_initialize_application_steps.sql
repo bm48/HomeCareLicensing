@@ -29,14 +29,14 @@ BEGIN
     IF license_requirement_uuid IS NOT NULL THEN
       -- Create application_steps entries for main steps only (expert steps are added later by experts)
       FOR step_record IN
-        SELECT step_name, step_order
+        SELECT step_name, step_order, instructions
         FROM license_requirement_steps
         WHERE license_requirement_id = license_requirement_uuid
           AND COALESCE(is_expert_step, false) = false
         ORDER BY step_order
       LOOP
-        INSERT INTO application_steps (application_id, step_name, step_order, is_completed)
-        VALUES (NEW.id, step_record.step_name, step_record.step_order, FALSE)
+        INSERT INTO application_steps (application_id, step_name, step_order, instructions, is_completed)
+        VALUES (NEW.id, step_record.step_name, step_record.step_order, step_record.instructions, FALSE)
         ON CONFLICT DO NOTHING;
       END LOOP;
 
@@ -49,7 +49,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-CREATE TRIGGER initialize_application_steps_on_approval_trigger
-  AFTER UPDATE ON applications
-  FOR EACH ROW
-  EXECUTE FUNCTION initialize_application_steps_on_approval();
+-- CREATE TRIGGER initialize_application_steps_on_approval_trigger
+--   AFTER UPDATE ON applications
+--   FOR EACH ROW
+--   EXECUTE FUNCTION initialize_application_steps_on_approval();

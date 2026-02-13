@@ -18,12 +18,12 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
-const DEMO_CREDENTIALS = [
-  { role: 'Agency Admin', email: 'owner@demo.com', password: 'demo123', icon: User, color: 'bg-blue-500' },
-  { role: 'Admin', email: 'admin@demo.com', password: 'demo123', icon: Shield, color: 'bg-purple-500' },
-  { role: 'Caregiver', email: 'staff@demo.com', password: 'demo123', icon: RefreshCw, color: 'bg-green-500' },
-  { role: 'Expert', email: 'expert@demo.com', password: 'demo123', icon: GraduationCap, color: 'bg-orange-500' },
-]
+// const DEMO_CREDENTIALS = [
+//   { role: 'Agency Admin', email: 'owner@demo.com', password: 'demo123', icon: User, color: 'bg-blue-500' },
+//   { role: 'Admin', email: 'admin@demo.com', password: 'demo123', icon: Shield, color: 'bg-purple-500' },
+//   { role: 'Caregiver', email: 'staff@demo.com', password: 'demo123', icon: RefreshCw, color: 'bg-green-500' },
+//   { role: 'Expert', email: 'expert@demo.com', password: 'demo123', icon: GraduationCap, color: 'bg-orange-500' },
+// ]
 
 function LoginPageContent() {
   const router = useRouter()
@@ -31,7 +31,7 @@ function LoginPageContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login')
+  // const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login')
 
   const {
     register,
@@ -164,51 +164,51 @@ function LoginPageContent() {
     }
   }
 
-  const handleQuickAccess = async (email: string, password: string) => {
-    console.log('email', email)
-    console.log('password', password)
-    setValue('email', email)
-    setValue('password', password)
+  // const handleQuickAccess = async (email: string, password: string) => {
+  //   console.log('email', email)
+  //   console.log('password', password)
+  //   setValue('email', email)
+  //   setValue('password', password)
     
-    setIsLoading(true)
-    setError(null)
+  //   setIsLoading(true)
+  //   setError(null)
 
-    try {
-      const supabase = createClient()
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+  //   try {
+  //     const supabase = createClient()
+  //     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+  //       email,
+  //       password,
+  //     })
 
-      if (authError) {
-        setError(authError.message)
-        setIsLoading(false)
-        return
-      }
+  //     if (authError) {
+  //       setError(authError.message)
+  //       setIsLoading(false)
+  //       return
+  //     }
 
-      if (authData.session) {
-        // Get user profile to check role
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('id', authData.user.id)
-          .single()
+  //     if (authData.session) {
+  //       // Get user profile to check role
+  //       const { data: profile } = await supabase
+  //         .from('user_profiles')
+  //         .select('role')
+  //         .eq('id', authData.user.id)
+  //         .single()
         
-        // Redirect based on role
-        if (profile?.role === 'admin') {
-          router.push('/admin')
-        } else if (profile?.role === 'staff_member') {
-          router.push('/staff-dashboard')
-        } else {
-          router.push('/dashboard')
-        }
-        router.refresh()
-      }
-    } catch (err) {
-      setError('An unexpected error occurred. Please try again.')
-      setIsLoading(false)
-    }
-  }
+  //       // Redirect based on role
+  //       if (profile?.role === 'admin') {
+  //         router.push('/admin')
+  //       } else if (profile?.role === 'staff_member') {
+  //         router.push('/staff-dashboard')
+  //       } else {
+  //         router.push('/dashboard')
+  //       }
+  //       router.refresh()
+  //     }
+  //   } catch (err) {
+  //     setError('An unexpected error occurred. Please try again.')
+  //     setIsLoading(false)
+  //   }
+  // }
 
   return (
     <div 
@@ -298,7 +298,7 @@ function LoginPageContent() {
               </div>
 
               {/* Tabs */}
-              <div className="flex gap-2 mb-8 bg-white/10 p-1 rounded-xl backdrop-blur-sm">
+              {/* <div className="flex gap-2 mb-8 bg-white/10 p-1 rounded-xl backdrop-blur-sm">
                 <button
                   onClick={() => setActiveTab('login')}
                   className="flex-1 py-3 px-4 rounded-lg font-semibold transition-all bg-white/20 text-white shadow-sm"
@@ -311,7 +311,7 @@ function LoginPageContent() {
                 >
                   Sign Up
                 </Link>
-              </div>
+              </div> */}
 
               {/* Login Form */}
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -401,7 +401,7 @@ function LoginPageContent() {
               </form>
 
               {/* Quick Access */}
-              <div className="mt-8">
+              {/* <div className="mt-8">
                 <div className="relative mb-6">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-white/20"></div>
@@ -429,14 +429,15 @@ function LoginPageContent() {
                     )
                   })}
                 </div>
-              </div>
+              </div> */}
 
-              <div className="mt-6 text-center text-sm text-white/80">
+              {/* <div className="mt-6 text-center text-sm text-white/80">
                 Don&apos;t have an account?{' '}
                 <Link href="/signup" className="font-semibold text-blue-300 hover:text-blue-200 transition-colors">
                   Sign up
                 </Link>
-              </div>
+              </div> */}
+
             </div>
           </div>
         </div>

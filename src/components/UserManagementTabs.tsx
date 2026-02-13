@@ -6,6 +6,8 @@ import ClientListWithFilters from './ClientListWithFilters'
 import ExpertListWithFilters from './ExpertListWithFilters'
 import ResetPasswordModal from './ResetPasswordModal'
 import AddExpertModal from './AddExpertModal'
+import AddUserModal from './AddUserModal'
+import AddNewClientModal from './AddNewClientModal'
 import { toggleUserStatus } from '@/app/actions/users'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -79,6 +81,8 @@ export default function UserManagementTabs({
   const [userStatuses, setUserStatuses] = useState<Record<string, boolean>>({})
   const [isTogglingStatus, setIsTogglingStatus] = useState<string | null>(null)
   const [isAddExpertModalOpen, setIsAddExpertModalOpen] = useState(false)
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
+  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -287,6 +291,20 @@ export default function UserManagementTabs({
       <div>
         {activeTab === 'users' && (
           <div className="space-y-4 md:space-y-6">
+            {/* Header with Add User Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900">Users</h2>
+                <p className="text-sm md:text-base text-gray-600 mt-1">Manage platform users and access.</p>
+              </div>
+              <button
+                onClick={() => setIsAddUserModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-sm md:text-base whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4 md:w-5 md:h-5" />
+                Add User
+              </button>
+            </div>
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
@@ -579,6 +597,20 @@ export default function UserManagementTabs({
 
         {activeTab === 'clients' && (
           <div className="space-y-4 md:space-y-6">
+            {/* Header with Add Client Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900">Clients</h2>
+                <p className="text-sm md:text-base text-gray-600 mt-1">Manage your care recipients and applications.</p>
+              </div>
+              <button
+                onClick={() => setIsAddClientModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-sm md:text-base whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4 md:w-5 md:h-5" />
+                Add New Client
+              </button>
+            </div>
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
@@ -711,6 +743,26 @@ export default function UserManagementTabs({
         onClose={() => setIsAddExpertModalOpen(false)}
         onSuccess={() => {
           setIsAddExpertModalOpen(false)
+          router.refresh()
+        }}
+      />
+
+      {/* Add User Modal */}
+      <AddUserModal
+        isOpen={isAddUserModalOpen}
+        onClose={() => setIsAddUserModalOpen(false)}
+        onSuccess={() => {
+          setIsAddUserModalOpen(false)
+          router.refresh()
+        }}
+      />
+
+      {/* Add New Client Modal */}
+      <AddNewClientModal
+        isOpen={isAddClientModalOpen}
+        onClose={() => setIsAddClientModalOpen(false)}
+        onSuccess={() => {
+          setIsAddClientModalOpen(false)
           router.refresh()
         }}
       />

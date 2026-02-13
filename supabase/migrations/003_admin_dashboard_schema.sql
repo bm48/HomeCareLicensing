@@ -113,6 +113,13 @@ CREATE TABLE IF NOT EXISTS license_requirement_steps (
 CREATE INDEX IF NOT EXISTS idx_requirement_steps_requirement ON license_requirement_steps(license_requirement_id);
 CREATE INDEX IF NOT EXISTS idx_requirement_steps_order ON license_requirement_steps(license_requirement_id, step_order);
 
+
+
+-- add instructions column to license_requirement_steps
+ALTER TABLE license_requirement_steps
+  ADD COLUMN instructions text;
+
+  
 -- Create license_requirement_documents table
 CREATE TABLE IF NOT EXISTS license_requirement_documents (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -124,6 +131,7 @@ CREATE TABLE IF NOT EXISTS license_requirement_documents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_requirement_documents_requirement ON license_requirement_documents(license_requirement_id);
+
 
 -- Create cases table (admin view of applications)
 CREATE TABLE IF NOT EXISTS cases (
@@ -433,3 +441,6 @@ CREATE POLICY "Admins can view all profiles"
     )
   );
 
+-- add category column to license_requirement_templates
+alter table license_requirement_templates
+add column category text

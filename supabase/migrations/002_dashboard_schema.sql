@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS applications (
 CREATE INDEX IF NOT EXISTS idx_applications_owner ON applications(company_owner_id);
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 
+alter table application_steps
+  add column if not exists instructions text;
+  
 -- Create application_documents table
 CREATE TABLE IF NOT EXISTS application_documents (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -332,3 +335,7 @@ ALTER TABLE license_documents
 ADD COLUMN IF NOT EXISTS expiry_date DATE;
 
 CREATE INDEX IF NOT EXISTS idx_license_documents_expiry_date ON license_documents(expiry_date);
+
+-- add instrunctions column to application_steps
+ALTER TABLE application_steps
+  ADD COLUMN instructions text;

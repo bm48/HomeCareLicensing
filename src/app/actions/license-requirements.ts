@@ -7,6 +7,7 @@ export interface CreateStepData {
   licenseRequirementId: string
   stepName: string
   description: string
+  instructions: string
   estimatedDays?: number
   isRequired: boolean
 }
@@ -84,6 +85,7 @@ export async function createStep(data: CreateStepData) {
       step_name: data.stepName,
       step_order: nextOrder,
       description: data.description || null,
+      instructions: data.instructions || null,
       is_expert_step: false,
       estimated_days: data.estimatedDays ?? null,
       is_required: data.isRequired,
@@ -372,6 +374,7 @@ export type ExpertStepTemplate = {
   step_name: string
   step_order: number
   description: string | null
+  instructions: string | null
   phase: string | null
 }
 
@@ -389,7 +392,7 @@ export async function getExpertStepTemplates(
 
     const { data: templateSteps, error: fetchError } = await supabase
       .from('license_requirement_steps')
-      .select('step_name, step_order, description, phase')
+      .select('step_name, step_order, description, instructions, phase')
       .eq('license_requirement_id', requirementId)
       .eq('is_expert_step', true)
       .order('step_order', { ascending: true })
@@ -405,6 +408,7 @@ export async function getExpertStepTemplates(
       step_name: String(step.step_name),
       step_order: Number(step.step_order),
       description: step.description != null ? String(step.description) : null,
+      instructions: step.instructions != null ? String(step.instructions) : null,
       phase: step.phase != null ? String(step.phase) : null,
     }))
     return { steps, error: null }
@@ -650,7 +654,7 @@ export async function getTemplatesFromRequirement(requirementId: string) {
   return { error: null, data: templates || [] }
 }
 
-export async function createTemplate(data: { licenseRequirementId: string; templateName: string; description: string; fileUrl: string; fileName: string }) {
+export async function createTemplate(data: { licenseRequirementId: string; templateName: string; description: string; category: string; fileUrl: string; fileName: string }) {
   const supabase = await createClient()
 
   const { data: template, error } = await supabase
@@ -659,6 +663,7 @@ export async function createTemplate(data: { licenseRequirementId: string; templ
       license_requirement_id: data.licenseRequirementId,
       template_name: data.templateName,
       description: data.description || null,
+      category: data.category || null,
       file_url: data.fileUrl,
       file_name: data.fileName,
     })

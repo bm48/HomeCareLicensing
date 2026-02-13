@@ -86,6 +86,7 @@ export default function ReviewLicenseRequestModal({
           step_name: step.step_name,
           step_order: step.step_order,
           description: step.description ?? null,
+          instructions: step.instructions ?? null,
           phase: step.phase ?? null,
           is_expert_step: true,
           is_completed: false,

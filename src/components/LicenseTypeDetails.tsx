@@ -154,11 +154,11 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   
   // Template form / upload modal
   const [showUploadTemplateModal, setShowUploadTemplateModal] = useState(false)
-  const [templateFormData, setTemplateFormData] = useState({ templateName: '', description: '' })
+  const [templateFormData, setTemplateFormData] = useState({ templateName: '', description: '', category: '' })
   const [templateFile, setTemplateFile] = useState<File | null>(null)
   
   // Form data
-  const [stepFormData, setStepFormData] = useState({ stepName: '', description: '', estimatedDays: '', isRequired: true })
+  const [stepFormData, setStepFormData] = useState({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
   const [documentFormData, setDocumentFormData] = useState({ documentName: '', description: '', isRequired: true })
   const [expertFormData, setExpertFormData] = useState({ phase: 'Pre-Application', stepTitle: '', description: '' })
   const [templateEditData, setTemplateEditData] = useState({ templateName: '', description: '' })
@@ -374,6 +374,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
         getExpertStepsFromRequirement(reqId),
       ])
 
+
       if (stepsResult.data) {
         setSteps(stepsResult.data)
         setStepsCount(stepsResult.data.length)
@@ -468,6 +469,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       licenseRequirementId: requirementId,
       stepName: stepFormData.stepName,
       description: stepFormData.description,
+      instructions: stepFormData.instructions,
       estimatedDays: stepFormData.estimatedDays ? parseInt(stepFormData.estimatedDays) : undefined,
       isRequired: stepFormData.isRequired,
     })
@@ -476,7 +478,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setError(result.error)
       setIsSubmitting(false)
     } else {
-      setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
+      setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
       setShowStepForm(false)
       closeAddStepModal()
       await loadData()
@@ -552,6 +554,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     setStepFormData({
       stepName: step.step_name,
       description: step.description || '',
+      instructions: '', // Instructions are not currently stored in the database, so we can't pre-fill this field
       estimatedDays: step.estimated_days != null ? String(step.estimated_days) : '',
       isRequired: step.is_required ?? true,
     })
@@ -594,7 +597,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setError(result.error)
       setIsSubmitting(false)
     } else {
-      setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
+      setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
       setShowStepForm(false)
       setEditingStep(null)
       await loadData()
@@ -741,7 +744,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     e.preventDefault()
     if (!requirementId || !templateFile) return
 
-    console.log('uploading template', templateFile)
     setIsSubmitting(true)
     setError(null)
     try {
@@ -755,7 +757,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
           contentType: templateFile.type || 'application/octet-stream',
           cacheControl: '3600',
         })
-        console.log('uploadError', uploadError)
       if (uploadError) {
         setError(uploadError.message || 'Failed to upload file')
         setIsSubmitting(false)
@@ -766,6 +767,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
         licenseRequirementId: requirementId,
         templateName: templateFormData.templateName,
         description: templateFormData.description,
+        category: templateFormData.category,
         fileUrl: publicUrl,
         fileName: templateFile.name,
       })
@@ -775,7 +777,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
         return
       }
       setShowUploadTemplateModal(false)
-      setTemplateFormData({ templateName: '', description: '' })
+      setTemplateFormData({ templateName: '', description: '', category: '' })
       setTemplateFile(null)
       await loadData()
     } finally {
@@ -933,7 +935,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     setShowAddStepModal(false)
     setAddStepModalTab('new')
     setShowStepForm(false)
-    setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
+    setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
     setShowCopyStepsForm(false)
     setSelectedSourceRequirementId('')
     setAvailableSteps([])
@@ -1609,6 +1611,23 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                         />
                       </div>
                       <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                        <textarea
+                          value={stepFormData.instructions}
+                          onChange={(e) => setStepFormData({ ...stepFormData, instructions: e.target.value })}
+                          placeholder="e.g. Website URLs, login steps, or guidance for external portals like background ckeck sites
+                          
+                          Example:
+                          1. Go to https://backgroundcheck.example.com
+                          2. Create an account using agency email
+                          3. Complete the application form"
+                          rows={5}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                          style={{whiteSpace: 'pre-line'}}
+                        />
+                      </div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Days</label>
                         <input
                           type="number"
@@ -1823,7 +1842,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 isOpen={!!editingStep}
                 onClose={() => {
                   setEditingStep(null)
-                  setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
+                  setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
                   setShowStepForm(false)
                   setError(null)
                 }}
@@ -1888,7 +1907,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="button"
                       onClick={() => {
                         setEditingStep(null)
-                        setStepFormData({ stepName: '', description: '', estimatedDays: '', isRequired: true })
+                        setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
                         setShowStepForm(false)
                         setError(null)
                       }}
@@ -2416,7 +2435,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
               <button
                 onClick={() => {
                   setShowUploadTemplateModal(true)
-                  setTemplateFormData({ templateName: '', description: '' })
+                  setTemplateFormData({ templateName: '', description: '', category: '' })
                   setTemplateFile(null)
                   setError(null)
                 }}
@@ -2432,7 +2451,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 isOpen={showUploadTemplateModal}
                 onClose={() => {
                   setShowUploadTemplateModal(false)
-                  setTemplateFormData({ templateName: '', description: '' })
+                  setTemplateFormData({ templateName: '', description: '', category: '' })
                   setTemplateFile(null)
                   setError(null)
                 }}
@@ -2461,6 +2480,21 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                        <select
+                          value={templateFormData.category}
+                          onChange={(e) => setTemplateFormData({ ...templateFormData, category: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        >
+                          <option value="Client Intake">Client Intake</option>
+                          <option value="Application Preparation">Preparation</option>
+                          <option value="Application Submission">Application Submission</option>
+                          <option value="Survey Preparation">Survey Preparation</option>
+                          <option value="Survey Guidance">Survey Guidance</option>
+                        </select>
+                      </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Select File</label>
                     <label className="block w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent min-h-[42px] flex items-center">
@@ -2489,7 +2523,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="button"
                       onClick={() => {
                         setShowUploadTemplateModal(false)
-                        setTemplateFormData({ templateName: '', description: '' })
+                        setTemplateFormData({ templateName: '', description: '', category: '' })
                         setTemplateFile(null)
                         setError(null)
                       }}
@@ -3129,10 +3163,10 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                               <span className="text-sm font-semibold text-white">{index + 1}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
-                              {step.description && (
+                              <h4 className="font-semibold text-gray-900 mb-1">{step.phase ?? 'No Phase'}</h4>
+                              {/* {step.description && (
                                 <p className="text-sm text-gray-600">{step.description}</p>
-                              )}
+                              )} */}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <button

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
@@ -12,25 +12,22 @@ import {
   ArrowRight,
   Loader2,
   CheckSquare,
-  MessageSquare,
   Send,
-  Bot,
   Users,
   Upload,
   X,
   Check,
-  AlertCircle,
   Plus,
-  Edit2,
-  Trash2,
   ChevronDown,
   Copy,
   Search,
-  Lock
+  Lock,
+  Info,
 } from 'lucide-react'
 import { closeApplication } from '@/app/actions/applications'
 import UploadDocumentModal from './UploadDocumentModal'
 import Modal from './Modal'
+import { info } from 'console'
 
 interface Application {
   id: string
@@ -83,6 +80,8 @@ interface Step {
   is_completed?: boolean
   is_expert_step?: boolean
   created_by_expert_id?: string | null
+  phase?: string | null
+  instructions?: string | null
 }
 
 interface ApplicationDetailContentProps {
@@ -102,6 +101,7 @@ export default function ApplicationDetailContent({
   onTabChange,
   showInlineTabs = false
 }: ApplicationDetailContentProps) {
+  const [infoModalStep, setInfoModalStep] = useState<any | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const [internalActiveTab, setInternalActiveTab] = useState<TabType>(showInlineTabs ? 'next-steps' : 'message')
@@ -156,6 +156,10 @@ export default function ApplicationDetailContent({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const canCloseApplication = currentUserRole === 'expert' && (application.progress_percentage ?? 0) === 100 && application.status !== 'closed'
+
+  useEffect(() => {
+    console.log('infomodalstep', infoModalStep)
+  }, [infoModalStep])
 
   const handleCloseApplication = async () => {
     if (!canCloseApplication || isClosing) return
@@ -224,6 +228,7 @@ export default function ApplicationDetailContent({
         .eq('application_id', application.id)
         .order('step_order', { ascending: true })
 
+        console.log('Fetched application steps:',  applicationSteps)
       if (appStepsError) {
         console.error('Error fetching application steps:', appStepsError)
       }
@@ -238,6 +243,7 @@ export default function ApplicationDetailContent({
             step_name: step.step_name,
             step_order: step.step_order,
             description: step.description,
+            instructions: step.instructions ?? null,
             is_completed: step.is_completed,
             is_expert_step: false
           }))
@@ -251,9 +257,12 @@ export default function ApplicationDetailContent({
             step_order: step.step_order,
             description: step.description,
             is_completed: step.is_completed,
+            phase: step.phase ?? null,
             is_expert_step: true,
             created_by_expert_id: step.created_by_expert_id
           }))
+
+          console.log('expertStepsData', expertStepsData?.length ?? 0, expertStepsData)
         
         setSteps(regularSteps)
         setExpertSteps(expertStepsData)
@@ -539,6 +548,27 @@ export default function ApplicationDetailContent({
       fetchExpertSteps()
     }
   }, [activeTab, fetchExpertSteps])
+
+  // Group expert steps by phase for rendering
+  const expertStepsByPhase = useMemo(() => {
+    console.log("expertSteps: ",expertSteps)
+    let temp = expertSteps
+    // temp = [...temp].sort((a, b) =>
+    //   a.phase.localeCompare(b.phase)
+    // );
+    const grouped: Record<string, Step[]> = {}
+    temp.forEach((s: any) => {
+      const phaseKey = s.phase ?? 'General'
+      if (!grouped[phaseKey]) grouped[phaseKey] = []
+      grouped[phaseKey].push(s)
+    })
+    // sort steps within each phase by step_order
+    Object.keys(grouped).forEach((k) => {
+      grouped[k].sort((a, b) => (a.step_order ?? 0) - (b.step_order ?? 0))
+    })
+    console.log('expertStepsByPhase', grouped)
+    return grouped
+  }, [expertSteps])
 
   const openAddExpertStepModal = () => {
     setShowAddExpertStepModal(true)
@@ -1775,55 +1805,12 @@ export default function ApplicationDetailContent({
       {activeTab === 'documents' && (
             <div className="space-y-6">
 
-              {/* Status Cards */}
-              {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-3 mb-2">
-                    <CheckCircle2 className="w-6 h-6 text-green-600" />
-                    <div className="text-sm font-medium text-gray-600">Completed</div>
-                  </div>
-                  <div className="text-3xl font-bold text-gray-900">
-                    {documents.filter(d => getDocumentStatus(d.status) === 'completed').length}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Clock className="w-6 h-6 text-blue-600" />
-                    <div className="text-sm font-medium text-gray-600">In Progress</div>
-                  </div>
-                  <div className="text-3xl font-bold text-gray-900">
-                    {documents.filter(d => d.status === 'draft' || d.status === 'rejected').length}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Clock className="w-6 h-6 text-orange-600" />
-                    <div className="text-sm font-medium text-gray-600">Pending</div>
-                  </div>
-                  <div className="text-3xl font-bold text-gray-900">
-                    {documents.filter(d => d.status === 'pending').length}
-                  </div>
-                </div>
-              </div> */}
-
               {/* Documents section with filter select */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                   <h2 className="text-lg font-semibold text-gray-900">Documents</h2>
                   <div className="relative flex items-center gap-4">
                     
-                {/* Upload button - only for clients (company owners) */}
-                {/* {currentUserRole === 'company_owner' && (
-                  <button
-                    onClick={() => setIsUploadModalOpen(true)}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
-                  >
-                    <Upload className="w-5 h-5" />
-                    Upload Document
-                  </button>
-                )} */}
                     <select
                       value={documentFilter}
                       onChange={(e) => setDocumentFilter(e.target.value as typeof documentFilter)}
@@ -2084,7 +2071,6 @@ export default function ApplicationDetailContent({
                   return (
                     <div 
                       key={step.id} 
-                      // onClick={() => !isCompleted && setSelectedStepId(step.id === selectedStepId ? null : step.id)}
                       onClick={() => {
                         if (!isCompleted) {
                           handleCompleteStep(true, step.id)
@@ -2095,8 +2081,6 @@ export default function ApplicationDetailContent({
                       className={`flex items-start gap-3 p-3 border rounded-lg transition-all ${
                         isCompleted
                           ? 'bg-green-50 border-green-200 cursor-pointer'
-                          // : isSelected
-                          // ? 'border-blue-500 bg-blue-50 shadow-md cursor-pointer'
                           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer'
                       }`}
                     >
@@ -2118,9 +2102,38 @@ export default function ApplicationDetailContent({
                         )}
                       </div>
                       <div className="flex-1">
-                        <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
+                        <div className='flex items-center'>
+                          <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
+                          <div className="relative group ml-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInfoModalStep(step)
+                              }}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  setInfoModalStep(step)
+                                }
+                              }}
+                              className="inline-flex items-center justify-center p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              aria-label={`View instructions for ${step.step_name}`}
+                            >
+                              <Info className="w-5 h-5 text-blue-400 cursor-pointer" />
+                            </button>
+
+                            <div
+                              role="tooltip"
+                              className="absolute z-50 -top-10 left-1/2 transform -translate-x-1/2 w-64 bg-gray-900 text-white text-sm rounded py-2 px-3 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all"
+                            >
+                              {step.description || 'View step instruction'}
+                            </div>
+                          </div>
+                        </div>
                         {step.description && (
-                          <div className="text-sm text-gray-600 mb-2">{step.description}</div>
+                            <div className="text-sm text-gray-600 mb-2">{step.description}</div>
                         )}
                         <div className="flex gap-2">
                           <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
@@ -2134,39 +2147,7 @@ export default function ApplicationDetailContent({
               </div>
             )}
           </div>
-          
-          {/* Complete Button - appears at bottom when step is selected */}
-          {/* {selectedStepId && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    Selected: {steps.find(s => s.id === selectedStepId)?.step_name}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Click Complete to mark this step as finished
-                  </p>
-                </div>
-                <button
-                  // onClick={handleCompleteStep}
-                  disabled={isCompletingStep}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
-                >
-                  {isCompletingStep ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Completing...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-5 h-5" />
-                      Complete
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )} */}
+        
         </div>
       )}
 
@@ -2472,71 +2453,58 @@ export default function ApplicationDetailContent({
                 )}
               </div>
             ) : (
-              <div className="space-y-3">
-                {expertSteps.map((step) => (
-                  <div
-                    key={step.id}
-                    className={`flex items-start gap-3 p-4 border rounded-lg ${
-                      step.is_completed
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-gray-50 border-gray-200'
-                    }`}
-                  >
-                    <div className="mt-1 flex-shrink-0">
-                      {currentUserRole === 'expert' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleExpertStepComplete(step)}
-                          disabled={togglingExpertStepId === step.id}
-                          className="p-0.5 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={step.is_completed ? 'Mark as not completed' : 'Mark as completed'}
-                          aria-label={step.is_completed ? 'Uncomplete step' : 'Complete step'}
+              <div className="space-y-4">
+                {Object.entries(expertStepsByPhase).map(([phaseName, steps]) => (
+                  <div key={phaseName}>
+                    <div className="text-sm font-semibold text-gray-700 mb-2">{phaseName}</div>
+                    <div className="space-y-3">
+                      {steps.map((step) => (
+                        <div
+                          key={step.id}
+                          className={`flex items-start gap-3 p-4 border rounded-lg ${
+                            step.is_completed
+                              ? 'bg-green-50 border-green-200'
+                              : 'bg-gray-50 border-gray-200'
+                          }`}
                         >
-                          {togglingExpertStepId === step.id ? (
-                            <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
-                          ) : step.is_completed ? (
-                            <CheckCircle2 className="w-5 h-5 text-green-600" />
-                          ) : (
-                            <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
-                          )}
-                        </button>
-                      ) : (
-                        <>
-                          {step.is_completed ? (
-                            <CheckCircle2 className="w-5 h-5 text-green-600" />
-                          ) : (
-                            <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
-                          )}
-                        </>
-                      )}
+                          <div className="mt-1 flex-shrink-0">
+                            {currentUserRole === 'expert' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleExpertStepComplete(step)}
+                                disabled={togglingExpertStepId === step.id}
+                                className="p-0.5 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={step.is_completed ? 'Mark as not completed' : 'Mark as completed'}
+                                aria-label={step.is_completed ? 'Uncomplete step' : 'Complete step'}
+                              >
+                                {togglingExpertStepId === step.id ? (
+                                  <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+                                ) : step.is_completed ? (
+                                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                ) : (
+                                  <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                                )}
+                              </button>
+                            ) : (
+                              <>
+                                {step.is_completed ? (
+                                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                ) : (
+                                  <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                                )}
+                              </>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900 mb-1">{step.phase}</div>
+                            {step.description && (
+                              <div className="text-sm text-gray-600 mb-2">{step.step_name}</div>
+                            )}
+                            <div className="text-xs text-gray-500">Step {step.step_order}</div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900 mb-1">{step.step_name}</div>
-                      {step.description && (
-                        <div className="text-sm text-gray-600 mb-2">{step.description}</div>
-                      )}
-                      <div className="text-xs text-gray-500">
-                        Step {step.step_order} of {expertSteps.length}
-                      </div>
-                    </div>
-                    {/* {currentUserRole === 'expert' && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEditExpertStep(step)}
-                          className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                          title="Edit step"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteExpertStep(step.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Delete step"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )} */}
                   </div>
                 ))}
               </div>
@@ -2762,6 +2730,41 @@ export default function ApplicationDetailContent({
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {/* Step Instructions Modal */}
+      {infoModalStep && (
+        <Modal
+          isOpen={!!infoModalStep}
+          onClose={() => setInfoModalStep(null)}
+          title={`Step Instructions`}
+          size="md"
+        >
+          <div className="space-y-4">
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-900 whitespace-pre-wrap">
+              {
+                infoModalStep.instructions !== null ? 
+                (
+                  <div>
+                    <div className="font-medium text-gray-900 mb-2">{infoModalStep.step_name}</div>
+                    <div>{infoModalStep.instructions}</div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500 italic">No instructions provided for this step.</div>
+                )
+              }
+            </div>
+
+            <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-gray-700 flex items-start gap-3">
+              <div className="w-6 h-6 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-700 font-semibold">i</div>
+              <div>Tip: Instructions can include website URLs, login credentials, and step-by-step guidance for external portals.</div>
+            </div>
+
+            <div className="flex justify-end">
+              <button onClick={() => setInfoModalStep(null)} className="px-4 py-2 bg-white border rounded-lg">Close</button>
             </div>
           </div>
         </Modal>
