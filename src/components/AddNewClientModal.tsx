@@ -435,7 +435,7 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNew
               ) : (
                 <>
                   <Plus className="w-4 h-4" />
-                  Add Client
+                  Add Agency Admin
                 </>
               )}
             </button>

@@ -172,7 +172,7 @@ export default async function ClientDetailPage({
                     {statusCapitalized}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600">Client ID: {client.id.substring(0, 8)}</p>
+                <p className="text-sm text-gray-600">Agency Admin ID: {client.id.substring(0, 8)}</p>
               </div>
             </div>
             {/* <div className="flex items-center gap-2">
@@ -249,8 +249,8 @@ export default async function ClientDetailPage({
         {/* Client Licenses Section */}
         <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
           <div className="mb-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-1">Client Licenses</h2>
-            <p className="text-sm text-gray-600">View all current, expiring, and expired licenses for this client</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-1">Agency Admin Licenses</h2>
+            <p className="text-sm text-gray-600">View all current, expiring, and expired licenses for this Agency Admin</p>
           </div>
 
           {/* Summary Cards */}
@@ -356,7 +356,7 @@ export default async function ClientDetailPage({
         <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
           <div className="mb-4">
             <h2 className="text-xl font-bold text-gray-900 mb-1">License Applications</h2>
-            <p className="text-sm text-gray-600">View and manage all applications for this client</p>
+            <p className="text-sm text-gray-600">View and manage all applications for this Agency Admin</p>
           </div>
 
           {applications && applications.length > 0 ? (
