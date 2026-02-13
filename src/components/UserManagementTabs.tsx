@@ -600,7 +600,7 @@ export default function UserManagementTabs({
             {/* Header with Add Client Button */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h2 className="text-xl md:text-2xl font-bold text-gray-900">Clients</h2>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900">Agency Admins</h2>
                 <p className="text-sm md:text-base text-gray-600 mt-1">Manage your care recipients and applications.</p>
               </div>
               <button
@@ -608,7 +608,7 @@ export default function UserManagementTabs({
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-sm md:text-base whitespace-nowrap"
               >
                 <Plus className="w-4 h-4 md:w-5 md:h-5" />
-                Add New Client
+                Add New Agency Admin
               </button>
             </div>
             {/* Summary Cards */}
@@ -620,7 +620,7 @@ export default function UserManagementTabs({
                   </div>
                 </div>
                 <div className="text-xl md:text-2xl font-bold text-gray-900 mb-1">{totalClients}</div>
-                <div className="text-xs md:text-sm text-gray-600">Total Clients</div>
+                <div className="text-xs md:text-sm text-gray-600">Total Agency Admins</div>
               </div>
 
               <div className="bg-white rounded-xl p-4 md:p-6 shadow-md border border-gray-100">
