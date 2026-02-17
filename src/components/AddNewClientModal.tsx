@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { X, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { createAgencyAdminAccount } from '@/app/actions/users'
 
 type AddNewClientModalMode = 'agency_admin' | 'care_recipient'
 
@@ -29,10 +30,13 @@ const US_STATES = [
 ]
 
 const AGENCY_FORM_INITIAL = {
-  company_name: '',
-  contact_name: '',
+  first_name: '',
+  last_name: '',
   contact_email: '',
   contact_phone: '',
+  job_title: '',
+  department: '',
+  work_location: '',
   status: 'active' as 'active' | 'inactive' | 'pending',
 }
 
@@ -81,21 +85,20 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
     setError(null)
 
     try {
-      const supabase = createClient()
-
       if (mode === 'agency_admin') {
-        const { error: insertError } = await supabase
-          .from('clients')
-          .insert({
-            company_name: agencyFormData.company_name.trim(),
-            contact_name: agencyFormData.contact_name.trim(),
-            contact_email: agencyFormData.contact_email.trim(),
-            contact_phone: agencyFormData.contact_phone.trim() || null,
-            status: agencyFormData.status,
-          })
+        const result = await createAgencyAdminAccount(
+          agencyFormData.first_name.trim(),
+          agencyFormData.last_name.trim(),
+          agencyFormData.contact_email.trim(),
+          agencyFormData.contact_phone.trim(),
+          agencyFormData.job_title.trim() || undefined,
+          agencyFormData.department.trim() || undefined,
+          agencyFormData.work_location.trim(),
+          agencyFormData.status
+        )
 
-        if (insertError) {
-          setError(insertError.message)
+        if (result.error) {
+          setError(result.error)
           setIsLoading(false)
           return
         }
@@ -108,6 +111,7 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
       }
 
       // care_recipient: small_clients
+      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setError('You must be logged in to add a client')
@@ -182,7 +186,7 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
             </h2>
             <p className="text-sm text-gray-600 mt-1">
               {mode === 'agency_admin'
-                ? 'Add a new client (agency) to the system. Data is stored in the clients table.'
+                ? 'Add an agency admin. Data is stored in user_profiles first, then in the clients table. A login link will be sent to the contact email.'
                 : 'Enter client information to create a new care recipient profile'}
             </p>
           </div>
@@ -206,31 +210,31 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
           {mode === 'agency_admin' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="company_name" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Company Name <span className="text-red-500">*</span>
+                <label htmlFor="first_name" className="block text-sm font-semibold text-gray-700 mb-2">
+                  First Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  id="company_name"
-                  name="company_name"
-                  value={agencyFormData.company_name}
+                  id="first_name"
+                  name="first_name"
+                  value={agencyFormData.first_name}
                   onChange={handleAgencyChange}
-                  placeholder="Acme Home Care LLC"
+                  placeholder="Jane"
                   required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label htmlFor="contact_name" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Contact Name <span className="text-red-500">*</span>
+                <label htmlFor="last_name" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Last Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  id="contact_name"
-                  name="contact_name"
-                  value={agencyFormData.contact_name}
+                  id="last_name"
+                  name="last_name"
+                  value={agencyFormData.last_name}
                   onChange={handleAgencyChange}
-                  placeholder="Jane Smith"
+                  placeholder="Smith"
                   required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -261,6 +265,49 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
                   value={agencyFormData.contact_phone}
                   onChange={handleAgencyChange}
                   placeholder="(555) 123-4567"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label htmlFor="job_title" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Job Title
+                </label>
+                <input
+                  type="text"
+                  id="job_title"
+                  name="job_title"
+                  value={agencyFormData.job_title}
+                  onChange={handleAgencyChange}
+                  placeholder="Operations Manager"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label htmlFor="department" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Department
+                </label>
+                <input
+                  type="text"
+                  id="department"
+                  name="department"
+                  value={agencyFormData.department}
+                  onChange={handleAgencyChange}
+                  placeholder="Licensing"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label htmlFor="work_location" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Work Location <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="work_location"
+                  name="work_location"
+                  value={agencyFormData.work_location}
+                  onChange={handleAgencyChange}
+                  placeholder="Austin, TX"
+                  required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>

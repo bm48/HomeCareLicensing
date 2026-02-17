@@ -120,7 +120,7 @@ export default function ClientListWithFilters({
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               type="text"
-              placeholder="Search Agency Admins by company name, contact, or email..."
+              placeholder="Search Agency Admins by name,or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white"
@@ -194,14 +194,14 @@ export default function ClientListWithFilters({
                   <div className="flex items-start gap-4 flex-1 min-w-0">
                     {/* Avatar */}
                     <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-                      {getInitials(client.company_name)}
+                      {getInitials(client.contact_name)}
                     </div>
                     
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       {/* Header with Company Name and Status Tags */}
                       <div className="flex items-center gap-3 mb-3 flex-wrap relative">
-                        <h3 className="text-lg font-bold text-gray-900">{client.company_name}</h3>
+                        <h3 className="text-lg font-bold text-gray-900">{client.contact_name}</h3>
                         <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full whitespace-nowrap">
                           {statusCapitalized}
                         </span>
@@ -231,7 +231,7 @@ export default function ClientListWithFilters({
                       {/* Contact Information */}
                       <div className="space-y-2 text-sm text-gray-600 mb-3 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span>Contact: {client.contact_name}</span>
+                          <span>Company: {client.company_name ? client.company_name : 'Unassigned'}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Mail className="w-4 h-4 flex-shrink-0" />

@@ -315,6 +315,148 @@ export async function createUserAccount(
   }
 }
 
+/** Build company_name for clients from work_location and optional job/department (no schema change). */
+function buildAgencyAdminCompanyName(workLocation: string, jobTitle?: string, department?: string): string {
+  const parts = [workLocation.trim()]
+  if (jobTitle?.trim()) parts.push(`Job: ${jobTitle.trim()}`)
+  if (department?.trim()) parts.push(`Dept: ${department.trim()}`)
+  return parts.join(' | ') || 'Agency Admin'
+}
+
+/**
+ * Create an agency admin: auth user (→ user_profiles via trigger) first, then clients row.
+ * Sends magic link for first login. No table schema changes.
+ */
+export async function createAgencyAdminAccount(
+  firstName: string,
+  lastName: string,
+  contactEmail: string,
+  contactPhone: string,
+  jobTitle: string | undefined,
+  department: string | undefined,
+  workLocation: string,
+  status: 'active' | 'inactive' | 'pending' = 'active'
+) {
+  let supabaseAdmin
+  try {
+    supabaseAdmin = createAdminClient()
+  } catch (e: any) {
+    return {
+      error:
+        e?.message ||
+        'Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local for creating agency admin accounts.',
+      data: null,
+    }
+  }
+  const supabaseCookie = await createClient()
+
+  try {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const normalizedEmail = contactEmail.toLowerCase().trim()
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || normalizedEmail
+    // const companyName = buildAgencyAdminCompanyName(workLocation, jobTitle, department)
+    const defaultPassword = `${lastName.trim()}!123`
+
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: normalizedEmail,
+      password: defaultPassword,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        role: 'company_owner',
+      },
+    })
+
+    let userId: string | null = null
+
+    if (createError) {
+      if (
+        createError.message.includes('already registered') ||
+        createError.message.includes('already exists') ||
+        createError.message.includes('User already registered')
+      ) {
+        const { data: existingProfile } = await supabaseAdmin
+          .from('user_profiles')
+          .select('id')
+          .eq('email', normalizedEmail)
+          .maybeSingle()
+        userId = existingProfile?.id ?? null
+        if (userId) {
+          const { data: existingClient } = await supabaseAdmin
+            .from('clients')
+            .select('id')
+            .eq('company_owner_id', userId)
+            .maybeSingle()
+          if (!existingClient) {
+            await supabaseAdmin.from('clients').insert({
+              company_owner_id: userId,
+              // company_name: companyName,
+              contact_name: fullName,
+              contact_email: normalizedEmail,
+              contact_phone: contactPhone.trim() || null,
+              status,
+            })
+          }
+        }
+        const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: { emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink` },
+        })
+        if (magicLinkError) {
+          return { error: `User already exists. Failed to send login link: ${magicLinkError.message}`, data: null }
+        }
+        revalidatePath('/admin/users')
+        return {
+          error: null,
+          data: { success: true, userId, message: `User already exists. Login link sent to ${contactEmail}.` },
+        }
+      }
+      const errorMessage =
+        createError.message.includes('Database error') || createError.message.includes('database')
+          ? 'Database error creating user. Ensure handle_new_user migration has been applied.'
+          : createError.message
+      return { error: `Failed to create agency admin: ${errorMessage}`, data: null }
+    }
+
+    if (!newUser?.user?.id) {
+      return { error: 'Failed to create agency admin - no user returned', data: null }
+    }
+    userId = newUser.user.id
+
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    const { error: clientError } = await supabaseAdmin.from('clients').insert({
+      company_owner_id: userId,
+      // company_name: companyName,
+      contact_name: fullName,
+      contact_email: normalizedEmail,
+      contact_phone: contactPhone.trim() || null,
+      status,
+    })
+    if (clientError) {
+      console.error('Failed to create clients row for agency admin:', clientError)
+      return {
+        error: `User created but failed to create agency record: ${clientError.message}`,
+        data: null,
+      }
+    }
+
+    const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: { emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink` },
+    })
+    if (magicLinkError) console.warn('Failed to send magic link:', magicLinkError.message)
+
+    revalidatePath('/admin/users')
+    return {
+      error: null,
+      data: { success: true, userId, message: `Agency admin created. Login link sent to ${contactEmail}.` },
+    }
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to create agency admin account', data: null }
+  }
+}
+
 export async function createStaffUserAccount(
   email: string,
   password: string,

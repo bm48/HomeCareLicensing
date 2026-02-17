@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   ShieldCheck,
-  Settings
+  Settings,
+  Building2
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import LoadingSpinner from './LoadingSpinner'
@@ -70,6 +71,7 @@ export default function AdminLayout({
     { href: '/admin/license-requirements', label: 'License Requirements', icon: FileText },
     { href: '/admin/billing', label: 'Billing & Invoicing', icon: DollarSign },
     { href: '/admin/configuration', label: 'Configuration', icon: Settings },
+    { href: '/admin/agencies', label: 'Agency', icon: Building2 },
     { href: '/admin/users', label: 'User Management', icon: UserCog },
   ]
 
