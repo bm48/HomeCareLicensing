@@ -83,6 +83,78 @@ export async function setUserPassword(userId: string, newPassword: string) {
 /** Role value for new users created from admin User Management */
 export type CreateUserRole = 'admin' | 'company_owner' | 'staff_member' | 'expert'
 
+function parseFullName(fullName: string): { first_name: string; last_name: string } {
+  const trimmed = fullName.trim()
+  if (!trimmed) return { first_name: 'User', last_name: 'Unknown' }
+  const space = trimmed.indexOf(' ')
+  if (space <= 0) return { first_name: trimmed, last_name: 'Unknown' }
+  return {
+    first_name: trimmed.slice(0, space),
+    last_name: trimmed.slice(space + 1).trim() || 'Unknown',
+  }
+}
+
+/** Ensure the role-specific table has a row for this user (idempotent). Used when user already exists. */
+async function ensureRoleTableRow(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  fullName: string,
+  normalizedEmail: string,
+  role: CreateUserRole
+) {
+  const { first_name: firstName, last_name: lastName } = parseFullName(fullName)
+  if (role === 'company_owner') {
+    const { data: existing } = await supabaseAdmin
+      .from('clients')
+      .select('id')
+      .eq('company_owner_id', userId)
+      .maybeSingle()
+    if (!existing) {
+      const companyName = fullName ? `${fullName}'s Agency` : 'Pending Agency'
+      await supabaseAdmin.from('clients').insert({
+        company_owner_id: userId,
+        company_name: companyName,
+        contact_name: fullName || normalizedEmail,
+        contact_email: normalizedEmail,
+        status: 'pending',
+      })
+    }
+  } else if (role === 'staff_member') {
+    const { data: existing } = await supabaseAdmin
+      .from('staff_members')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (!existing) {
+      await supabaseAdmin.from('staff_members').insert({
+        user_id: userId,
+        company_owner_id: null,
+        first_name: firstName,
+        last_name: lastName,
+        email: normalizedEmail,
+        role: 'Staff Member',
+        status: 'active',
+      })
+    }
+  } else if (role === 'expert') {
+    const { data: existing } = await supabaseAdmin
+      .from('licensing_experts')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (!existing) {
+      await supabaseAdmin.from('licensing_experts').insert({
+        user_id: userId,
+        first_name: firstName,
+        last_name: lastName,
+        email: normalizedEmail,
+        role: 'Licensing Specialist',
+        status: 'active',
+      })
+    }
+  }
+}
+
 /**
  * Create a user account from admin User Management. Uses Admin API so the current
  * admin's session is never overwritten (unlike signUp() which would log the admin out).
@@ -130,10 +202,13 @@ export async function createUserAccount(
       ) {
         const { data: existingProfile } = await supabaseAdmin
           .from('user_profiles')
-          .select('id')
+          .select('id, role')
           .eq('email', normalizedEmail)
           .single()
         userId = existingProfile?.id || null
+        if (userId) {
+          await ensureRoleTableRow(supabaseAdmin, userId, fullName.trim(), normalizedEmail, role)
+        }
         const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
           email: normalizedEmail,
           options: { emailRedirectTo: `${siteUrl}/auth/callback?type=magiclink` },
@@ -159,7 +234,70 @@ export async function createUserAccount(
     }
     userId = newUser.user.id
 
+    // Wait for handle_new_user trigger to create user_profiles
     await new Promise((resolve) => setTimeout(resolve, 500))
+
+    // Insert into role-specific table so the user appears in the right tab
+    const fullNameTrimmed = fullName.trim()
+    const { first_name: firstName, last_name: lastName } = parseFullName(fullNameTrimmed)
+
+    if (role === 'company_owner') {
+      const companyName = fullNameTrimmed ? `${fullNameTrimmed}'s Agency` : 'Pending Agency'
+      const { error: clientError } = await supabaseAdmin
+        .from('clients')
+        .insert({
+          company_owner_id: userId,
+          company_name: companyName,
+          contact_name: fullNameTrimmed || normalizedEmail,
+          contact_email: normalizedEmail,
+          status: 'pending',
+        })
+      if (clientError) {
+        console.error('Failed to create clients row for agency admin:', clientError)
+        return {
+          error: `User created but failed to create agency record: ${clientError.message}`,
+          data: null,
+        }
+      }
+    } else if (role === 'staff_member') {
+      const { error: staffError } = await supabaseAdmin
+        .from('staff_members')
+        .insert({
+          user_id: userId,
+          company_owner_id: null,
+          first_name: firstName,
+          last_name: lastName,
+          email: normalizedEmail,
+          role: 'Staff Member',
+          status: 'active',
+        })
+      if (staffError) {
+        console.error('Failed to create staff_members row for caregiver:', staffError)
+        return {
+          error: `User created but failed to create staff record: ${staffError.message}`,
+          data: null,
+        }
+      }
+    } else if (role === 'expert') {
+      const { error: expertError } = await supabaseAdmin
+        .from('licensing_experts')
+        .insert({
+          user_id: userId,
+          first_name: firstName,
+          last_name: lastName,
+          email: normalizedEmail,
+          role: 'Licensing Specialist',
+          status: 'active',
+        })
+      if (expertError) {
+        console.error('Failed to create licensing_experts row for expert:', expertError)
+        return {
+          error: `User created but failed to create expert record: ${expertError.message}`,
+          data: null,
+        }
+      }
+    }
+    // admin role: no extra table
 
     const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
       email: normalizedEmail,

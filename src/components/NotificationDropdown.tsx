@@ -151,7 +151,7 @@ export default function NotificationDropdown({
 
       if (applicationIds.length === 0) {
         if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
-          // Admin, expert, or owner with no conversations: still fetch unread notifications
+          // Admin, expert, or owner with no conversations: fetch unread notifications (exclude message notifs - they go in unread messages only)
           const { data: notificationRows } = await supabase
             .from('notifications')
             .select('id, title, type, created_at')
@@ -159,15 +159,16 @@ export default function NotificationDropdown({
             .eq('is_read', false)
             .order('created_at', { ascending: false })
             .limit(20)
-          const items = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
+          const allItems = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
             id: n.id,
             title: n.title,
             type: n.type,
             created_at: n.created_at
           }))
-          setAdminNotifications(items)
+          const nonMessageItems = allItems.filter(n => !(n.type === 'general' && n.title === 'New Message'))
+          setAdminNotifications(nonMessageItems)
           setApplications([])
-          setUnreadCount(items.length)
+          setUnreadCount(nonMessageItems.length)
         } else {
           setApplications([])
           setAdminNotifications([])
@@ -280,7 +281,7 @@ export default function NotificationDropdown({
       setApplications(appNotifications)
       let totalUnread = appNotifications.reduce((sum, app) => sum + app.unread_count, 0)
 
-      // For admin, expert, owner: also fetch unread notifications (e.g. New Application Request, Application Assigned, Document Approved) and add to list
+      // For admin, expert, owner: fetch unread notifications for first box only (exclude message notifications - those appear in unread messages box)
       if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
         const { data: notificationRows } = await supabase
           .from('notifications')
@@ -289,14 +290,15 @@ export default function NotificationDropdown({
           .eq('is_read', false)
           .order('created_at', { ascending: false })
           .limit(20)
-        const items = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
+        const allItems = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
           id: n.id,
           title: n.title,
           type: n.type,
           created_at: n.created_at
         }))
-        setAdminNotifications(items)
-        totalUnread += items.length
+        const nonMessageItems = allItems.filter(n => !(n.type === 'general' && n.title === 'New Message'))
+        setAdminNotifications(nonMessageItems)
+        totalUnread += nonMessageItems.length
       } else {
         setAdminNotifications([])
       }
@@ -388,14 +390,15 @@ export default function NotificationDropdown({
 
       let totalCount = countError ? 0 : (count || 0)
 
-      // For admin, expert, owner: add unread notifications count (e.g. New Application Request, Application Assigned, Document Approved)
+      // For admin, expert, owner: add unread notifications count excluding message notifications (message notifs only in unread messages box)
       if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
-        const { count: notificationsCount } = await supabase
+        const { data: notificationRows } = await supabase
           .from('notifications')
-          .select('*', { count: 'exact', head: true })
+          .select('id, type, title')
           .eq('user_id', userId)
           .eq('is_read', false)
-        totalCount += notificationsCount || 0
+        const nonMessageCount = (notificationRows || []).filter(n => !(n.type === 'general' && n.title === 'New Message')).length
+        totalCount += nonMessageCount
       }
 
       if (countError && userRole !== 'admin' && userRole !== 'expert' && userRole !== 'company_owner') {

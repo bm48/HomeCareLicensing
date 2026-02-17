@@ -556,23 +556,51 @@ export default function AdminApplicationDetailContent({
             convId = existingConv.id
             setConversationId(convId)
           } else {
-            // Create new conversation for this application
+            const { data: clientRow, error: clientErr } = await supabase
+              .from('clients')
+              .select('id')
+              .eq('company_owner_id', application.company_owner_id)
+              .maybeSingle()
+
+            if (clientErr || !clientRow?.id) {
+              console.error('Error resolving client for conversation:', clientErr || 'No client record')
+              setIsLoadingConversation(false)
+              return
+            }
+
             const { data: newConv, error: convError } = await supabase
               .from('conversations')
               .insert({
-                application_id: application.id
+                client_id: clientRow.id,
+                application_id: application.id,
               })
               .select()
               .single()
 
             if (convError) {
-              console.error('Error creating conversation:', convError)
-              setIsLoadingConversation(false)
-              return
+              if (convError.code === '23505') {
+                const { data: existing } = await supabase
+                  .from('conversations')
+                  .select('id')
+                  .eq('application_id', application.id)
+                  .maybeSingle()
+                if (existing?.id) {
+                  convId = existing.id
+                  setConversationId(convId)
+                } else {
+                  console.error('Error creating conversation:', convError)
+                  setIsLoadingConversation(false)
+                  return
+                }
+              } else {
+                console.error('Error creating conversation:', convError)
+                setIsLoadingConversation(false)
+                return
+              }
+            } else {
+              convId = newConv!.id
+              setConversationId(convId)
             }
-
-            convId = newConv.id
-            setConversationId(convId)
           }
         }
 

@@ -845,24 +845,58 @@ export default function ApplicationDetailContent({
             convId = existingConv.id
             setConversationId(convId)
           } else {
-            // Create new conversation for this application
-            const { data: newConv, error: convError } = await supabase
-              .from('conversations')
-              .insert({
-                application_id: application.id
-              })
-              .select()
-              .single()
+            // conversations.client_id is NOT NULL: get client for this application's company owner
+            const { data: clientRow, error: clientErr } = await supabase
+              .from('clients')
+              .select('id')
+              .eq('company_owner_id', application.company_owner_id)
+              .maybeSingle()
 
-            if (convError) {
-              console.error('Error creating conversation:', convError)
+            if (clientErr || !clientRow?.id) {
+              console.error('Error resolving client for conversation:', clientErr || 'No client record')
               setMessages([])
               setConversationId(null)
               setIsLoadingConversation(false)
               return
             }
-            convId = newConv.id
-            setConversationId(convId)
+
+            const { data: newConv, error: convError } = await supabase
+              .from('conversations')
+              .insert({
+                client_id: clientRow.id,
+                application_id: application.id,
+              })
+              .select()
+              .single()
+
+            if (convError) {
+              if (convError.code === '23505') {
+                const { data: existing } = await supabase
+                  .from('conversations')
+                  .select('id')
+                  .eq('application_id', application.id)
+                  .maybeSingle()
+                if (existing?.id) {
+                  convId = existing.id
+                  setConversationId(convId)
+                } else {
+                  console.error('Error creating conversation:', convError)
+                  setMessages([])
+                  setConversationId(null)
+                  setIsLoadingConversation(false)
+                  return
+                }
+              } else {
+                console.error('Error creating conversation:', convError)
+                setMessages([])
+                setConversationId(null)
+                setIsLoadingConversation(false)
+                return
+              }
+            } else {
+              convId = newConv.id
+              setConversationId(convId)
+            }
           }
         }
 
@@ -1033,21 +1067,45 @@ export default function ApplicationDetailContent({
           convId = existingConv.id
           setConversationId(convId)
         } else {
-          // Create new conversation for this application
+          const { data: clientRow, error: clientErr } = await supabase
+            .from('clients')
+            .select('id')
+            .eq('company_owner_id', application.company_owner_id)
+            .maybeSingle()
+
+          if (clientErr || !clientRow?.id) {
+            throw new Error('Could not resolve client for conversation. Please try again.')
+          }
+
           const { data: newConv, error: convError } = await supabase
             .from('conversations')
             .insert({
-              application_id: application.id
+              client_id: clientRow.id,
+              application_id: application.id,
             })
             .select()
             .single()
 
-
           if (convError) {
-            throw new Error('Failed to create conversation. Please try again.')
+            if (convError.code === '23505') {
+              const { data: existing } = await supabase
+                .from('conversations')
+                .select('id')
+                .eq('application_id', application.id)
+                .maybeSingle()
+              if (existing?.id) {
+                convId = existing.id
+                setConversationId(convId)
+              } else {
+                throw new Error('Failed to create conversation. Please try again.')
+              }
+            } else {
+              throw new Error('Failed to create conversation. Please try again.')
+            }
+          } else {
+            convId = newConv.id
+            setConversationId(convId)
           }
-          convId = newConv.id
-          setConversationId(convId)
         }
       }
 

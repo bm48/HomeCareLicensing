@@ -403,13 +403,25 @@ function ExpertMessagesContent() {
         const { data: newConv, error: convError } = await supabase
           .from('conversations')
           .insert({
-            application_id: application.id
+            client_id: client.id,
+            application_id: application.id,
           })
           .select()
           .single()
         
-        if (convError) throw convError
-        conversationId = newConv.id
+        if (convError) {
+          if (convError.code === '23505') {
+            const { data: existing } = await supabase
+              .from('conversations')
+              .select('id')
+              .eq('application_id', application.id)
+              .maybeSingle()
+            if (existing?.id) conversationId = existing.id
+            else throw convError
+          } else throw convError
+        } else {
+          conversationId = newConv!.id
+        }
       }
 
 

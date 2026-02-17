@@ -126,29 +126,36 @@ function LoginPageContent() {
     setError(null)
 
     try {
+      console.log('data.email', data.email)
+      console.log('data.password', data.password)
       const supabase = createClient()
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       })
-
+      console.log('authData', authData)
+      console.log('authError', authError)
       if (authError) {
-        setError(authError.message)
+        setError(
+          authError.message?.toLowerCase().includes('invalid login credentials')
+            ? 'Invalid email or password. Please try again.'
+            : authError.message
+        )
         setIsLoading(false)
         return
       }
 
-      console.log('ok')
+      console.log('authData.session', authData.session)
       if (authData.session) {
-        console.log('authData', authData)
         // Get user profile to check role
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('role')
           .eq('id', authData.user.id)
           .single()
-        console.log('profile', profile)
         // Redirect based on role
+        console.log('profile', profile)
+        console.log('profile?.role', profile?.role)
         if (profile?.role === 'admin') {
           router.push('/admin')
         } else if (profile?.role === 'staff_member') {
@@ -156,10 +163,17 @@ function LoginPageContent() {
         } else {
           router.push('/dashboard')
         }
-        router.refresh()
+        // router.refresh()
       }
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.')
+      const isNetworkError =
+        err instanceof TypeError &&
+        (err.message === 'Failed to fetch' || (err as Error).message?.includes('fetch'))
+      setError(
+        isNetworkError
+          ? 'Cannot reach the server. Check your internet connection, firewall, or try again later.'
+          : 'An unexpected error occurred. Please try again.'
+      )
       setIsLoading(false)
     }
   }

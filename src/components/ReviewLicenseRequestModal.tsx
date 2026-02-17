@@ -6,7 +6,6 @@ import Modal from './Modal'
 import { Heart, Users, MapPin, DollarSign, Clock, RefreshCw, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LicenseType } from '@/types/license'
-import { getExpertStepTemplates } from '@/app/actions/license-requirements'
 
 interface ReviewLicenseRequestModalProps {
   isOpen: boolean
@@ -40,6 +39,7 @@ export default function ReviewLicenseRequestModal({
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser()
+      console.log('user: ', user)
       if (!user) {
         setError('You must be logged in to submit a license request')
         setIsLoading(false)
@@ -51,6 +51,8 @@ export default function ReviewLicenseRequestModal({
 
       // Create the application request with status 'requested'
       // The database trigger will automatically notify admin users
+      console.log('Creating application request for user:', user.id)
+      console.log('License type:', licenseType.name)
       const { data: application, error: insertError } = await supabase
         .from('applications')
         .insert({
@@ -67,41 +69,27 @@ export default function ReviewLicenseRequestModal({
         .select()
         .single()
 
+        console.log('Application created:', application)
       if (insertError) {
         setError(insertError.message || 'Failed to create application. Please try again.')
         setIsLoading(false)
         return
       }
 
-      // Copy expert step template into this application (fetch templates via server action, insert on client to avoid RSC serialization errors)
-      const templatesResult = await getExpertStepTemplates(state, licenseType.name)
-      if (templatesResult.error) {
-        setError(templatesResult.error)
+      // Copy expert steps via RPC (avoids Server Action so no RSC "frame.join" serialization error)
+      const { error: rpcError } = await supabase.rpc('copy_expert_steps_to_application', {
+        p_application_id: application.id,
+        p_state: state,
+        p_license_type_name: licenseType.name,
+      })
+      if (rpcError) {
+        setError(rpcError.message || 'Failed to set up application steps. Please try again.')
         setIsLoading(false)
         return
       }
-      if (templatesResult.steps?.length) {
-        const rows = templatesResult.steps.map((step) => ({
-          application_id: application.id,
-          step_name: step.step_name,
-          step_order: step.step_order,
-          description: step.description ?? null,
-          instructions: step.instructions ?? null,
-          phase: step.phase ?? null,
-          is_expert_step: true,
-          is_completed: false,
-        }))
-        const { error: stepsError } = await supabase.from('application_steps').insert(rows)
-        if (stepsError) {
-          setError(stepsError.message || 'Failed to add application steps.')
-          setIsLoading(false)
-          return
-        }
-      }
 
-      // Close modal and refresh
       onClose()
-      router.refresh()
+      // Navigate without router.refresh() to avoid RSC "frame.join" serialization error
       router.push('/dashboard/licenses')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to submit license request. Please try again.'

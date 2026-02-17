@@ -203,6 +203,7 @@ export default function UserManagementTabs({
 
   // Filter users based on search and filters
   const filteredUsers = useMemo(() => {
+    
     return userProfiles.filter(profile => {
       // Search filter (name, email, user ID)
       if (searchQuery) {
@@ -757,7 +758,7 @@ export default function UserManagementTabs({
         }}
       />
 
-      {/* Add New Client Modal */}
+      {/* Add New Client Modal (Agency Admins tab: store in clients table) */}
       <AddNewClientModal
         isOpen={isAddClientModalOpen}
         onClose={() => setIsAddClientModalOpen(false)}
@@ -765,6 +766,7 @@ export default function UserManagementTabs({
           setIsAddClientModalOpen(false)
           router.refresh()
         }}
+        mode="agency_admin"
       />
     </div>
   )

@@ -5,10 +5,14 @@ import { X, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
+type AddNewClientModalMode = 'agency_admin' | 'care_recipient'
+
 interface AddNewClientModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess?: () => void
+  /** When 'agency_admin', form targets clients table (company/contact fields). When 'care_recipient', targets small_clients. */
+  mode?: AddNewClientModalMode
 }
 
 const US_STATES = [
@@ -24,10 +28,20 @@ const US_STATES = [
   'West Virginia', 'Wisconsin', 'Wyoming'
 ]
 
-export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNewClientModalProps) {
+const AGENCY_FORM_INITIAL = {
+  company_name: '',
+  contact_name: '',
+  contact_email: '',
+  contact_phone: '',
+  status: 'active' as 'active' | 'inactive' | 'pending',
+}
+
+export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = 'care_recipient' }: AddNewClientModalProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [agencyFormData, setAgencyFormData] = useState(AGENCY_FORM_INITIAL)
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -55,6 +69,12 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNew
     setError(null)
   }
 
+  const handleAgencyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setAgencyFormData(prev => ({ ...prev, [name]: value }))
+    setError(null)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -62,8 +82,32 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNew
 
     try {
       const supabase = createClient()
-      
-      // Get current user
+
+      if (mode === 'agency_admin') {
+        const { error: insertError } = await supabase
+          .from('clients')
+          .insert({
+            company_name: agencyFormData.company_name.trim(),
+            contact_name: agencyFormData.contact_name.trim(),
+            contact_email: agencyFormData.contact_email.trim(),
+            contact_phone: agencyFormData.contact_phone.trim() || null,
+            status: agencyFormData.status,
+          })
+
+        if (insertError) {
+          setError(insertError.message)
+          setIsLoading(false)
+          return
+        }
+
+        setAgencyFormData(AGENCY_FORM_INITIAL)
+        onSuccess?.()
+        router.refresh()
+        onClose()
+        return
+      }
+
+      // care_recipient: small_clients
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setError('You must be logged in to add a client')
@@ -99,7 +143,6 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNew
         return
       }
 
-      // Reset form
       setFormData({
         full_name: '',
         date_of_birth: '',
@@ -134,8 +177,14 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNew
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Add New Agency Admin</h2>
-            <p className="text-sm text-gray-600 mt-1">Enter client information to create a new care recipient profile</p>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {mode === 'agency_admin' ? 'Add New Agency Admin' : 'Add New Care Recipient'}
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {mode === 'agency_admin'
+                ? 'Add a new client (agency) to the system. Data is stored in the clients table.'
+                : 'Enter client information to create a new care recipient profile'}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -154,6 +203,85 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNew
             </div>
           )}
 
+          {mode === 'agency_admin' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="company_name" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Company Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="company_name"
+                  name="company_name"
+                  value={agencyFormData.company_name}
+                  onChange={handleAgencyChange}
+                  placeholder="Acme Home Care LLC"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label htmlFor="contact_name" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Contact Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="contact_name"
+                  name="contact_name"
+                  value={agencyFormData.contact_name}
+                  onChange={handleAgencyChange}
+                  placeholder="Jane Smith"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label htmlFor="contact_email" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Contact Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  id="contact_email"
+                  name="contact_email"
+                  value={agencyFormData.contact_email}
+                  onChange={handleAgencyChange}
+                  placeholder="contact@company.com"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label htmlFor="contact_phone" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Contact Phone
+                </label>
+                <input
+                  type="tel"
+                  id="contact_phone"
+                  name="contact_phone"
+                  value={agencyFormData.contact_phone}
+                  onChange={handleAgencyChange}
+                  placeholder="(555) 123-4567"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label htmlFor="agency_status" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Status <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="agency_status"
+                  name="status"
+                  value={agencyFormData.status}
+                  onChange={handleAgencyChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Full Name */}
             <div>
@@ -415,6 +543,7 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess }: AddNew
               />
             </div>
           </div>
+          )}
 
           {/* Action Buttons */}
           <div className="mt-6 flex items-center justify-end gap-3">

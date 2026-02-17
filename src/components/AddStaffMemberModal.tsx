@@ -173,7 +173,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         }
       }, 2000)
     } catch (err: any) {
-      setError(err.message || 'Failed to add staff member. Please try again.')
+      setError(err.message || 'Failed to add caregiver. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -189,7 +189,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Add Staff Member" size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add caregiver" size="lg">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
@@ -395,7 +395,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
                 Adding...
               </>
             ) : (
-              'Add Staff Member'
+              'Add Caregiver'
             )}
           </button>
         </div>

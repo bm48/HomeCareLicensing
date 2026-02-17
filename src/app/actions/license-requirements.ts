@@ -442,7 +442,7 @@ export async function copyExpertStepsFromRequirementToApplication(
 
     const { data: templateSteps, error: fetchError } = await supabase
       .from('license_requirement_steps')
-      .select('step_name, step_order, description, phase')
+      .select('step_name, step_order, description, instructions, phase')
       .eq('license_requirement_id', requirementId)
       .eq('is_expert_step', true)
       .order('step_order', { ascending: true })
@@ -455,6 +455,7 @@ export async function copyExpertStepsFromRequirementToApplication(
       step_name: step.step_name,
       step_order: step.step_order,
       description: step.description ?? null,
+      instructions: step.instructions ?? null,
       phase: step.phase ?? null,
       is_expert_step: true,
       is_completed: false,
