@@ -403,7 +403,7 @@ function ExpertMessagesContent() {
         const { data: newConv, error: convError } = await supabase
           .from('conversations')
           .insert({
-            client_id: client.id,
+            client_id: selectedClient,
             application_id: application.id,
           })
           .select()
