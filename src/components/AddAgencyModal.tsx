@@ -258,7 +258,7 @@ export default function AddAgencyModal({
                   className="text-[#2460d6] flex items-center justify-between w-full text-left text-sm font-semibold text-gray-700 mb-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-gray-100 transition-colors"
                   aria-expanded={agencyAdminsOpen}
                 >
-                  <span>Select agency admins</span>
+                  <span className='text-[#2460d6]'>Select agency admins</span>
                   {agencyAdminsOpen ? (
                     <ChevronUp className="w-4 h-4 text-gray-500 shrink-0" />
                   ) : (
