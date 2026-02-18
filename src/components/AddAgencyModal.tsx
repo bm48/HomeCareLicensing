@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { createAgency, updateAgency } from '@/app/actions/agencies'
+import { createAgency, updateAgency, type AgencyFormData } from '@/app/actions/agencies'
 
 export interface AgencyAdminOption {
   id: string
@@ -11,16 +11,50 @@ export interface AgencyAdminOption {
   contact_email: string
 }
 
+export interface EditAgencyData {
+  id: string
+  name: string
+  agency_admin_id: string | null
+  business_type?: string | null
+  tax_id?: string | null
+  primary_license_number?: string | null
+  website?: string | null
+  physical_street_address?: string | null
+  physical_city?: string | null
+  physical_state?: string | null
+  physical_zip_code?: string | null
+  same_as_physical?: boolean | null
+  mailing_street_address?: string | null
+  mailing_city?: string | null
+  mailing_state?: string | null
+  mailing_zip_code?: string | null
+}
+
+const emptyForm: Omit<AgencyFormData, 'agencyAdminId'> & { agencyAdminId: string } = {
+  companyName: '',
+  agencyAdminId: '',
+  businessType: '',
+  taxId: '',
+  primaryLicenseNumber: '',
+  website: '',
+  physicalStreetAddress: '',
+  physicalCity: '',
+  physicalState: '',
+  physicalZipCode: '',
+  sameAsPhysical: true,
+  mailingStreetAddress: '',
+  mailingCity: '',
+  mailingState: '',
+  mailingZipCode: '',
+}
+
 interface AddAgencyModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess?: () => void
-  /** All agency admins (for showing current selection in edit mode) */
   agencyAdmins: AgencyAdminOption[]
-  /** Agency admins with company_name null only (for dropdown options) */
   agencyAdminsForSelect: AgencyAdminOption[]
-  /** When set, modal is in edit mode */
-  editAgency?: { id: string; name: string; agency_admin_id: string | null } | null
+  editAgency?: EditAgencyData | null
 }
 
 export default function AddAgencyModal({
@@ -34,8 +68,7 @@ export default function AddAgencyModal({
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [agencyAdminId, setAgencyAdminId] = useState<string>('')
+  const [form, setForm] = useState(emptyForm)
 
   const isEdit = !!editAgency
 
@@ -47,29 +80,61 @@ export default function AddAgencyModal({
     if (isOpen) {
       setError(null)
       if (editAgency) {
-        setName(editAgency.name)
-        setAgencyAdminId(editAgency.agency_admin_id || '')
+        setForm({
+          companyName: editAgency.name ?? '',
+          agencyAdminId: editAgency.agency_admin_id ?? '',
+          businessType: editAgency.business_type ?? '',
+          taxId: editAgency.tax_id ?? '',
+          primaryLicenseNumber: editAgency.primary_license_number ?? '',
+          website: editAgency.website ?? '',
+          physicalStreetAddress: editAgency.physical_street_address ?? '',
+          physicalCity: editAgency.physical_city ?? '',
+          physicalState: editAgency.physical_state ?? '',
+          physicalZipCode: editAgency.physical_zip_code ?? '',
+          sameAsPhysical: editAgency.same_as_physical ?? true,
+          mailingStreetAddress: editAgency.mailing_street_address ?? '',
+          mailingCity: editAgency.mailing_city ?? '',
+          mailingState: editAgency.mailing_state ?? '',
+          mailingZipCode: editAgency.mailing_zip_code ?? '',
+        })
       } else {
-        setName('')
-        setAgencyAdminId('')
+        setForm(emptyForm)
       }
     }
   }, [isOpen, editAgency])
+
+  const setField = (field: keyof typeof form, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+    setError(null)
+  }
 
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.companyName.trim()) {
+      setError('Company name is required.')
+      return
+    }
     setIsLoading(true)
     setError(null)
+
+    const data: AgencyFormData = {
+      ...form,
+      agencyAdminId: form.agencyAdminId || null,
+      website: form.website || undefined,
+      mailingStreetAddress: form.mailingStreetAddress || undefined,
+      mailingCity: form.mailingCity || undefined,
+      mailingState: form.mailingState || undefined,
+      mailingZipCode: form.mailingZipCode || undefined,
+    }
 
     try {
       if (isEdit && editAgency) {
         const result = await updateAgency(
           editAgency.id,
-          name.trim(),
-          agencyAdminId || null,
-          editAgency.agency_admin_id || null
+          data,
+          editAgency.agency_admin_id ?? null
         )
         if (result.error) {
           setError(result.error)
@@ -77,7 +142,7 @@ export default function AddAgencyModal({
           return
         }
       } else {
-        const result = await createAgency(name.trim(), agencyAdminId || null)
+        const result = await createAgency(data)
         if (result.error) {
           setError(result.error)
           setIsLoading(false)
@@ -95,9 +160,9 @@ export default function AddAgencyModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold text-gray-900">
             {isEdit ? 'Edit Agency' : 'Add New Agency'}
           </h2>
@@ -110,51 +175,219 @@ export default function AddAgencyModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
               {error}
             </div>
           )}
 
+          {/* Basic Information */}
           <div>
-            <label htmlFor="agency_name" className="block text-sm font-semibold text-gray-700 mb-2">
-              Agency Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="agency_name"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value)
-                setError(null)
-              }}
-              placeholder="Acme Home Care LLC"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Company Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.companyName}
+                  onChange={(e) => setField('companyName', e.target.value)}
+                  placeholder="Acme Home Care LLC"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Business Type <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={form.businessType}
+                  onChange={(e) => setField('businessType', e.target.value)}
+                  placeholder="Home Healthcare Agency"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Tax ID / EIN <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={form.taxId}
+                  onChange={(e) => setField('taxId', e.target.value)}
+                  placeholder="12-3456789"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Primary License Number <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={form.primaryLicenseNumber}
+                  onChange={(e) => setField('primaryLicenseNumber', e.target.value)}
+                  placeholder="HCA-2022-001"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Website</label>
+                <input
+                  type="url"
+                  value={form.website}
+                  onChange={(e) => setField('website', e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Agency Admin</label>
+                <select
+                  value={form.agencyAdminId}
+                  onChange={(e) => setField('agencyAdminId', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">None</option>
+                  {selectOptions.map((admin) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.contact_name} ({admin.contact_email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
+          {/* Physical Address */}
           <div>
-            <label htmlFor="agency_admin" className="block text-sm font-semibold text-gray-700 mb-2">
-              Agency Admin
-            </label>
-            <select
-              id="agency_admin"
-              value={agencyAdminId}
-              onChange={(e) => setAgencyAdminId(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">None</option>
-              {selectOptions.map((admin) => (
-                <option key={admin.id} value={admin.id}>
-                  {admin.contact_name} ({admin.contact_email})
-                </option>
-              ))}
-            </select>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Physical Address</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Street Address <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={form.physicalStreetAddress}
+                  onChange={(e) => setField('physicalStreetAddress', e.target.value)}
+                  placeholder="123 Healthcare Blvd"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={form.physicalCity}
+                  onChange={(e) => setField('physicalCity', e.target.value)}
+                  placeholder="Austin"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={form.physicalState}
+                  onChange={(e) => setField('physicalState', e.target.value)}
+                  placeholder="Texas"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">ZIP Code <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={form.physicalZipCode}
+                  onChange={(e) => setField('physicalZipCode', e.target.value)}
+                  placeholder="78701"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
+          {/* Mailing Address */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Mailing Address</h3>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.sameAsPhysical}
+                  onChange={(e) => {
+                    setField('sameAsPhysical', e.target.checked)
+                    if (e.target.checked) {
+                      setForm((prev) => ({
+                        ...prev,
+                        sameAsPhysical: true,
+                        mailingStreetAddress: '',
+                        mailingCity: '',
+                        mailingState: '',
+                        mailingZipCode: '',
+                      }))
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Same as physical address</span>
+              </label>
+            </div>
+            {!form.sameAsPhysical && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing Street Address <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={form.mailingStreetAddress}
+                    onChange={(e) => setField('mailingStreetAddress', e.target.value)}
+                    placeholder="456 Mailing Ave"
+                    required={!form.sameAsPhysical}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing City <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={form.mailingCity}
+                    onChange={(e) => setField('mailingCity', e.target.value)}
+                    placeholder="Austin"
+                    required={!form.sameAsPhysical}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing State <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={form.mailingState}
+                    onChange={(e) => setField('mailingState', e.target.value)}
+                    placeholder="Texas"
+                    required={!form.sameAsPhysical}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing ZIP Code <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={form.mailingZipCode}
+                    onChange={(e) => setField('mailingZipCode', e.target.value)}
+                    placeholder="78702"
+                    required={!form.sameAsPhysical}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
@@ -167,9 +400,7 @@ export default function AddAgencyModal({
               disabled={isLoading}
               className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isLoading ? (
-                'Saving...'
-              ) : (
+              {isLoading ? 'Saving...' : (
                 <>
                   <Plus className="w-4 h-4" />
                   {isEdit ? 'Update Agency' : 'Add Agency'}

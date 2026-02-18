@@ -12,13 +12,30 @@ export default async function ProfilePage() {
   }
 
   const supabase = await createClient()
-  
+
   // Get user profile
   const { data: profile } = await supabase
     .from('user_profiles')
     .select('*')
     .eq('id', session.user.id)
     .single()
+
+  let initialAgency: Record<string, unknown> | null = null
+  if (profile?.role === 'company_owner') {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('company_owner_id', session.user.id)
+      .maybeSingle()
+    if (client) {
+      const { data: agency } = await supabase
+        .from('agencies')
+        .select('*')
+        .eq('agency_admin_id', client.id)
+        .maybeSingle()
+      if (agency) initialAgency = agency
+    }
+  }
 
   // Get unread notifications count
   const { count: unreadNotifications } = await supabase
@@ -41,7 +58,7 @@ export default async function ProfilePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Profile Section */}
         <div className="lg:col-span-2">
-          <ProfileTabs user={session.user} profile={profile} />
+          <ProfileTabs user={session.user} profile={profile} initialAgency={initialAgency} />
         </div>
 
         {/* Sidebar */}

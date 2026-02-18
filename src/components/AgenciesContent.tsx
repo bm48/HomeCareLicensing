@@ -10,6 +10,19 @@ interface Agency {
   agency_admin_id: string | null
   created_at: string
   updated_at: string
+  business_type?: string | null
+  tax_id?: string | null
+  primary_license_number?: string | null
+  website?: string | null
+  physical_street_address?: string | null
+  physical_city?: string | null
+  physical_state?: string | null
+  physical_zip_code?: string | null
+  same_as_physical?: boolean | null
+  mailing_street_address?: string | null
+  mailing_city?: string | null
+  mailing_state?: string | null
+  mailing_zip_code?: string | null
 }
 
 interface AgenciesContentProps {
@@ -24,11 +37,7 @@ export default function AgenciesContent({
   agencyAdminsForSelect,
 }: AgenciesContentProps) {
   const [modalOpen, setModalOpen] = useState(false)
-  const [editAgency, setEditAgency] = useState<{
-    id: string
-    name: string
-    agency_admin_id: string | null
-  } | null>(null)
+  const [editAgency, setEditAgency] = useState<Agency | null>(null)
 
   const openAdd = () => {
     setEditAgency(null)
@@ -36,11 +45,7 @@ export default function AgenciesContent({
   }
 
   const openEdit = (agency: Agency) => {
-    setEditAgency({
-      id: agency.id,
-      name: agency.name,
-      agency_admin_id: agency.agency_admin_id,
-    })
+    setEditAgency(agency)
     setModalOpen(true)
   }
 

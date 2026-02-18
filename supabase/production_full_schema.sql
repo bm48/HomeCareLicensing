@@ -563,6 +563,80 @@ CREATE POLICY "Admins can insert agencies" ON agencies FOR INSERT WITH CHECK (EX
 CREATE POLICY "Admins can update agencies" ON agencies FOR UPDATE USING (EXISTS (SELECT 1 FROM user_profiles WHERE user_profiles.id = auth.uid() AND user_profiles.role = 'admin'));
 CREATE POLICY "Admins can delete agencies" ON agencies FOR DELETE USING (EXISTS (SELECT 1 FROM user_profiles WHERE user_profiles.id = auth.uid() AND user_profiles.role = 'admin'));
 
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS business_type TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS tax_id TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS primary_license_number TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS website TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS physical_street_address TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS physical_city TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS physical_state TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS physical_zip_code TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS same_as_physical BOOLEAN DEFAULT true;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS mailing_street_address TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS mailing_city TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS mailing_state TEXT;
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS mailing_zip_code TEXT;
+
+CREATE POLICY "Company owners can view own agency" ON agencies FOR SELECT USING (EXISTS (SELECT 1 FROM clients c WHERE c.id = agencies.agency_admin_id AND c.company_owner_id = auth.uid()));
+CREATE POLICY "Company owners can insert own agency" ON agencies FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM clients c WHERE c.id = agencies.agency_admin_id AND c.company_owner_id = auth.uid()));
+CREATE POLICY "Company owners can update own agency" ON agencies FOR UPDATE USING (EXISTS (SELECT 1 FROM clients c WHERE c.id = agencies.agency_admin_id AND c.company_owner_id = auth.uid()));
+
+CREATE POLICY "Admins can insert agency company details"
+  ON agencies FOR INSERT  
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE user_profiles.id = auth.uid()
+      AND user_profiles.role = 'admin' OR
+      EXISTS (
+        SELECT 1 FROM clients c
+        WHERE c.id = agencies.agency_admin_id
+        AND c.company_owner_id = auth.uid()
+      )
+    )
+  );
+  CREATE POLICY "Admins can update agency company details"
+  ON agencies FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE user_profiles.id = auth.uid()
+      AND user_profiles.role = 'admin' OR
+      EXISTS (
+        SELECT 1 FROM clients c
+        WHERE c.id = agencies.agency_admin_id
+        AND c.company_owner_id = auth.uid()
+      )
+    )
+  );
+  CREATE POLICY "Admins can delete agency company details"
+  ON agencies FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE user_profiles.id = auth.uid()
+      AND user_profiles.role = 'admin' OR
+      EXISTS (
+        SELECT 1 FROM clients c
+        WHERE c.id = agencies.agency_admin_id
+        AND c.company_owner_id = auth.uid()
+      )
+    )
+  );
+  CREATE POLICY "Admins can view agency company details"
+  ON agencies FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE user_profiles.id = auth.uid()
+      AND user_profiles.role = 'admin' OR
+      EXISTS (
+        SELECT 1 FROM clients c
+        WHERE c.id = agencies.agency_admin_id
+        AND c.company_owner_id = auth.uid()
+      )
+    )
+  );
 -- Create client_states table (many-to-many relationship for clients and states)
 CREATE TABLE IF NOT EXISTS client_states (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,

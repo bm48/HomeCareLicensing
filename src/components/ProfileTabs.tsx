@@ -8,6 +8,7 @@ import * as z from 'zod'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { UserRole } from '@/types/auth'
+import { saveCompanyDetails } from '@/app/actions/agencies'
 
 const personalInfoSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -50,6 +51,23 @@ const companyDetailsSchema = z.object({
 type CompanyDetailsFormInput = z.input<typeof companyDetailsSchema>
 type CompanyDetailsFormOutput = z.output<typeof companyDetailsSchema>
 
+interface InitialAgency {
+  name?: string | null
+  business_type?: string | null
+  tax_id?: string | null
+  primary_license_number?: string | null
+  website?: string | null
+  physical_street_address?: string | null
+  physical_city?: string | null
+  physical_state?: string | null
+  physical_zip_code?: string | null
+  same_as_physical?: boolean | null
+  mailing_street_address?: string | null
+  mailing_city?: string | null
+  mailing_state?: string | null
+  mailing_zip_code?: string | null
+}
+
 interface ProfileTabsProps {
   user: {
     id: string
@@ -65,9 +83,27 @@ interface ProfileTabsProps {
     work_location?: string | null
     start_date?: string | null
   } | null
+  initialAgency?: InitialAgency | null
 }
 
-export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
+const emptyCompanyDefaults = {
+  companyName: '',
+  businessType: '',
+  taxId: '',
+  primaryLicenseNumber: '',
+  website: '',
+  physicalStreetAddress: '',
+  physicalCity: '',
+  physicalState: '',
+  physicalZipCode: '',
+  sameAsPhysical: true,
+  mailingStreetAddress: '',
+  mailingCity: '',
+  mailingState: '',
+  mailingZipCode: '',
+}
+
+export default function ProfileTabs({ user, profile, initialAgency }: ProfileTabsProps) {
   const router = useRouter()
   // For experts, only show personal tab, so default to 'personal'
   const [activeTab, setActiveTab] = useState('personal')
@@ -108,22 +144,24 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
     setValue: setCompanyValue,
   } = useForm<CompanyDetailsFormInput, any, CompanyDetailsFormOutput>({
     resolver: zodResolver(companyDetailsSchema),
-    defaultValues: {
-      companyName: 'HomeCare Solutions LLC',
-      businessType: 'Home Healthcare Agency',
-      taxId: '12-3456789',
-      primaryLicenseNumber: 'HCA-2022-001',
-      website: 'https://homecaresolutions.com',
-      physicalStreetAddress: '123 Healthcare Blvd',
-      physicalCity: 'Austin',
-      physicalState: 'Texas',
-      physicalZipCode: '78701',
-      sameAsPhysical: true,
-      mailingStreetAddress: '',
-      mailingCity: '',
-      mailingState: '',
-      mailingZipCode: '',
-    },
+    defaultValues: initialAgency
+      ? {
+          companyName: initialAgency.name ?? '',
+          businessType: initialAgency.business_type ?? '',
+          taxId: initialAgency.tax_id ?? '',
+          primaryLicenseNumber: initialAgency.primary_license_number ?? '',
+          website: initialAgency.website ?? '',
+          physicalStreetAddress: initialAgency.physical_street_address ?? '',
+          physicalCity: initialAgency.physical_city ?? '',
+          physicalState: initialAgency.physical_state ?? '',
+          physicalZipCode: initialAgency.physical_zip_code ?? '',
+          sameAsPhysical: initialAgency.same_as_physical ?? true,
+          mailingStreetAddress: initialAgency.mailing_street_address ?? '',
+          mailingCity: initialAgency.mailing_city ?? '',
+          mailingState: initialAgency.mailing_state ?? '',
+          mailingZipCode: initialAgency.mailing_zip_code ?? '',
+        }
+      : emptyCompanyDefaults,
   })
 
   const sameAsPhysical = watchCompany('sameAsPhysical')
@@ -134,10 +172,30 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
     setSuccess(false)
 
     try {
-      // Here you would save to your database
-      // For now, we'll just simulate success
+      const result = await saveCompanyDetails({
+        companyName: data.companyName,
+        businessType: data.businessType,
+        taxId: data.taxId,
+        primaryLicenseNumber: data.primaryLicenseNumber,
+        website: data.website || undefined,
+        physicalStreetAddress: data.physicalStreetAddress,
+        physicalCity: data.physicalCity,
+        physicalState: data.physicalState,
+        physicalZipCode: data.physicalZipCode,
+        sameAsPhysical: data.sameAsPhysical,
+        mailingStreetAddress: data.mailingStreetAddress,
+        mailingCity: data.mailingCity,
+        mailingState: data.mailingState,
+        mailingZipCode: data.mailingZipCode,
+      })
+
+      if (result.error) {
+        setError(result.error)
+        setIsLoading(false)
+        return
+      }
+
       setSuccess(true)
-      setIsLoading(false)
       setIsEditingCompany(false)
       router.refresh()
 
@@ -146,6 +204,7 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
       }, 3000)
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')
+    } finally {
       setIsLoading(false)
     }
   }
@@ -462,9 +521,9 @@ export default function ProfileTabs({ user, profile }: ProfileTabsProps) {
                   <Building className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">{watchCompany('companyName') || 'HomeCare Solutions LLC'}</h3>
-                  <p className="text-sm text-gray-600">{watchCompany('businessType') || 'Home Healthcare Agency'}</p>
-                  <p className="text-sm text-gray-600">License: {watchCompany('primaryLicenseNumber') || 'HCA-2022-001'}</p>
+                  <h3 className="text-lg font-bold text-gray-900">{watchCompany('companyName') || 'Company name'}</h3>
+                  <p className="text-sm text-gray-600">{watchCompany('businessType') || 'Business type'}</p>
+                  <p className="text-sm text-gray-600">License: {watchCompany('primaryLicenseNumber') || '—'}</p>
                 </div>
               </div>
               <button

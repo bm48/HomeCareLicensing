@@ -110,10 +110,8 @@ async function ensureRoleTableRow(
       .eq('company_owner_id', userId)
       .maybeSingle()
     if (!existing) {
-      const companyName = fullName ? `${fullName}'s Agency` : 'Pending Agency'
       await supabaseAdmin.from('clients').insert({
         company_owner_id: userId,
-        company_name: companyName,
         contact_name: fullName || normalizedEmail,
         contact_email: normalizedEmail,
         status: 'pending',
@@ -242,12 +240,10 @@ export async function createUserAccount(
     const { first_name: firstName, last_name: lastName } = parseFullName(fullNameTrimmed)
 
     if (role === 'company_owner') {
-      const companyName = fullNameTrimmed ? `${fullNameTrimmed}'s Agency` : 'Pending Agency'
       const { error: clientError } = await supabaseAdmin
         .from('clients')
         .insert({
           company_owner_id: userId,
-          company_name: companyName,
           contact_name: fullNameTrimmed || normalizedEmail,
           contact_email: normalizedEmail,
           status: 'pending',
