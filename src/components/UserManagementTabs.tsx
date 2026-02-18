@@ -189,17 +189,7 @@ export default function UserManagementTabs({
     return domain.split('.')[0].split('').map((c, i) => i === 0 ? c.toUpperCase() : c).join('') + ' Care'
   }
 
-  // Get unique companies from user profiles
-  const allCompanies = useMemo(() => {
-    const companiesSet = new Set<string>()
-    userProfiles.forEach(profile => {
-      const company = getCompanyFromEmail(profile.email)
-      if (company !== 'N/A') {
-        companiesSet.add(company)
-      }
-    })
-    return Array.from(companiesSet).sort()
-  }, [userProfiles])
+
 
   // Filter users based on search and filters
   const filteredUsers = useMemo(() => {
@@ -263,7 +253,7 @@ export default function UserManagementTabs({
             <Users className="w-4 h-4" />
             Users
           </button>
-          <button
+          {/* <button
             onClick={() => setActiveTab('clients')}
             className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${
               activeTab === 'clients'
@@ -273,7 +263,7 @@ export default function UserManagementTabs({
           >
             <Building2 className="w-4 h-4" />
             Agency Admin
-          </button>
+          </button> */}
           <button
             onClick={() => setActiveTab('experts')}
             className={`py-3 px-4 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${
