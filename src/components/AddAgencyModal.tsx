@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { X, Plus } from 'lucide-react'
+import { X, Plus, ChevronDown, ChevronUp } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createAgency, updateAgency, type AgencyFormData } from '@/app/actions/agencies'
 
@@ -14,7 +14,7 @@ export interface AgencyAdminOption {
 export interface EditAgencyData {
   id: string
   name: string
-  agency_admin_id: string | null
+  agency_admin_ids: string[] | null
   business_type?: string | null
   tax_id?: string | null
   primary_license_number?: string | null
@@ -30,9 +30,9 @@ export interface EditAgencyData {
   mailing_zip_code?: string | null
 }
 
-const emptyForm: Omit<AgencyFormData, 'agencyAdminId'> & { agencyAdminId: string } = {
+const emptyForm: AgencyFormData = {
   companyName: '',
-  agencyAdminId: '',
+  agencyAdminIds: [],
   businessType: '',
   taxId: '',
   primaryLicenseNumber: '',
@@ -69,12 +69,12 @@ export default function AddAgencyModal({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
+  const [agencyAdminsOpen, setAgencyAdminsOpen] = useState(false)
 
   const isEdit = !!editAgency
 
-  const selectOptions = useMemo(() => {
-    return isEdit ? agencyAdmins : agencyAdminsForSelect
-  }, [isEdit, agencyAdmins, agencyAdminsForSelect])
+  // Parent passes: add = unassigned only; edit = unassigned + this agency's admins
+  const selectOptions = agencyAdminsForSelect
 
   useEffect(() => {
     if (isOpen) {
@@ -82,7 +82,7 @@ export default function AddAgencyModal({
       if (editAgency) {
         setForm({
           companyName: editAgency.name ?? '',
-          agencyAdminId: editAgency.agency_admin_id ?? '',
+          agencyAdminIds: editAgency.agency_admin_ids ?? [],
           businessType: editAgency.business_type ?? '',
           taxId: editAgency.tax_id ?? '',
           primaryLicenseNumber: editAgency.primary_license_number ?? '',
@@ -103,8 +103,17 @@ export default function AddAgencyModal({
     }
   }, [isOpen, editAgency])
 
-  const setField = (field: keyof typeof form, value: string | boolean) => {
+  const setField = (field: keyof typeof form, value: string | boolean | string[]) => {
     setForm((prev) => ({ ...prev, [field]: value }))
+    setError(null)
+  }
+
+  const toggleAgencyAdmin = (clientId: string) => {
+    setForm((prev) => {
+      const ids = prev.agencyAdminIds || []
+      const next = ids.includes(clientId) ? ids.filter((id) => id !== clientId) : [...ids, clientId]
+      return { ...prev, agencyAdminIds: next }
+    })
     setError(null)
   }
 
@@ -121,7 +130,7 @@ export default function AddAgencyModal({
 
     const data: AgencyFormData = {
       ...form,
-      agencyAdminId: form.agencyAdminId || null,
+      agencyAdminIds: form.agencyAdminIds || [],
       website: form.website || undefined,
       mailingStreetAddress: form.mailingStreetAddress || undefined,
       mailingCity: form.mailingCity || undefined,
@@ -134,7 +143,7 @@ export default function AddAgencyModal({
         const result = await updateAgency(
           editAgency.id,
           data,
-          editAgency.agency_admin_id ?? null
+          editAgency.agency_admin_ids ?? []
         )
         if (result.error) {
           setError(result.error)
@@ -243,19 +252,45 @@ export default function AddAgencyModal({
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Agency Admin</label>
-                <select
-                  value={form.agencyAdminId}
-                  onChange={(e) => setField('agencyAdminId', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                <button
+                  type="button"
+                  onClick={() => setAgencyAdminsOpen((prev) => !prev)}
+                  className="text-[#2460d6] flex items-center justify-between w-full text-left text-sm font-semibold text-gray-700 mb-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  aria-expanded={agencyAdminsOpen}
                 >
-                  <option value="">None</option>
-                  {selectOptions.map((admin) => (
-                    <option key={admin.id} value={admin.id}>
-                      {admin.contact_name} ({admin.contact_email})
-                    </option>
-                  ))}
-                </select>
+                  <span>Select agency admins</span>
+                  {agencyAdminsOpen ? (
+                    <ChevronUp className="w-4 h-4 text-gray-500 shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                  )}
+                </button>
+                {agencyAdminsOpen && (
+                  <div className="border border-gray-300 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2 bg-gray-50">
+                    {selectOptions.length === 0 ? (
+                      <p className="text-sm text-gray-500">No agency admins available (all may be assigned).</p>
+                    ) : (
+                      selectOptions.map((admin) => (
+                        <label key={admin.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                          <input
+                            type="checkbox"
+                            checked={(form.agencyAdminIds || []).includes(admin.id)}
+                            onChange={() => toggleAgencyAdmin(admin.id)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm">
+                            {admin.contact_name} ({admin.contact_email})
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+                {!agencyAdminsOpen && (form.agencyAdminIds?.length ?? 0) > 0 && (
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {(form.agencyAdminIds?.length ?? 0)} selected
+                  </p>
+                )}
               </div>
             </div>
           </div>

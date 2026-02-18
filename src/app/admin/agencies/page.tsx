@@ -25,12 +25,14 @@ export default async function AgenciesPage() {
     .not('company_owner_id', 'is', null)
     .order('contact_name')
 
-  const { data: agencyAdminsForSelect } = await supabase
-    .from('clients')
-    .select('id, contact_name, contact_email')
-    .not('company_owner_id', 'is', null)
-    .is('company_name', null)
-    .order('contact_name')
+  // One agency admin can only be in one agency: show only those not in any agency's agency_admin_ids
+  const assignedAdminIds = new Set<string>()
+  for (const a of agencies || []) {
+    const ids = (a.agency_admin_ids as string[] | null) || []
+    ids.forEach((id) => assignedAdminIds.add(id))
+  }
+  const allAdmins = agencyAdmins || []
+  const agencyAdminsForSelect = allAdmins.filter((a) => !assignedAdminIds.has(a.id))
 
   return (
     <AdminLayout

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 
 export type AgencyFormData = {
   companyName: string
-  agencyAdminId: string | null
+  agencyAdminIds: string[]
   businessType: string
   taxId: string
   primaryLicenseNumber: string
@@ -21,7 +21,7 @@ export type AgencyFormData = {
   mailingZipCode?: string
 }
 
-function buildAgencyPayload(data: Omit<AgencyFormData, 'agencyAdminId'>) {
+function buildAgencyPayload(data: Omit<AgencyFormData, 'agencyAdminIds'>) {
   return {
     name: data.companyName.trim(),
     business_type: data.businessType.trim() || null,
@@ -44,26 +44,25 @@ function buildAgencyPayload(data: Omit<AgencyFormData, 'agencyAdminId'>) {
 export async function createAgency(data: AgencyFormData) {
   const supabase = await createClient()
   try {
-    const agencyAdminId = data.agencyAdminId || null
+    const ids = (data.agencyAdminIds || []).filter(Boolean)
     const { error } = await supabase
       .from('agencies')
       .insert({
         ...buildAgencyPayload(data),
-        agency_admin_id: agencyAdminId,
+        agency_admin_ids: ids,
       })
 
     if (error) {
       return { error: error.message, data: null }
     }
 
-    if (agencyAdminId) {
+    const trimmedName = data.companyName.trim()
+    for (const clientId of ids) {
       const { error: clientError } = await supabase
         .from('clients')
-        .update({ company_name: data.companyName.trim() })
-        .eq('id', agencyAdminId)
-      if (clientError) {
-        console.error('Failed to set client company_name:', clientError)
-      }
+        .update({ company_name: trimmedName })
+        .eq('id', clientId)
+      if (clientError) console.error('Failed to set client company_name:', clientError)
     }
 
     revalidatePath('/admin/agencies')
@@ -76,20 +75,30 @@ export async function createAgency(data: AgencyFormData) {
 export async function updateAgency(
   id: string,
   data: AgencyFormData,
-  previousAgencyAdminId: string | null
+  previousAgencyAdminIds: string[]
 ) {
   const supabase = await createClient()
   try {
-    const agencyAdminId = data.agencyAdminId || null
+    const newIds = (data.agencyAdminIds || []).filter(Boolean)
+    const prevSet = new Set(previousAgencyAdminIds)
+    const newSet = new Set(newIds)
 
-    if (agencyAdminId) {
-      const { error: clearError } = await supabase
+    for (const clientId of newIds) {
+      const { data: otherAgencies } = await supabase
         .from('agencies')
-        .update({ agency_admin_id: null, updated_at: new Date().toISOString() })
-        .eq('agency_admin_id', agencyAdminId)
+        .select('id, agency_admin_ids')
         .neq('id', id)
-      if (clearError) {
-        console.error('Failed to clear other agencies from this admin:', clearError)
+      if (otherAgencies) {
+        for (const ag of otherAgencies) {
+          const arr = (ag.agency_admin_ids as string[]) || []
+          if (arr.includes(clientId)) {
+            const updated = arr.filter((x) => x !== clientId)
+            await supabase
+              .from('agencies')
+              .update({ agency_admin_ids: updated, updated_at: new Date().toISOString() })
+              .eq('id', ag.id)
+          }
+        }
       }
     }
 
@@ -97,7 +106,7 @@ export async function updateAgency(
       .from('agencies')
       .update({
         ...buildAgencyPayload(data),
-        agency_admin_id: agencyAdminId,
+        agency_admin_ids: newIds,
       })
       .eq('id', id)
 
@@ -105,24 +114,19 @@ export async function updateAgency(
       return { error: error.message, data: null }
     }
 
-    if (previousAgencyAdminId && previousAgencyAdminId !== agencyAdminId) {
-      const { error: clearClientError } = await supabase
-        .from('clients')
-        .update({ company_name: '' })
-        .eq('id', previousAgencyAdminId)
-      if (clearClientError) {
-        console.error('Failed to clear previous client company_name:', clearClientError)
+    for (const clientId of previousAgencyAdminIds) {
+      if (!newSet.has(clientId)) {
+        await supabase.from('clients').update({ company_name: '' }).eq('id', clientId)
       }
     }
 
-    if (agencyAdminId) {
+    const trimmedName = data.companyName.trim()
+    for (const clientId of newIds) {
       const { error: clientError } = await supabase
         .from('clients')
-        .update({ company_name: data.companyName.trim() })
-        .eq('id', agencyAdminId)
-      if (clientError) {
-        console.error('Failed to set client company_name:', clientError)
-      }
+        .update({ company_name: trimmedName })
+        .eq('id', clientId)
+      if (clientError) console.error('Failed to set client company_name:', clientError)
     }
 
     revalidatePath('/admin/agencies')
@@ -188,7 +192,7 @@ export async function saveCompanyDetails(data: CompanyDetailsFormData) {
     const { data: existingAgency } = await supabase
       .from('agencies')
       .select('id')
-      .eq('agency_admin_id', client.id)
+      .contains('agency_admin_ids', [client.id])
       .maybeSingle()
 
     if (existingAgency) {
@@ -203,10 +207,10 @@ export async function saveCompanyDetails(data: CompanyDetailsFormData) {
     } else {
       const { error: insertError } = await supabase
         .from('agencies')
-        .insert({
-          ...payload,
-          agency_admin_id: client.id,
-        })
+      .insert({
+        ...payload,
+        agency_admin_ids: [client.id],
+      })
 
       if (insertError) {
         return { error: insertError.message, data: null }

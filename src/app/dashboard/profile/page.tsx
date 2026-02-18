@@ -31,7 +31,7 @@ export default async function ProfilePage() {
       const { data: agency } = await supabase
         .from('agencies')
         .select('*')
-        .eq('agency_admin_id', client.id)
+        .contains('agency_admin_ids', [client.id])
         .maybeSingle()
       if (agency) initialAgency = agency
     }

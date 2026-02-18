@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus, Pencil } from 'lucide-react'
 import AddAgencyModal, { type AgencyAdminOption } from './AddAgencyModal'
 
 interface Agency {
   id: string
   name: string
-  agency_admin_id: string | null
+  agency_admin_ids: string[] | null
   created_at: string
   updated_at: string
   business_type?: string | null
@@ -39,6 +39,12 @@ export default function AgenciesContent({
   const [modalOpen, setModalOpen] = useState(false)
   const [editAgency, setEditAgency] = useState<Agency | null>(null)
 
+  // Add: only unassigned admins. Edit: show all agency admins in the checkbox list
+  const agencyAdminsForSelectResolved = useMemo(() => {
+    if (!editAgency) return agencyAdminsForSelect
+    return agencyAdmins
+  }, [editAgency, agencyAdmins, agencyAdminsForSelect])
+
   const openAdd = () => {
     setEditAgency(null)
     setModalOpen(true)
@@ -54,11 +60,15 @@ export default function AgenciesContent({
     setEditAgency(null)
   }
 
-  const getAdminDisplay = (agencyAdminId: string | null) => {
-    if (!agencyAdminId) return '—'
-    const admin = agencyAdmins.find((a) => a.id === agencyAdminId)
-    if (!admin) return '—'
-    return `${admin.contact_name} (${admin.contact_email})`
+  const getAdminsDisplay = (agencyAdminIds: string[]) => {
+    if (!agencyAdminIds?.length) return '—'
+    const names = agencyAdminIds
+      .map((id) => {
+        const admin = agencyAdmins.find((a) => a.id === id)
+        return admin ? `${admin.contact_name}` : null
+      })
+      .filter(Boolean)
+    return names.length ? names.join(', ') : '—'
   }
 
   const formatDate = (dateStr: string) => {
@@ -120,7 +130,7 @@ export default function AgenciesContent({
                       {agency.name}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">
-                      {getAdminDisplay(agency.agency_admin_id)}
+                      {getAdminsDisplay(agency.agency_admin_ids || [])}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
                       {formatDate(agency.created_at)}
@@ -149,7 +159,7 @@ export default function AgenciesContent({
         onClose={closeModal}
         onSuccess={closeModal}
         agencyAdmins={agencyAdmins}
-        agencyAdminsForSelect={agencyAdminsForSelect}
+        agencyAdminsForSelect={agencyAdminsForSelectResolved}
         editAgency={editAgency}
       />
     </>

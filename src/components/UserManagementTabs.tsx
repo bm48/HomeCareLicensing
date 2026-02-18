@@ -111,18 +111,51 @@ export default function UserManagementTabs({
     return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
   }
 
+  // DB role -> display label (admin, agency admin, expert, caregiver)
+  const getRoleDisplayLabel = (role: string) => {
+    switch (role) {
+      case 'admin': return 'Admin'
+      case 'company_owner': return 'Agency admin'
+      case 'expert': return 'Expert'
+      case 'staff_member': return 'Caregiver'
+      default: return role || '—'
+    }
+  }
+
   const getRoleBadge = (role: string) => {
+    const label = getRoleDisplayLabel(role)
     if (role === 'admin') {
       return (
-        <span className=" py-1 bg-black text-white text-xs font-semibold rounded-full flex items-center justify-center gap-1">
+        <span className="px-2 py-1 bg-black text-white text-xs font-semibold rounded-full flex items-center justify-center gap-1">
           <span className="w-2 h-2 bg-white rounded-full"></span>
-          admin
+          {label}
+        </span>
+      )
+    }
+    if (role === 'company_owner') {
+      return (
+        <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full flex items-center justify-center">
+          {label}
+        </span>
+      )
+    }
+    if (role === 'expert') {
+      return (
+        <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full flex items-center justify-center">
+          {label}
+        </span>
+      )
+    }
+    if (role === 'staff_member') {
+      return (
+        <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full flex items-center justify-center">
+          {label}
         </span>
       )
     }
     return (
-      <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full flex items-center justify-center">
-        user
+      <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full flex items-center justify-center">
+        {label}
       </span>
     )
   }
@@ -183,10 +216,9 @@ export default function UserManagementTabs({
     setSelectedUser(null)
   }
 
-  const getCompanyFromEmail = (email: string) => {
-    const domain = email.split('@')[1]
-    if (!domain) return 'N/A'
-    return domain.split('.')[0].split('').map((c, i) => i === 0 ? c.toUpperCase() : c).join('') + ' Care'
+  const getCompanyDisplay = (profile: { company_name?: string | null; email?: string }) => {
+    if (profile.company_name?.trim()) return profile.company_name.trim()
+    return '—'
   }
 
 
@@ -207,10 +239,16 @@ export default function UserManagementTabs({
         if (!matchesSearch) return false
       }
 
-      // Role filter
+      // Role filter (selectedRole is display label: Admin, Agency admin, Expert, Caregiver)
       if (selectedRole !== 'All Roles') {
-        const profileRole = profile.role === 'admin' ? 'admin' : 'user'
-        if (profileRole !== selectedRole.toLowerCase()) return false
+        const roleToDb: Record<string, string> = {
+          'Admin': 'admin',
+          'Agency admin': 'company_owner',
+          'Expert': 'expert',
+          'Caregiver': 'staff_member',
+        }
+        const wantedDbRole = roleToDb[selectedRole]
+        if (profile.role !== wantedDbRole) return false
       }
 
       // Status filter
@@ -224,11 +262,11 @@ export default function UserManagementTabs({
     })
   }, [userProfiles, searchQuery, selectedRole, selectedStatus, userStatuses])
 
-  // Group users by company
+  // Group users by company (exact company name when available)
   const usersByCompany = useMemo(() => {
     const grouped: Record<string, typeof filteredUsers> = {}
     filteredUsers.forEach(user => {
-      const company = getCompanyFromEmail(user.email)
+      const company = getCompanyDisplay(user) || '—'
       if (!grouped[company]) {
         grouped[company] = []
       }
@@ -365,7 +403,9 @@ export default function UserManagementTabs({
                 >
                   <option>All Roles</option>
                   <option>Admin</option>
-                  <option>User</option>
+                  <option>Agency admin</option>
+                  <option>Expert</option>
+                  <option>Caregiver</option>
                 </select>
                 {/* Status Dropdown */}
                 <select 
@@ -428,7 +468,6 @@ export default function UserManagementTabs({
                             const isActive = userStatuses[userProfile.id] !== false
                             const originalIndex = userProfiles.indexOf(userProfile)
                             const userID = `USR-${String(originalIndex + 1).padStart(3, '0')}`
-                            const companyName = getCompanyFromEmail(userProfile.email)
 
                             return (
                               <tr key={userProfile.id} className="hover:bg-gray-50">
@@ -442,7 +481,7 @@ export default function UserManagementTabs({
                                 <td className="px-3 md:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
                                   <div className="flex items-center gap-2">
                                     <Building2 className="w-3 h-3 md:w-4 md:h-4 text-gray-400" />
-                                    <span className="text-xs md:text-sm text-gray-900">{companyName}</span>
+                                    <span className="text-xs md:text-sm text-gray-900">{getCompanyDisplay(userProfile)}</span>
                                   </div>
                                 </td>
                                 <td className="px-3 md:px-6 py-4 whitespace-nowrap">
@@ -512,7 +551,6 @@ export default function UserManagementTabs({
                           const isActive = userStatuses[userProfile.id] !== false
                           const originalIndex = userProfiles.indexOf(userProfile)
                           const userID = `USR-${String(originalIndex + 1).padStart(3, '0')}`
-                          const companyName = getCompanyFromEmail(userProfile.email)
 
                           return (
                             <tr key={userProfile.id} className="hover:bg-gray-50">
@@ -526,7 +564,7 @@ export default function UserManagementTabs({
                               <td className="px-3 md:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
                                 <div className="flex items-center gap-2">
                                   <Building2 className="w-3 h-3 md:w-4 md:h-4 text-gray-400" />
-                                  <span className="text-xs md:text-sm text-gray-900">{companyName}</span>
+                                  <span className="text-xs md:text-sm text-gray-900">{getCompanyDisplay(userProfile)}</span>
                                 </div>
                               </td>
                               <td className="px-3 md:px-6 py-4 whitespace-nowrap">

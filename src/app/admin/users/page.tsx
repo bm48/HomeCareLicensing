@@ -16,16 +16,34 @@ export default async function UsersPage() {
     .eq('is_read', false)
 
   // Get all user profiles
-  const { data: userProfiles } = await supabase
+  const { data: userProfilesRaw } = await supabase
     .from('user_profiles')
     .select('*')
     .order('created_at', { ascending: false })
+
+  // Get exact company name for agency admins (company_owner) from clients table
+  const companyOwnerIds = userProfilesRaw?.filter(u => u.role === 'company_owner').map(u => u.id) || []
+  const { data: clientCompanies } = companyOwnerIds.length > 0 ? await supabase
+    .from('clients')
+    .select('company_owner_id, company_name')
+    .in('company_owner_id', companyOwnerIds)
+    : { data: [] }
+  const companyNameByUserId: Record<string, string> = {}
+  clientCompanies?.forEach(c => {
+    if (c.company_owner_id && c.company_name?.trim()) {
+      companyNameByUserId[c.company_owner_id] = c.company_name.trim()
+    }
+  })
+  const userProfiles = (userProfilesRaw || []).map(p => ({
+    ...p,
+    company_name: p.role === 'company_owner' ? (companyNameByUserId[p.id] ?? null) : null,
+  }))
 
   // Get user counts
   const totalUsers = userProfiles?.length || 0
   const activeUsers = userProfiles?.filter(u => u.role !== 'admin' || true).length || 0
   const disabledUsers = 0
-  const companies = new Set(userProfiles?.map(u => u.email?.split('@')[1]).filter(Boolean)).size
+  const companies = new Set(userProfiles?.map(u => (u as { company_name?: string | null }).company_name).filter(Boolean)).size
 
   // Get all clients data
   const { data: clients } = await supabase
