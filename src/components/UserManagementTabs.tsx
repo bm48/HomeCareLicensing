@@ -25,6 +25,7 @@ interface UserManagementTabsProps {
   
   // Clients data
   clients: any[]
+  agencies: { id: string; name: string }[]
   expertsByUserId: Record<string, any>
   allExperts: any[]
   statesByClient: Record<string, string[]>
@@ -51,6 +52,7 @@ export default function UserManagementTabs({
   disabledUsers,
   companies,
   clients,
+  agencies = [],
   expertsByUserId,
   allExperts,
   statesByClient,
@@ -784,6 +786,7 @@ export default function UserManagementTabs({
           setIsAddUserModalOpen(false)
           router.refresh()
         }}
+        agencies={agencies}
       />
 
       {/* Add New Client Modal (Agency Admins tab: store in clients table) */}

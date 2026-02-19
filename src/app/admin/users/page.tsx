@@ -21,22 +21,68 @@ export default async function UsersPage() {
     .select('*')
     .order('created_at', { ascending: false })
 
-  // Get exact company name for agency admins (company_owner) from clients table
+  // Agency names for display (company name = agency name)
+  const { data: agenciesList } = await supabase
+    .from('agencies')
+    .select('id, name')
+  const agencyNameById: Record<string, string> = {}
+  agenciesList?.forEach(a => {
+    if (a.id && a.name?.trim()) agencyNameById[a.id] = a.name.trim()
+  })
+
+  // Company name for agency admins (company_owner): use agency name from client.agency_id
   const companyOwnerIds = userProfilesRaw?.filter(u => u.role === 'company_owner').map(u => u.id) || []
   const { data: clientCompanies } = companyOwnerIds.length > 0 ? await supabase
     .from('clients')
-    .select('company_owner_id, company_name')
+    .select('company_owner_id, company_name, agency_id')
     .in('company_owner_id', companyOwnerIds)
     : { data: [] }
   const companyNameByUserId: Record<string, string> = {}
   clientCompanies?.forEach(c => {
-    if (c.company_owner_id && c.company_name?.trim()) {
-      companyNameByUserId[c.company_owner_id] = c.company_name.trim()
-    }
+    if (!c.company_owner_id) return
+    const name = c.agency_id && agencyNameById[c.agency_id]
+      ? agencyNameById[c.agency_id]
+      : (c.company_name?.trim() ?? null)
+    if (name) companyNameByUserId[c.company_owner_id] = name
   })
+
+  // Company name for caregivers (staff_member): use agency name from staff_members.agency_id
+  const staffUserIds = userProfilesRaw?.filter(u => u.role === 'staff_member').map(u => u.id) || []
+  const { data: staffMembers } = staffUserIds.length > 0 ? await supabase
+    .from('staff_members')
+    .select('user_id, agency_id, company_owner_id')
+    .in('user_id', staffUserIds)
+    : { data: [] }
+  const clientIdsForStaff = staffMembers?.map(s => s.company_owner_id).filter(Boolean) || []
+  const { data: clientsForStaff } = clientIdsForStaff.length > 0 ? await supabase
+    .from('clients')
+    .select('id, company_name, agency_id')
+    .in('id', clientIdsForStaff)
+    : { data: [] }
+  const companyNameByClientId: Record<string, string> = {}
+  clientsForStaff?.forEach(c => {
+    if (!c.id) return
+    const name = c.agency_id && agencyNameById[c.agency_id]
+      ? agencyNameById[c.agency_id]
+      : (c.company_name?.trim() ?? null)
+    if (name) companyNameByClientId[c.id] = name
+  })
+  const companyNameByStaffUserId: Record<string, string> = {}
+  staffMembers?.forEach(s => {
+    if (!s.user_id) return
+    const name = s.agency_id && agencyNameById[s.agency_id]
+      ? agencyNameById[s.agency_id]
+      : (s.company_owner_id ? companyNameByClientId[s.company_owner_id] : null)
+    if (name) companyNameByStaffUserId[s.user_id] = name
+  })
+
   const userProfiles = (userProfilesRaw || []).map(p => ({
     ...p,
-    company_name: p.role === 'company_owner' ? (companyNameByUserId[p.id] ?? null) : null,
+    company_name: p.role === 'company_owner'
+      ? (companyNameByUserId[p.id] ?? null)
+      : p.role === 'staff_member'
+        ? (companyNameByStaffUserId[p.id] ?? null)
+        : null,
   }))
 
   // Get user counts
@@ -175,6 +221,12 @@ export default async function UsersPage() {
     }
   })
 
+  // Agencies for Add User modal (agency admin / caregiver must select an agency)
+  const { data: agencies } = await supabase
+    .from('agencies')
+    .select('id, name')
+    .order('name')
+
   return (
     <AdminLayout 
       user={user} 
@@ -199,6 +251,7 @@ export default async function UsersPage() {
           disabledUsers={disabledUsers}
           companies={companies}
           clients={clients || []}
+          agencies={(agencies || []).map((a) => ({ id: a.id, name: a.name ?? '' }))}
           expertsByUserId={expertsByUserId}
           allExperts={allExperts || []}
           statesByClient={statesByClient}

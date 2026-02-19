@@ -156,12 +156,14 @@ async function ensureRoleTableRow(
 /**
  * Create a user account from admin User Management. Uses Admin API so the current
  * admin's session is never overwritten (unlike signUp() which would log the admin out).
+ * When role is company_owner or staff_member, agencyId is required and the user is assigned to that agency.
  */
 export async function createUserAccount(
   email: string,
   password: string,
   fullName: string,
-  role: CreateUserRole
+  role: CreateUserRole,
+  agencyId?: string | null
 ) {
   let supabaseAdmin
   try {
@@ -240,14 +242,17 @@ export async function createUserAccount(
     const { first_name: firstName, last_name: lastName } = parseFullName(fullNameTrimmed)
 
     if (role === 'company_owner') {
-      const { error: clientError } = await supabaseAdmin
+      const { data: newClient, error: clientError } = await supabaseAdmin
         .from('clients')
         .insert({
           company_owner_id: userId,
           contact_name: fullNameTrimmed || normalizedEmail,
           contact_email: normalizedEmail,
           status: 'pending',
+          ...(agencyId ? { agency_id: agencyId } : {}),
         })
+        .select('id')
+        .single()
       if (clientError) {
         console.error('Failed to create clients row for agency admin:', clientError)
         return {
@@ -255,12 +260,29 @@ export async function createUserAccount(
           data: null,
         }
       }
+      if (agencyId && newClient?.id) {
+        const { data: agency } = await supabaseAdmin.from('agencies').select('agency_admin_ids').eq('id', agencyId).single()
+        const currentIds = (agency?.agency_admin_ids as string[] | null) || []
+        if (!currentIds.includes(newClient.id)) {
+          await supabaseAdmin
+            .from('agencies')
+            .update({ agency_admin_ids: [...currentIds, newClient.id], updated_at: new Date().toISOString() })
+            .eq('id', agencyId)
+        }
+      }
     } else if (role === 'staff_member') {
+      let companyOwnerId: string | null = null
+      if (agencyId) {
+        const { data: agency } = await supabaseAdmin.from('agencies').select('agency_admin_ids').eq('id', agencyId).single()
+        const adminIds = (agency?.agency_admin_ids as string[] | null) || []
+        if (adminIds.length > 0) companyOwnerId = adminIds[0]
+      }
       const { error: staffError } = await supabaseAdmin
         .from('staff_members')
         .insert({
           user_id: userId,
-          company_owner_id: null,
+          company_owner_id: companyOwnerId,
+          agency_id: agencyId || null,
           first_name: firstName,
           last_name: lastName,
           email: normalizedEmail,

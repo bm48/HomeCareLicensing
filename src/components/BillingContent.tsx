@@ -19,13 +19,9 @@ import {
   Loader2
 } from 'lucide-react'
 
-interface Client {
+interface Agency {
   id: string
-  company_name: string
-  contact_name: string
-  contact_email: string
-  contact_phone?: string
-  status: string
+  name: string
 }
 
 interface Case {
@@ -51,14 +47,14 @@ interface LicenseType {
 }
 
 interface BaseBillingItem {
-  client: Client
+  agency: Agency
   ownerCount: number
   staffCount: number
   totalLicenses: number
   ownerLicenseFee: number
   staffLicenseFee: number
   totalLicenseFee: number
-  allCases: Case[] // All cases for this client (will be filtered by month)
+  allCases: Case[] // All cases for this agency (will be filtered by month)
 }
 
 interface BillingItem extends BaseBillingItem {
@@ -74,7 +70,7 @@ interface BillingContentProps {
   baseBillingData: BaseBillingItem[]
   selectedMonth: number
   selectedYear: number
-  activeClients: number
+  activeAgencies: number
   ownerLicenseRate: number
   staffLicenseRate: number
   licenseTypes: LicenseType[]
@@ -84,7 +80,7 @@ export default function BillingContent({
   baseBillingData,
   selectedMonth: initialMonth,
   selectedYear: initialYear,
-  activeClients,
+  activeAgencies,
   ownerLicenseRate,
   staffLicenseRate,
   licenseTypes
@@ -92,7 +88,7 @@ export default function BillingContent({
   const router = useRouter()
   const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
-  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
+  const [expandedAgencies, setExpandedAgencies] = useState<Set<string>>(new Set())
   // Use local state for month/year so changes don't trigger server reload
   const [selectedMonth, setSelectedMonth] = useState(initialMonth)
   const [selectedYear, setSelectedYear] = useState(initialYear)
@@ -235,21 +231,21 @@ export default function BillingContent({
   const summary = useMemo(() => {
     const totalRevenue = billingData.reduce((sum, b) => sum + b.monthlyTotal, 0)
     const totalUserLicenses = billingData.reduce((sum, b) => sum + b.totalLicenses, 0)
-    const totalOwners = billingData.length
+    const totalOwners = billingData.reduce((sum, b) => sum + b.ownerCount, 0)
     const totalStaff = billingData.reduce((sum, b) => sum + b.staffCount, 0)
     const totalApplications = billingData.reduce((sum, b) => sum + b.applicationsCount, 0)
     const totalApplicationFees = billingData.reduce((sum, b) => sum + b.totalApplicationFee, 0)
 
     return {
       totalRevenue,
-      activeClients,
+      activeAgencies,
       totalUserLicenses,
       totalOwners,
       totalStaff,
       totalApplications,
       totalApplicationFees
     }
-  }, [billingData, activeClients])
+  }, [billingData, activeAgencies])
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -270,18 +266,18 @@ export default function BillingContent({
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
-  const getClientId = (clientId: string) => {
-    return `CL-${clientId.substring(0, 8).toUpperCase().replace(/-/g, '')}`
+  const getAgencyId = (agencyId: string) => {
+    return `AG-${agencyId.substring(0, 8).toUpperCase().replace(/-/g, '')}`
   }
 
-  const toggleClient = (clientId: string) => {
-    const newExpanded = new Set(expandedClients)
-    if (newExpanded.has(clientId)) {
-      newExpanded.delete(clientId)
+  const toggleAgency = (agencyId: string) => {
+    const newExpanded = new Set(expandedAgencies)
+    if (newExpanded.has(agencyId)) {
+      newExpanded.delete(agencyId)
     } else {
-      newExpanded.add(clientId)
+      newExpanded.add(agencyId)
     }
-    setExpandedClients(newExpanded)
+    setExpandedAgencies(newExpanded)
   }
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -326,13 +322,9 @@ export default function BillingContent({
   }
 
   const handleExportCSV = () => {
-    // Create CSV content
     const headers = [
-      'Client ID',
-      'Company Name',
-      'Contact Person',
-      'Contact Email',
-      'Contact Phone',
+      'Agency ID',
+      'Agency Name',
       'Owner Licenses',
       'Staff Licenses',
       'Total Licenses',
@@ -343,11 +335,8 @@ export default function BillingContent({
     ]
 
     const rows = filteredBillingData.map(item => [
-      getClientId(item.client.id),
-      item.client.company_name,
-      item.client.contact_name,
-      item.client.contact_email,
-      item.client.contact_phone || '',
+      getAgencyId(item.agency.id),
+      item.agency.name,
       item.ownerCount.toString(),
       item.staffCount.toString(),
       item.totalLicenses.toString(),
@@ -379,10 +368,8 @@ export default function BillingContent({
       if (!searchQuery) return true
       const query = searchQuery.toLowerCase()
       return (
-        item.client.company_name.toLowerCase().includes(query) ||
-        item.client.contact_name.toLowerCase().includes(query) ||
-        item.client.contact_email.toLowerCase().includes(query) ||
-        getClientId(item.client.id).toLowerCase().includes(query)
+        item.agency.name.toLowerCase().includes(query) ||
+        getAgencyId(item.agency.id).toLowerCase().includes(query)
       )
     })
   }, [billingData, searchQuery])
@@ -406,7 +393,7 @@ export default function BillingContent({
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Billing & Invoicing</h1>
           <p className="text-sm text-gray-600 mt-1">
-            View all clients and their license applications for invoicing
+            View all agencies and their license applications for invoicing
           </p>
         </div>
         <button
@@ -475,9 +462,9 @@ export default function BillingContent({
             </div>
           </div>
           <div className="text-2xl font-bold text-gray-900 mb-1">
-            {summary.activeClients}
+            {summary.activeAgencies}
           </div>
-          <div className="text-sm text-gray-600">Total clients</div>
+          <div className="text-sm text-gray-600">Total agencies</div>
         </div>
 
         <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
@@ -527,7 +514,7 @@ export default function BillingContent({
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
-            placeholder="Search by client name, business name, or client ID..."
+            placeholder="Search by agency name or agency ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white"
@@ -535,22 +522,22 @@ export default function BillingContent({
         </div>
       </div>
 
-      {/* Client List */}
+      {/* Agency List */}
       <div className="space-y-4">
         {filteredBillingData.length > 0 ? (
           filteredBillingData.map((item) => {
-            const isExpanded = expandedClients.has(item.client.id)
-            const clientId = getClientId(item.client.id)
+            const isExpanded = expandedAgencies.has(item.agency.id)
+            const agencyId = getAgencyId(item.agency.id)
 
             return (
               <div
-                key={item.client.id}
+                key={item.agency.id}
                 className="bg-white rounded-xl p-6 shadow-md border border-gray-100"
               >
-                {/* Client Header - Clickable to expand/collapse */}
+                {/* Agency Header - Clickable to expand/collapse */}
                 <div 
                   className="flex items-start justify-between cursor-pointer hover:bg-gray-50 -m-6 p-6 rounded-t-xl transition-colors"
-                  onClick={() => toggleClient(item.client.id)}
+                  onClick={() => toggleAgency(item.agency.id)}
                 >
                   <div className="flex items-start gap-4 flex-1">
                     <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -559,18 +546,14 @@ export default function BillingContent({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="text-lg font-bold text-gray-900">
-                          {item.client.company_name}
+                          {item.agency.name}
                         </h3>
                         <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-                          {clientId}
+                          {agencyId}
                         </span>
                       </div>
-                      <div className="text-sm text-gray-600 mb-1">
-                        {item.client.contact_name}
-                      </div>
                       <div className="text-sm text-gray-600">
-                        {item.client.contact_email}
-                        {item.client.contact_phone && ` (${item.client.contact_phone})`}
+                        {item.ownerCount} agency admin{item.ownerCount !== 1 ? 's' : ''}, {item.staffCount} staff
                       </div>
                     </div>
                   </div>
@@ -583,7 +566,7 @@ export default function BillingContent({
                         {item.totalLicenses}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {item.ownerCount}O / {item.staffCount}S + {formatCurrency(item.totalLicenseFee)}/mo
+                        {item.ownerCount}A / {item.staffCount}C + {formatCurrency(item.totalLicenseFee)}/mo
                       </div>
                     </div>
                     <div className="text-right">
@@ -708,7 +691,7 @@ export default function BillingContent({
         ) : (
           <div className="bg-white rounded-xl p-12 text-center shadow-md border border-gray-100">
             <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No clients found</p>
+            <p className="text-gray-500 text-lg">No agencies found</p>
           </div>
         )}
       </div>

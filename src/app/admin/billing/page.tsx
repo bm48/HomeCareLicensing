@@ -24,44 +24,39 @@ export default async function BillingPage({
   const now = new Date()
   const selectedMonth = params.month ? parseInt(params.month) : now.getMonth() + 1
   const selectedYear = params.year ? parseInt(params.year) : now.getFullYear()
-  const selectedDate = new Date(selectedYear, selectedMonth - 1, 1)
 
-  // Get all clients
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('*')
-    .order('company_name', { ascending: true })
+  // Get all agencies
+  const { data: agencies } = await supabase
+    .from('agencies')
+    .select('id, name, agency_admin_ids')
+    .order('name', { ascending: true })
 
-  if (!clients) {
+  if (!agencies) {
     return (
       <AdminLayout 
         user={user} 
         profile={profile} 
         unreadNotifications={unreadNotifications || 0}
       >
-        <div>Error loading clients</div>
+        <div>Error loading agencies</div>
       </AdminLayout>
     )
   }
 
-  // Get all staff members grouped by client
-  const clientIds = clients.map(c => c.id)
-  const { data: staffMembers } = clientIds.length > 0 ? await supabase
+  // Get all staff members grouped by agency
+  const { data: staffMembers } = await supabase
     .from('staff_members')
     .select('*')
-    .in('company_owner_id', clientIds)
-    .eq('status', 'active') : { data: [] }
+    .not('agency_id', 'is', null)
+    .eq('status', 'active')
 
-  // Group staff by client
-  type StaffMember = { id: string; company_owner_id: string | null; [key: string]: any }
-  const staffByClient: Record<string, StaffMember[]> = {}
+  type StaffMember = { id: string; agency_id: string | null; [key: string]: any }
+  const staffByAgency: Record<string, StaffMember[]> = {}
   if (staffMembers) {
     staffMembers.forEach(staff => {
-      if (staff && staff.company_owner_id) {
-        if (!staffByClient[staff.company_owner_id]) {
-          staffByClient[staff.company_owner_id] = []
-        }
-        staffByClient[staff.company_owner_id].push(staff)
+      if (staff?.agency_id) {
+        if (!staffByAgency[staff.agency_id]) staffByAgency[staff.agency_id] = []
+        staffByAgency[staff.agency_id].push(staff)
       }
     })
   }
@@ -72,8 +67,6 @@ export default async function BillingPage({
     .select('*')
     .order('started_date', { ascending: false })
 
-  // Group ALL cases by client (will be filtered by month on client side)
-  // Case type matches BillingContent interface
   type Case = {
     id: string
     case_id: string
@@ -90,10 +83,8 @@ export default async function BillingPage({
   const allCasesByClient: Record<string, Case[]> = {}
   if (allCases) {
     allCases.forEach(c => {
-      if (c && c.client_id) {
-        if (!allCasesByClient[c.client_id]) {
-          allCasesByClient[c.client_id] = []
-        }
+      if (c?.client_id) {
+        if (!allCasesByClient[c.client_id]) allCasesByClient[c.client_id] = []
         allCasesByClient[c.client_id].push(c as Case)
       }
     })
@@ -105,55 +96,42 @@ export default async function BillingPage({
     .select('*')
     .eq('is_active', true)
 
-  // Create a map of license type name + state to cost
-  const licenseTypeFeeMap: Record<string, number> = {}
-  licenseTypes?.forEach(lt => {
-    const key = `${lt.state}_${lt.name}`
-    // Parse cost from cost_display (e.g., "$500" -> 500)
-    const costMatch = lt.cost_display?.replace(/[^0-9.]/g, '')
-    const cost = costMatch ? parseFloat(costMatch) : (lt.cost_min || 0)
-    licenseTypeFeeMap[key] = cost
-  })
-
   // Get pricing that was effective for the selected month
-  // This ensures billing history is preserved when pricing changes
   const { getPricingForMonth } = await import('@/app/actions/pricing')
   const pricingResult = await getPricingForMonth(selectedYear, selectedMonth)
   const pricingData = pricingResult.data
-
   const ownerLicenseRate = pricingData?.owner_admin_license || 0
   const staffLicenseRate = pricingData?.staff_license || 0
 
-  // Prepare base billing data (without month filtering - will be done client-side)
-  // License fees are constant per client, only application fees change by month
-  const baseBillingData = clients.map(client => {
-    const staff = staffByClient[client.id] || []
-    const allClientCases = allCasesByClient[client.id] || []
-    
-    // Count owners (1 per client) and staff
-    const ownerCount = 1
+  // Build billing data per agency: owner count = agency admins (clients) in agency, staff = staff in agency, cases = all cases for those clients
+  const baseBillingData = agencies.map(agency => {
+    const adminIds = (agency.agency_admin_ids as string[] | null) || []
+    const staff = staffByAgency[agency.id] || []
+    const allAgencyCases: Case[] = []
+    adminIds.forEach(cid => {
+      (allCasesByClient[cid] || []).forEach(c => allAgencyCases.push(c))
+    })
+
+    const ownerCount = adminIds.length
     const staffCount = staff.length
     const totalLicenses = ownerCount + staffCount
-    
-    // Calculate license fees (constant, doesn't depend on month)
     const ownerLicenseFee = ownerCount * ownerLicenseRate
     const staffLicenseFee = staffCount * staffLicenseRate
     const totalLicenseFee = ownerLicenseFee + staffLicenseFee
 
     return {
-      client,
+      agency: { id: agency.id, name: agency.name ?? '' },
       ownerCount,
       staffCount,
       totalLicenses,
       ownerLicenseFee,
       staffLicenseFee,
       totalLicenseFee,
-      allCases: allClientCases // Pass all cases, will be filtered client-side
+      allCases: allAgencyCases
     }
   })
 
-  // Calculate active clients (constant)
-  const activeClients = clients.filter(c => c.status === 'active').length
+  const activeAgencies = agencies.length
 
   return (
     <AdminLayout 
@@ -165,7 +143,7 @@ export default async function BillingPage({
         baseBillingData={baseBillingData}
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
-        activeClients={activeClients}
+        activeAgencies={activeAgencies}
         ownerLicenseRate={ownerLicenseRate}
         staffLicenseRate={staffLicenseRate}
         licenseTypes={licenseTypes || []}

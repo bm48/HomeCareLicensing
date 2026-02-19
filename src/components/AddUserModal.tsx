@@ -9,9 +9,10 @@ interface AddUserModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess?: () => void
+  agencies?: { id: string; name: string }[]
 }
 
-export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModalProps) {
+export default function AddUserModal({ isOpen, onClose, onSuccess, agencies = [] }: AddUserModalProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,8 +22,11 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'company_owner'
+    role: 'company_owner' as CreateUserRole,
+    agency_id: ''
   })
+
+  const showAgencyField = formData.role === 'company_owner' || formData.role === 'staff_member'
 
   if (!isOpen) return null
 
@@ -43,12 +47,19 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
       return
     }
 
+    if (showAgencyField && !formData.agency_id?.trim()) {
+      setError('Please select an agency.')
+      setIsLoading(false)
+      return
+    }
+
     try {
       const result = await createUserAccount(
         formData.email,
         formData.password,
         formData.full_name,
-        formData.role as CreateUserRole
+        formData.role,
+        showAgencyField ? formData.agency_id.trim() || null : null
       )
 
       if (result.error) {
@@ -57,7 +68,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
         return
       }
 
-      setFormData({ full_name: '', email: '', password: '', confirmPassword: '', role: 'company_owner' })
+      setFormData({ full_name: '', email: '', password: '', confirmPassword: '', role: 'company_owner', agency_id: '' })
       onSuccess?.()
       router.refresh()
       onClose()
@@ -145,6 +156,29 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
               <option value="expert">Expert</option>
             </select>
           </div>
+
+          {showAgencyField && (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Agency <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="agency_id"
+                value={formData.agency_id}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                required
+              >
+                <option value="">Select an agency</option>
+                {agencies.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              {agencies.length === 0 && (
+                <p className="mt-1 text-sm text-amber-600">No agencies available. Create one under Admin → Agencies first.</p>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 mt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-white border rounded-lg">Cancel</button>

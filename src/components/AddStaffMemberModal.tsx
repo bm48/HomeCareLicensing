@@ -65,10 +65,11 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         return
       }
 
-      // Get client record for the current user (company_owner_id now references clients.id)
+      // Get client record for the current user (company_owner_id now references clients.id).
+      // Include agency_id so new caregivers are assigned to the same agency when added by an agency admin.
       const { data: client, error: clientError } = await supabase
         .from('clients')
-        .select('id')
+        .select('id, agency_id')
         .eq('company_owner_id', user.id)
         .single()
 
@@ -121,12 +122,13 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
 
       console.log('Creating staff member with userId:', userIdToUse, 'for client:', client.id)
 
-      // Create the staff member using client.id as company_owner_id
-      // Link the user_id - this is required for staff members to access their dashboard
+      // Create the staff member using client.id as company_owner_id and client.agency_id so the
+      // caregiver is assigned to the same agency when added by an agency admin.
       const { data: staffMember, error: insertError } = await supabase
         .from('staff_members')
         .insert({
           company_owner_id: client.id,
+          agency_id: client.agency_id ?? null,
           user_id: userIdToUse, // Must not be null and must be a valid UUID
           first_name: data.first_name,
           last_name: data.last_name,
