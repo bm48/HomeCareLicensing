@@ -31,8 +31,8 @@ interface ProfileFormProps {
 }
 
 const ROLE_OPTIONS = [
-  { value: 'company_owner', label: 'Company Owner' },
-  { value: 'staff_member', label: 'Staff Member' },
+  { value: 'company_owner', label: 'Agency Admin' },
+  { value: 'staff_member', label: 'Caregiver' },
   { value: 'admin', label: 'Admin' },
   { value: 'expert', label: 'Expert' },
 ]

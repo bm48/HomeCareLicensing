@@ -130,7 +130,7 @@ async function ensureRoleTableRow(
         first_name: firstName,
         last_name: lastName,
         email: normalizedEmail,
-        role: 'Staff Member',
+        role: 'Caregiver',
         status: 'active',
       })
     }
@@ -286,7 +286,7 @@ export async function createUserAccount(
           first_name: firstName,
           last_name: lastName,
           email: normalizedEmail,
-          role: 'Staff Member',
+          role: 'Caregiver',
           status: 'active',
         })
       if (staffError) {

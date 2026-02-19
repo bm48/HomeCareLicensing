@@ -146,7 +146,7 @@ export default function EditStaffModal({ isOpen, onClose, staff, onSuccess }: Ed
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Edit Staff Member" size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Edit Caregiver" size="lg">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
@@ -340,7 +340,7 @@ export default function EditStaffModal({ isOpen, onClose, staff, onSuccess }: Ed
                 Updating...
               </>
             ) : (
-              'Update Staff Member'
+              'Update Caregiver'
             )}
           </button>
         </div>

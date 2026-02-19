@@ -179,7 +179,7 @@ export default function StaffManagementClient({
       if (error) {
         // Revert the toggle on error
         e.target.checked = !e.target.checked
-        alert(`Failed to ${action} staff member: ` + error.message)
+        alert(`Failed to ${action} caregiver: ` + error.message)
         return
       }
 
@@ -187,7 +187,7 @@ export default function StaffManagementClient({
     } catch (err: any) {
       // Revert the toggle on error
       e.target.checked = !e.target.checked
-      alert(`Failed to ${action} staff member: ` + err.message)
+      alert(`Failed to ${action} caregiver: ` + err.message)
     }
   }
 
@@ -289,7 +289,7 @@ export default function StaffManagementClient({
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Staff Member</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Caregiver</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Role</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
@@ -404,8 +404,8 @@ export default function StaffManagementClient({
         {staffMembers.length === 0 ? (
           <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
             <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No staff members yet</h3>
-            <p className="text-gray-600 mb-6">Get started by adding your first staff member</p>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No caregivers yet</h3>
+            <p className="text-gray-600 mb-6">Get started by adding your first caregiver</p>
             <button
               onClick={() => setIsAddModalOpen(true)}
               className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
@@ -417,7 +417,7 @@ export default function StaffManagementClient({
         ) : filteredStaffMembers.length === 0 ? (
           <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
             <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No staff members found</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No careigvers found</h3>
             <p className="text-gray-600 mb-6">Try adjusting your search or filter criteria</p>
             <button
               onClick={() => {
