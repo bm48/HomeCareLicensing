@@ -79,16 +79,27 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         return
       }
 
-      // Generate password from last name: {lastName}123!
-      // Example: "john" -> "john123!"
+      // Get agency name for the invite email (Supabase template can use {{ .Data.agency_name }})
+      let agencyName = ''
+      if (client.agency_id) {
+        const { data: agency } = await supabase
+          .from('agencies')
+          .select('name')
+          .eq('id', client.agency_id)
+          .single()
+        agencyName = agency?.name ?? ''
+      }
+
+      // Generate password from last name: Lastname!123 (e.g. "Doe" -> "doe123!")
       const password = `${data.last_name.toLowerCase().trim()}123!`
 
-      // Create user account with password and send login link
+      // Create user account with password and send login link (agencyName/temporary_password go to user_metadata for email template)
       const result = await createStaffUserAccount(
         data.email,
         password,
         data.first_name,
-        data.last_name
+        data.last_name,
+        agencyName || undefined
       )
 
       console.log('createStaffUserAccount result:', result)

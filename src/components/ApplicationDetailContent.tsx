@@ -2023,9 +2023,9 @@ export default function ApplicationDetailContent({
                                 <FileText className="w-6 h-6 text-gray-400 mt-1" />
                                 <div className="flex-1">
                                   <div className="font-medium text-gray-900 mb-1">{doc.document_name}</div>
-                                  {doc.description && (
+                                  {/* {doc.description && (
                                     <div className="text-sm text-gray-600 mb-2">{doc.description}</div>
-                                  )}
+                                  )} */}
                                   <div className="text-sm text-gray-500">
                                     {doc.document_type || 'Document'} • Uploaded {formatDate(doc.created_at)}
                                   </div>
@@ -2190,9 +2190,9 @@ export default function ApplicationDetailContent({
                             </div>
                           </div>
                         </div>
-                        {step.description && (
+                        {/* {step.description && (
                             <div className="text-sm text-gray-600 mb-2">{step.description}</div>
-                        )}
+                        )} */}
                         <div className="flex gap-2">
                           <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
                             Licensing
@@ -2511,15 +2511,15 @@ export default function ApplicationDetailContent({
                 )}
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 w-full">
                 {Object.entries(expertStepsByPhase).map(([phaseName, steps]) => (
-                  <div key={phaseName}>
+                  <div key={phaseName} className='w-full'>
                     <div className="text-sm font-semibold text-gray-700 mb-2">{phaseName}</div>
-                    <div className="space-y-3">
+                    <div className="space-y-3 w-full">
                       {steps.map((step) => (
                         <div
                           key={step.id}
-                          className={`flex items-start gap-3 p-4 border rounded-lg ${
+                          className={`flex items-start gap-3 p-4 border rounded-lg w-full ${
                             step.is_completed
                               ? 'bg-green-50 border-green-200'
                               : 'bg-gray-50 border-gray-200'
@@ -2553,12 +2553,19 @@ export default function ApplicationDetailContent({
                               </>
                             )}
                           </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-900 mb-1">{step.phase}</div>
-                            {step.description && (
-                              <div className="text-sm text-gray-600 mb-2">{step.step_name}</div>
-                            )}
-                            <div className="text-xs text-gray-500">Step {step.step_order}</div>
+                          <div className="grid grid-cols-2 gap-2 w-full grid-cols-[30%_70%]">
+                            <div>
+                              <div className="font-medium text-gray-900 mb-1">{step.phase}</div>
+                              {step.description && (
+                                <div className="text-sm text-gray-600 mb-2">{step.step_name}</div>
+                              )}
+                              <div className="text-xs text-gray-500">Step {step.step_order}</div>
+                              </div>
+                              <div>
+                                {step.description && (
+                                  <div className="text-sm text-gray-600 mb-2">{step.description}</div>
+                                )}
+                              </div>
                           </div>
                         </div>
                       ))}

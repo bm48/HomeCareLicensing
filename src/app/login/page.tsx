@@ -145,17 +145,17 @@ function LoginPageContent() {
         return
       }
 
-      console.log('authData.session', authData.session)
       if (authData.session) {
         // Get user profile to check role
+        console.log("authData.session: ",authData.session)
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('role')
           .eq('id', authData.user.id)
           .single()
+        // Refresh so middleware and server components see the new session
+        router.refresh()
         // Redirect based on role
-        console.log('profile', profile)
-        console.log('profile?.role', profile?.role)
         if (profile?.role === 'admin') {
           router.push('/admin')
         } else if (profile?.role === 'staff_member') {
@@ -163,7 +163,9 @@ function LoginPageContent() {
         } else {
           router.push('/dashboard')
         }
-        // router.refresh()
+
+        
+        console.log("authData.session after redirect: ",authData.session)
       }
     } catch (err) {
       const isNetworkError =

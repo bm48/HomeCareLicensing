@@ -31,26 +31,37 @@ export interface StaffRosterReportRow {
   staff_name: string
   email: string
   phone: string
-  total_certifications: number
+  role: string
+  job_title: string
+  status: string
 }
 
 export async function getStaffCertificationsReport() {
   const supabase = await createClient()
 
   try {
-    // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
     if (authError || !user) {
       return { error: 'You must be logged in', data: null }
     }
 
-    // Get all staff members for this company owner
+    // Agency admin: staff_members.company_owner_id is clients.id — get client for current user first
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('company_owner_id', user.id)
+      .single()
+
+    if (!client?.id) {
+      return { error: null, data: [] }
+    }
+
+    // All caregivers (all statuses) so we show all certifications
     const { data: staffMembers, error: staffError } = await supabase
       .from('staff_members')
       .select('id, first_name, last_name, email, phone, user_id')
-      .eq('company_owner_id', user.id)
-      .eq('status', 'active')
+      .eq('company_owner_id', client.id)
+      .order('first_name', { ascending: true })
 
     if (staffError) {
       return { error: staffError.message, data: null }
@@ -60,7 +71,6 @@ export async function getStaffCertificationsReport() {
       return { error: null, data: [] }
     }
 
-    // Get user_ids from staff members
     const userIds = staffMembers
       .map(sm => sm.user_id)
       .filter((id): id is string => id !== null)
@@ -136,19 +146,28 @@ export async function getExpiringCertificationsReport() {
   const supabase = await createClient()
 
   try {
-    // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
     if (authError || !user) {
       return { error: 'You must be logged in', data: null }
     }
 
-    // Get all staff members for this company owner
+    // Agency admin: staff_members.company_owner_id is clients.id — get client for current user first
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('company_owner_id', user.id)
+      .single()
+
+    if (!client?.id) {
+      return { error: null, data: [] }
+    }
+
+    // All caregivers (all statuses) so we include all their certifications
     const { data: staffMembers, error: staffError } = await supabase
       .from('staff_members')
       .select('id, first_name, last_name, email, phone, user_id')
-      .eq('company_owner_id', user.id)
-      .eq('status', 'active')
+      .eq('company_owner_id', client.id)
+      .order('first_name', { ascending: true })
 
     if (staffError) {
       return { error: staffError.message, data: null }
@@ -158,7 +177,6 @@ export async function getExpiringCertificationsReport() {
       return { error: null, data: [] }
     }
 
-    // Get user_ids from staff members
     const userIds = staffMembers
       .map(sm => sm.user_id)
       .filter((id): id is string => id !== null)
@@ -236,19 +254,26 @@ export async function getStaffRosterReport() {
   const supabase = await createClient()
 
   try {
-    // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
     if (authError || !user) {
       return { error: 'You must be logged in', data: null }
     }
 
-    // Get all staff members for this company owner
+    // Agency admin: staff_members.company_owner_id references clients.id — get client for current user first
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('company_owner_id', user.id)
+      .single()
+
+    if (!client?.id) {
+      return { error: null, data: [] }
+    }
+
     const { data: staffMembers, error: staffError } = await supabase
       .from('staff_members')
-      .select('id, first_name, last_name, email, phone, user_id')
-      .eq('company_owner_id', user.id)
-      .eq('status', 'active')
+      .select('id, first_name, last_name, email, phone, role, job_title, status')
+      .eq('company_owner_id', client.id)
       .order('first_name', { ascending: true })
 
     if (staffError) {
@@ -259,40 +284,14 @@ export async function getStaffRosterReport() {
       return { error: null, data: [] }
     }
 
-    // Get user_ids from staff members
-    const userIds = staffMembers
-      .map(sm => sm.user_id)
-      .filter((id): id is string => id !== null)
-
-    // Get certification counts for each user
-    const certificationCounts = new Map<string, number>()
-    
-    if (userIds.length > 0) {
-      const { data: certifications } = await supabase
-        .from('certifications')
-        .select('user_id')
-        .in('user_id', userIds)
-
-      if (certifications) {
-        certifications.forEach(cert => {
-          const count = certificationCounts.get(cert.user_id) || 0
-          certificationCounts.set(cert.user_id, count + 1)
-        })
-      }
-    }
-
-    // Build report data
-    const reportData: StaffRosterReportRow[] = staffMembers.map(staff => {
-      const staffName = `${staff.first_name} ${staff.last_name}`
-      const certCount = staff.user_id ? (certificationCounts.get(staff.user_id) || 0) : 0
-
-      return {
-        staff_name: staffName,
-        email: staff.email,
-        phone: staff.phone || 'N/A',
-        total_certifications: certCount
-      }
-    })
+    const reportData: StaffRosterReportRow[] = staffMembers.map(staff => ({
+      staff_name: `${staff.first_name} ${staff.last_name}`,
+      email: staff.email,
+      phone: staff.phone || 'N/A',
+      role: staff.role || '—',
+      job_title: staff.job_title || '—',
+      status: staff.status || '—'
+    }))
 
     return { error: null, data: reportData }
   } catch (err: any) {

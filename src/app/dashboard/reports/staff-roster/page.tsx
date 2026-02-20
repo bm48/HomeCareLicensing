@@ -34,12 +34,14 @@ export default async function StaffRosterReportPage() {
   const result = await getStaffRosterReport()
   const reportData = result.data || []
 
-  // Prepare CSV data
+  // Prepare CSV data (caregiver list)
   const csvData = reportData.map(row => ({
-    'Staff Name': row.staff_name,
+    'Caregiver Name': row.staff_name,
     'Email': row.email,
     'Phone': row.phone,
-    'Total Certifications': row.total_certifications
+    'Role': row.role,
+    'Job Title': row.job_title,
+    'Status': row.status
   }))
 
   return (
@@ -64,7 +66,7 @@ export default async function StaffRosterReportPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Staff Roster Report</h1>
               <p className="text-gray-600">
-                Complete staff directory with contact information
+                Caregiver list with contact and role information
               </p>
             </div>
             <DownloadCSVButton 
@@ -77,16 +79,18 @@ export default async function StaffRosterReportPage() {
             </DownloadCSVButton>
           </div>
 
-          {/* Report Table */}
+          {/* Caregiver list table */}
           {reportData.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Staff Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Caregiver Name</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Phone</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Total Certifications</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Job Title</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -95,7 +99,9 @@ export default async function StaffRosterReportPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.staff_name}</td>
                       <td className="px-4 py-4 text-sm text-gray-600">{row.email}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{row.phone}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{row.total_certifications}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{row.role}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{row.job_title}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{row.status}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -103,7 +109,7 @@ export default async function StaffRosterReportPage() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-600">No staff data available</p>
+              <p className="text-gray-600">No caregivers in your roster</p>
             </div>
           )}
         </div>

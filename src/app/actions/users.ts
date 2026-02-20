@@ -479,7 +479,8 @@ export async function createStaffUserAccount(
   email: string,
   password: string,
   firstName: string,
-  lastName: string
+  lastName: string,
+  agencyName?: string
 ) {
   // Use admin client for user creation so the current user's session is NEVER overwritten.
   // signUp() with the cookie-based client would set the new user's session and log out the agency admin.
@@ -496,6 +497,14 @@ export async function createStaffUserAccount(
   }
   const supabaseCookie = await createClient()
 
+  // For Supabase Magic Link email template: {{ .Data.agency_name }} and {{ .Data.temporary_password }}
+  const userMetadata: Record<string, string> = {
+    full_name: `${firstName} ${lastName}`,
+    role: 'staff_member',
+    agency_name: agencyName ?? 'Your Agency',
+    temporary_password: password,
+  }
+
   try {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
     const normalizedEmail = email.toLowerCase().trim()
@@ -505,10 +514,7 @@ export async function createStaffUserAccount(
       email: normalizedEmail,
       password,
       email_confirm: true,
-      user_metadata: {
-        full_name: `${firstName} ${lastName}`,
-        role: 'staff_member',
-      },
+      user_metadata: userMetadata,
     })
 
     let userId: string | null = null
@@ -527,6 +533,9 @@ export async function createStaffUserAccount(
           .single()
 
         userId = existingProfile?.id || null
+
+        // Update existing user metadata so Magic Link email template has agency_name and temporary_password
+        await supabaseAdmin.auth.admin.updateUserById(userId!, { user_metadata: userMetadata })
 
         // Send magic link using cookie client (only sends email; does not set session)
         const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
