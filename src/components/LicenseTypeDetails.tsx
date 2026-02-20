@@ -3148,9 +3148,9 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                             </div>
                             <div className="flex-1 min-w-0">
                               <h4 className="font-semibold text-gray-900 mb-1">{step.phase ?? 'No Phase'}</h4>
-                              {/* {step.description && (
-                                <p className="text-sm text-gray-600">{step.description}</p>
-                              )} */}
+                              {step.description && (
+                                <p className="text-sm text-gray-600 pl-4">{step.description}</p>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <button
