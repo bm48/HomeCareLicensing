@@ -38,7 +38,7 @@ export default async function ClientsPage() {
 
   // Get all clients for this owner
   const { data: clients } = await supabase
-    .from('small_clients')
+    .from('patients')
     .select('*')
     .eq('owner_id', session.user.id)
     .order('created_at', { ascending: false })

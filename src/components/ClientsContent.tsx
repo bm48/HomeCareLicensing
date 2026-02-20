@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Users, CheckCircle2, FileText, Plus, Search, Eye } from 'lucide-react'
+import { Users, CheckCircle2, FileText, Plus, Search, Eye, Loader2 } from 'lucide-react'
 import AddNewClientModal from './AddNewClientModal'
 
 interface SmallClient {
@@ -37,6 +37,7 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'All Status' | 'active' | 'inactive'>('All Status')
   const [clients, setClients] = useState(initialClients)
+  const [navigatingClientId, setNavigatingClientId] = useState<string | null>(null)
 
   // Sync state with props when data refreshes
   useEffect(() => {
@@ -94,7 +95,7 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
       const supabase = createClient()
       
       const { error } = await supabase
-        .from('small_clients')
+        .from('patients')
         .update({ status: newStatus })
         .eq('id', clientId)
 
@@ -282,13 +283,28 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
                         </span>
                       </label>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <Link 
-                        href={`/dashboard/clients/${client.id}`}
-                        className="text-blue-600 hover:text-blue-800 font-medium"
+                    <td className="px-6 py-4 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNavigatingClientId(client.id)
+                          router.push(`/dashboard/clients/${client.id}`)
+                        }}
+                        disabled={navigatingClientId !== null}
+                        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium disabled:opacity-70 disabled:cursor-not-allowed"
                       >
-                        View Details
-                      </Link>
+                        {navigatingClientId === client.id ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-4 h-4" />
+                            View Details
+                          </>
+                        )}
+                      </button>
                     </td>
                   </tr>
                 ))

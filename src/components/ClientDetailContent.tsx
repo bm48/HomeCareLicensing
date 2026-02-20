@@ -94,7 +94,7 @@ export default function ClientDetailContent({ client, allClients }: ClientDetail
     try {
       const supabase = createClient()
       const { error } = await supabase
-        .from('small_clients')
+        .from('patients')
         .update({ status: newStatus })
         .eq('id', client.id)
 

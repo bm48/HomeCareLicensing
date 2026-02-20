@@ -12,7 +12,7 @@ interface AddNewClientModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess?: () => void
-  /** When 'agency_admin', form targets clients table (company/contact fields). When 'care_recipient', targets small_clients. */
+  /** When 'agency_admin', form targets clients table (company/contact fields). When 'care_recipient', targets patients. */
   mode?: AddNewClientModalMode
 }
 
@@ -110,7 +110,7 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
         return
       }
 
-      // care_recipient: small_clients
+      // care_recipient: patients
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -120,7 +120,7 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
       }
 
       const { error: insertError } = await supabase
-        .from('small_clients')
+        .from('patients')
         .insert({
           owner_id: user.id,
           full_name: formData.full_name,
@@ -611,7 +611,7 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
               ) : (
                 <>
                   <Plus className="w-4 h-4" />
-                  Add Agency Admin
+                  Add Client
                 </>
               )}
             </button>

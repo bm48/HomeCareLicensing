@@ -43,7 +43,7 @@ export default async function ClientDetailPage({
 
   // Get the current client
   const { data: client } = await supabase
-    .from('small_clients')
+    .from('patients')
     .select('*')
     .eq('id', id)
     .eq('owner_id', session.user.id)
@@ -55,7 +55,7 @@ export default async function ClientDetailPage({
 
   // Get all clients for navigation
   const { data: allClients } = await supabase
-    .from('small_clients')
+    .from('patients')
     .select('id, full_name')
     .eq('owner_id', session.user.id)
     .order('full_name', { ascending: true })
