@@ -7,6 +7,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Home Care Licensing - Your complete licensing management platform',
   description: 'Your complete licensing management platform',
+  icons: {
+    icon: '/home.png',
+  },
 }
 
 export default function RootLayout({
