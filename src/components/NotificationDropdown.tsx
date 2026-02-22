@@ -110,6 +110,25 @@ export default function NotificationDropdown({
   }
 
 
+  // Helper: fetch unread notification items for admin/expert/owner (used in all paths so dropdown is never empty)
+  const fetchUnreadNotificationItems = async (): Promise<AdminNotificationItem[]> => {
+    if (!userId || (userRole !== 'admin' && userRole !== 'expert' && userRole !== 'company_owner')) return []
+    const { data: notificationRows } = await supabase
+      .from('notifications')
+      .select('id, title, type, created_at')
+      .eq('user_id', userId)
+      .eq('is_read', false)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    const allItems = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
+      id: n.id,
+      title: n.title,
+      type: n.type,
+      created_at: n.created_at
+    }))
+    return allItems.filter(n => !(n.type === 'general' && n.title === 'New Message'))
+  }
+
   // Optimized: Single query with aggregation using query builder
   const fetchApplicationsWithUnread = useCallback(async () => {
     if (!userRole) return
@@ -149,31 +168,16 @@ export default function NotificationDropdown({
         return
       }
 
+      // For admin/expert/owner, fetch notifications once so every path can show them (avoids empty dropdown on any error)
+      let notificationItems: AdminNotificationItem[] = []
+      if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
+        notificationItems = await fetchUnreadNotificationItems()
+      }
+
       if (applicationIds.length === 0) {
-        if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
-          // Admin, expert, or owner with no conversations: fetch unread notifications (exclude message notifs - they go in unread messages only)
-          const { data: notificationRows } = await supabase
-            .from('notifications')
-            .select('id, title, type, created_at')
-            .eq('user_id', userId)
-            .eq('is_read', false)
-            .order('created_at', { ascending: false })
-            .limit(20)
-          const allItems = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
-            id: n.id,
-            title: n.title,
-            type: n.type,
-            created_at: n.created_at
-          }))
-          const nonMessageItems = allItems.filter(n => !(n.type === 'general' && n.title === 'New Message'))
-          setAdminNotifications(nonMessageItems)
-          setApplications([])
-          setUnreadCount(nonMessageItems.length)
-        } else {
-          setApplications([])
-          setAdminNotifications([])
-          setUnreadCount(0)
-        }
+        setApplications([])
+        setAdminNotifications(notificationItems)
+        setUnreadCount(notificationItems.length)
         setIsLoading(false)
         lastFetchRef.current = Date.now()
         return
@@ -192,7 +196,8 @@ export default function NotificationDropdown({
       if (convError) {
         console.error('Error fetching conversations:', convError)
         setApplications([])
-        setUnreadCount(0)
+        setAdminNotifications(notificationItems)
+        setUnreadCount(notificationItems.length)
         setIsLoading(false)
         lastFetchRef.current = Date.now()
         return
@@ -200,7 +205,8 @@ export default function NotificationDropdown({
 
       if (!conversations || conversations.length === 0) {
         setApplications([])
-        setUnreadCount(0)
+        setAdminNotifications(notificationItems)
+        setUnreadCount(notificationItems.length)
         setIsLoading(false)
         lastFetchRef.current = Date.now()
         return
@@ -213,7 +219,8 @@ export default function NotificationDropdown({
       if (!userId || !Array.isArray(conversationIds) || conversationIds.length === 0) {
         console.warn('Invalid inputs for RPC call in fetchApplicationsWithUnread:', { userId, conversationIds: conversationIds.length })
         setApplications([])
-        setUnreadCount(0)
+        setAdminNotifications(notificationItems)
+        setUnreadCount(notificationItems.length)
         setIsLoading(false)
         return
       }
@@ -235,7 +242,8 @@ export default function NotificationDropdown({
           userId
         })
         setApplications([])
-        setUnreadCount(0)
+        setAdminNotifications(notificationItems)
+        setUnreadCount(notificationItems.length)
         setIsLoading(false)
         return
       }
@@ -280,29 +288,8 @@ export default function NotificationDropdown({
 
       setApplications(appNotifications)
       let totalUnread = appNotifications.reduce((sum, app) => sum + app.unread_count, 0)
-
-      // For admin, expert, owner: fetch unread notifications for first box only (exclude message notifications - those appear in unread messages box)
-      if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
-        const { data: notificationRows } = await supabase
-          .from('notifications')
-          .select('id, title, type, created_at')
-          .eq('user_id', userId)
-          .eq('is_read', false)
-          .order('created_at', { ascending: false })
-          .limit(20)
-        const allItems = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
-          id: n.id,
-          title: n.title,
-          type: n.type,
-          created_at: n.created_at
-        }))
-        const nonMessageItems = allItems.filter(n => !(n.type === 'general' && n.title === 'New Message'))
-        setAdminNotifications(nonMessageItems)
-        totalUnread += nonMessageItems.length
-      } else {
-        setAdminNotifications([])
-      }
-
+      setAdminNotifications(notificationItems)
+      totalUnread += notificationItems.length
       setUnreadCount(totalUnread)
       lastFetchRef.current = Date.now()
     } catch (err) {
