@@ -3033,14 +3033,42 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Pre-Application Steps */}
-                {expertSteps.filter(s => s.phase === 'Pre-Application' || s.phase === 'Pre-Application Steps').length > 0 && (
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Pre-Application Steps:</h4>
-                    <div className="space-y-3">
-                      {expertSteps
-                        .filter(s => s.phase === 'Pre-Application' || s.phase === 'Pre-Application Steps')
-                        .map((step, index) => (
+                {(() => {
+                  // Group steps by phase (display all phases; no hardcoded filter)
+                  const phaseOrder = [
+                    'Pre-Application',
+                    'Pre-Application Steps',
+                    'Client Intake',
+                    'Application Preparation',
+                    'Application Submission',
+                    'Survey Preparation',
+                    'Survey Guidance',
+                    'Post-Application',
+                    'Post-Application Steps',
+                  ]
+                  const byPhase = new Map<string, Step[]>()
+                  for (const step of expertSteps) {
+                    const phase = step.phase?.trim() || 'Other'
+                    if (!byPhase.has(phase)) byPhase.set(phase, [])
+                    byPhase.get(phase)!.push(step)
+                  }
+                  // Sort steps within each phase by step_order
+                  Array.from(byPhase.values()).forEach((steps) => {
+                    steps.sort((a, b) => (a.step_order ?? 0) - (b.step_order ?? 0))
+                  })
+                  const orderedPhases = Array.from(byPhase.keys()).sort((a: string, b: string) => {
+                    const i = phaseOrder.indexOf(a)
+                    const j = phaseOrder.indexOf(b)
+                    if (i !== -1 && j !== -1) return i - j
+                    if (i !== -1) return -1
+                    if (j !== -1) return 1
+                    return a.localeCompare(b)
+                  })
+                  return orderedPhases.map((phase) => (
+                    <div key={phase}>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">{phase}:</h4>
+                      <div className="space-y-3">
+                        {(byPhase.get(phase) ?? []).map((step, index) => (
                           <div
                             key={step.id}
                             className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -3073,107 +3101,10 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                             </div>
                           </div>
                         ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Post-Application Steps */}
-                {expertSteps.filter(s => s.phase === 'Post-Application' || s.phase === 'Post-Application Steps').length > 0 && (
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Post-Application Steps:</h4>
-                    <div className="space-y-3">
-                      {expertSteps
-                        .filter(s => s.phase === 'Post-Application' || s.phase === 'Post-Application Steps')
-                        .map((step, index) => (
-                          <div
-                            key={step.id}
-                            className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-sm font-semibold text-white">{index + 1}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
-                              {step.description && (
-                                <p className="text-sm text-gray-600">{step.description}</p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <button
-                                onClick={() => handleEditExpertStep(step)}
-                                className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                                title="Edit expert step"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteExpertStep(step)}
-                                disabled={isSubmitting}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                                title="Delete expert step"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Other phases */}
-                {expertSteps.filter(s => 
-                  s.phase !== 'Pre-Application' && 
-                  s.phase !== 'Pre-Application Steps' &&
-                  s.phase !== 'Post-Application' && 
-                  s.phase !== 'Post-Application Steps'
-                ).length > 0 && (
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Other Steps:</h4>
-                    <div className="space-y-3">
-                      {expertSteps
-                        .filter(s => 
-                          s.phase !== 'Pre-Application' && 
-                          s.phase !== 'Pre-Application Steps' &&
-                          s.phase !== 'Post-Application' && 
-                          s.phase !== 'Post-Application Steps'
-                        )
-                        .map((step, index) => (
-                          <div
-                            key={step.id}
-                            className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-sm font-semibold text-white">{index + 1}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-gray-900 mb-1">{step.phase ?? 'No Phase'}</h4>
-                              {step.description && (
-                                <p className="text-sm text-gray-600 pl-4">{step.description}</p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <button
-                                onClick={() => handleEditExpertStep(step)}
-                                className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                                title="Edit expert step"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteExpertStep(step)}
-                                disabled={isSubmitting}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                                title="Delete expert step"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
+                  ))
+                })()}
               </div>
             )}
           </div>
