@@ -3,7 +3,15 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
+import {
+  copyExpertStepsFromRequirementToApplication,
+  getAllLicenseRequirements,
+  getExpertStepsFromRequirement,
+  getAllExpertStepsWithRequirementInfo,
+  copySelectedExpertStepsFromRequirementToApplication,
+  copyExpertStepsFromApplicationStepsToApplication,
+  type ExpertStepWithRequirementInfo,
+} from '@/app/actions/license-requirements'
 import {
   FileText,
   Download,
@@ -146,12 +154,32 @@ export default function ApplicationDetailContent({
   const [expertSteps, setExpertSteps] = useState<Step[]>([])
   const [isLoadingExpertSteps, setIsLoadingExpertSteps] = useState(false)
   const [showExpertStepForm, setShowExpertStepForm] = useState(false)
-  const [expertStepFormData, setExpertStepFormData] = useState({ stepName: '', description: '' })
+  const [expertStepFormData, setExpertStepFormData] = useState({ stepName: '', description: '', phase: 'Pre-Application' })
   const [editingExpertStep, setEditingExpertStep] = useState<string | null>(null)
   const [isSubmittingExpertStep, setIsSubmittingExpertStep] = useState(false)
   const [showAddExpertStepModal, setShowAddExpertStepModal] = useState(false)
   const [addExpertStepModalTab, setAddExpertStepModalTab] = useState<'new' | 'copy' | 'browse'>('new')
+  // Copy from Another License (expert steps)
+  const [availableLicenseRequirements, setAvailableLicenseRequirements] = useState<Array<{ id: string; state: string; license_type: string }>>([])
+  const [selectedSourceRequirementId, setSelectedSourceRequirementId] = useState('')
+  const [availableExpertSteps, setAvailableExpertSteps] = useState<Step[]>([])
+  const [selectedExpertStepIds, setSelectedExpertStepIds] = useState<Set<string>>(new Set())
+  const [isLoadingCopyData, setIsLoadingCopyData] = useState(false)
+  const [expertStepsCopyError, setExpertStepsCopyError] = useState<string | null>(null)
+  // Browse All Expert Steps
+  const [browseExpertStepsSearch, setBrowseExpertStepsSearch] = useState('')
+  const [allBrowseExpertSteps, setAllBrowseExpertSteps] = useState<ExpertStepWithRequirementInfo[]>([])
+  const [selectedBrowseExpertStepIds, setSelectedBrowseExpertStepIds] = useState<Set<string>>(new Set())
+  const [isLoadingBrowseExpertSteps, setIsLoadingBrowseExpertSteps] = useState(false)
+  const [browseExpertStepsError, setBrowseExpertStepsError] = useState<string | null>(null)
   const [togglingExpertStepId, setTogglingExpertStepId] = useState<string | null>(null)
+  // List selection and copy to another application (same as admin)
+  const [selectedListExpertStepIds, setSelectedListExpertStepIds] = useState<Set<string>>(new Set())
+  const [showCopyExpertStepsModal, setShowCopyExpertStepsModal] = useState(false)
+  const [availableApplications, setAvailableApplications] = useState<Array<{ id: string; application_name: string; state: string }>>([])
+  const [selectedTargetApplicationId, setSelectedTargetApplicationId] = useState('')
+  const [isLoadingApplications, setIsLoadingApplications] = useState(false)
+  const [isCopyingExpertSteps, setIsCopyingExpertSteps] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
@@ -519,7 +547,8 @@ export default function ApplicationDetailContent({
               description: step.description,
               is_completed: step.is_completed,
               is_expert_step: true,
-              created_by_expert_id: step.created_by_expert_id
+              created_by_expert_id: step.created_by_expert_id,
+              phase: step.phase ?? null,
             })))
             return
           }
@@ -533,7 +562,8 @@ export default function ApplicationDetailContent({
         description: step.description,
         is_completed: step.is_completed,
         is_expert_step: true,
-        created_by_expert_id: step.created_by_expert_id
+        created_by_expert_id: step.created_by_expert_id,
+        phase: step.phase ?? null,
       })))
     } catch (error) {
       console.error('Error fetching expert steps:', error)
@@ -549,37 +579,212 @@ export default function ApplicationDetailContent({
     }
   }, [activeTab, fetchExpertSteps])
 
-  // Group expert steps by phase for rendering
-  const expertStepsByPhase = useMemo(() => {
-    console.log("expertSteps: ",expertSteps)
-    let temp = expertSteps
-    // temp = [...temp].sort((a, b) =>
-    //   a.phase.localeCompare(b.phase)
-    // );
-    const grouped: Record<string, Step[]> = {}
-    temp.forEach((s: any) => {
-      const phaseKey = s.phase ?? 'General'
-      if (!grouped[phaseKey]) grouped[phaseKey] = []
-      grouped[phaseKey].push(s)
-    })
-    // sort steps within each phase by step_order
-    Object.keys(grouped).forEach((k) => {
-      grouped[k].sort((a, b) => (a.step_order ?? 0) - (b.step_order ?? 0))
-    })
-    console.log('expertStepsByPhase', grouped)
-    return grouped
-  }, [expertSteps])
-
   const openAddExpertStepModal = () => {
     setShowAddExpertStepModal(true)
     setAddExpertStepModalTab('new')
-    setExpertStepFormData({ stepName: '', description: '' })
+    setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
+    setExpertStepsCopyError(null)
+    setBrowseExpertStepsError(null)
   }
 
   const closeAddExpertStepModal = () => {
     setShowAddExpertStepModal(false)
     setAddExpertStepModalTab('new')
-    setExpertStepFormData({ stepName: '', description: '' })
+    setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
+    setAvailableExpertSteps([])
+    setSelectedExpertStepIds(new Set())
+    setSelectedSourceRequirementId('')
+    setBrowseExpertStepsSearch('')
+    setAllBrowseExpertSteps([])
+    setSelectedBrowseExpertStepIds(new Set())
+    setExpertStepsCopyError(null)
+    setBrowseExpertStepsError(null)
+  }
+
+  const loadCopyExpertStepsData = async () => {
+    setSelectedSourceRequirementId('')
+    setAvailableExpertSteps([])
+    setSelectedExpertStepIds(new Set())
+    setExpertStepsCopyError(null)
+    setIsLoadingCopyData(true)
+    try {
+      const result = await getAllLicenseRequirements()
+      if (result.error) {
+        setExpertStepsCopyError(result.error)
+      } else {
+        setAvailableLicenseRequirements(result.data ?? [])
+      }
+    } catch (err) {
+      setExpertStepsCopyError(err instanceof Error ? err.message : 'Failed to load license requirements')
+    } finally {
+      setIsLoadingCopyData(false)
+    }
+  }
+
+  const handleSourceRequirementChangeForExpertSteps = async (reqId: string) => {
+    setSelectedSourceRequirementId(reqId)
+    setSelectedExpertStepIds(new Set())
+    if (!reqId) {
+      setAvailableExpertSteps([])
+      return
+    }
+    setIsLoadingCopyData(true)
+    try {
+      const result = await getExpertStepsFromRequirement(reqId)
+      if (result.error) {
+        setExpertStepsCopyError(result.error)
+        setAvailableExpertSteps([])
+      } else {
+        setAvailableExpertSteps(result.data ?? [])
+      }
+    } catch (err) {
+      setExpertStepsCopyError(err instanceof Error ? err.message : 'Failed to load expert steps')
+      setAvailableExpertSteps([])
+    } finally {
+      setIsLoadingCopyData(false)
+    }
+  }
+
+  const toggleExpertStepSelection = (stepId: string) => {
+    const next = new Set(selectedExpertStepIds)
+    if (next.has(stepId)) next.delete(stepId)
+    else next.add(stepId)
+    setSelectedExpertStepIds(next)
+  }
+
+  const handleCopyExpertStepsFromRequirement = async () => {
+    if (!application.id || selectedExpertStepIds.size === 0) return
+    setIsSubmittingExpertStep(true)
+    setExpertStepsCopyError(null)
+    try {
+      const result = await copySelectedExpertStepsFromRequirementToApplication(
+        application.id,
+        selectedSourceRequirementId,
+        Array.from(selectedExpertStepIds)
+      )
+      if (result.error) {
+        setExpertStepsCopyError(result.error)
+      } else {
+        closeAddExpertStepModal()
+        await fetchExpertSteps()
+      }
+    } catch (err) {
+      setExpertStepsCopyError(err instanceof Error ? err.message : 'Failed to copy expert steps')
+    } finally {
+      setIsSubmittingExpertStep(false)
+    }
+  }
+
+  const loadBrowseExpertStepsData = async () => {
+    setBrowseExpertStepsSearch('')
+    setSelectedBrowseExpertStepIds(new Set())
+    setBrowseExpertStepsError(null)
+    setIsLoadingBrowseExpertSteps(true)
+    try {
+      const result = await getAllExpertStepsWithRequirementInfo(undefined)
+      if (result.error) {
+        setBrowseExpertStepsError(result.error)
+        setAllBrowseExpertSteps([])
+      } else {
+        setAllBrowseExpertSteps(result.data ?? [])
+      }
+    } catch (err) {
+      setBrowseExpertStepsError(err instanceof Error ? err.message : 'Failed to load expert steps')
+      setAllBrowseExpertSteps([])
+    } finally {
+      setIsLoadingBrowseExpertSteps(false)
+    }
+  }
+
+  const filteredBrowseExpertSteps = useMemo(() => {
+    if (!browseExpertStepsSearch.trim()) return allBrowseExpertSteps
+    const q = browseExpertStepsSearch.toLowerCase()
+    return allBrowseExpertSteps.filter(
+      (s) =>
+        s.step_name.toLowerCase().includes(q) ||
+        (s.description?.toLowerCase().includes(q) ?? false) ||
+        (s.phase?.toLowerCase().includes(q) ?? false) ||
+        s.state.toLowerCase().includes(q) ||
+        s.license_type.toLowerCase().includes(q)
+    )
+  }, [allBrowseExpertSteps, browseExpertStepsSearch])
+
+  const toggleBrowseExpertStepSelection = (stepId: string) => {
+    const next = new Set(selectedBrowseExpertStepIds)
+    if (next.has(stepId)) next.delete(stepId)
+    else next.add(stepId)
+    setSelectedBrowseExpertStepIds(next)
+  }
+
+  const handleAddBrowseExpertSteps = async () => {
+    if (!application.id || selectedBrowseExpertStepIds.size === 0) return
+    setIsSubmittingExpertStep(true)
+    setBrowseExpertStepsError(null)
+    try {
+      const result = await copyExpertStepsFromApplicationStepsToApplication(
+        application.id,
+        Array.from(selectedBrowseExpertStepIds)
+      )
+      if (result.error) {
+        setBrowseExpertStepsError(result.error)
+      } else {
+        closeAddExpertStepModal()
+        await fetchExpertSteps()
+      }
+    } catch (err) {
+      setBrowseExpertStepsError(err instanceof Error ? err.message : 'Failed to add expert steps')
+    } finally {
+      setIsSubmittingExpertStep(false)
+    }
+  }
+
+  const toggleExpertStepSelectionInList = (stepId: string) => {
+    setSelectedListExpertStepIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(stepId)) next.delete(stepId)
+      else next.add(stepId)
+      return next
+    })
+  }
+
+  const handleCopyExpertStepsToApplication = async (targetApplicationId: string) => {
+    if (selectedListExpertStepIds.size === 0 || !targetApplicationId || isCopyingExpertSteps) return
+    setIsCopyingExpertSteps(true)
+    try {
+      const stepsToCopy = expertSteps.filter((step) => selectedListExpertStepIds.has(step.id))
+      if (stepsToCopy.length === 0) {
+        alert('Please select at least one expert step to copy')
+        setIsCopyingExpertSteps(false)
+        return
+      }
+      const { data: existingSteps } = await supabase
+        .from('application_steps')
+        .select('step_order')
+        .eq('application_id', targetApplicationId)
+        .eq('is_expert_step', true)
+        .order('step_order', { ascending: false })
+        .limit(1)
+      let nextOrder = existingSteps?.length ? existingSteps[0].step_order + 1 : 1
+      const stepsToInsert = stepsToCopy.map((step) => ({
+        application_id: targetApplicationId,
+        step_name: step.step_name,
+        step_order: nextOrder++,
+        description: step.description ?? null,
+        phase: step.phase ?? null,
+        is_expert_step: true,
+        is_completed: false,
+        created_by_expert_id: currentUserId ?? null,
+      }))
+      const { error: insertError } = await supabase.from('application_steps').insert(stepsToInsert)
+      if (insertError) throw insertError
+      alert(`Successfully copied ${stepsToCopy.length} expert step(s)`)
+      setSelectedListExpertStepIds(new Set())
+    } catch (error: any) {
+      console.error('Error copying expert steps:', error)
+      alert('Failed to copy expert steps: ' + (error?.message || 'Unknown error'))
+    } finally {
+      setIsCopyingExpertSteps(false)
+    }
   }
 
   // Handle expert step operations
@@ -613,6 +818,7 @@ export default function ApplicationDetailContent({
           step_name: expertStepFormData.stepName.trim(),
           step_order: nextOrder,
           description: expertStepFormData.description.trim() || null,
+          phase: expertStepFormData.phase || null,
           is_expert_step: true,
           created_by_expert_id: currentUserId,
           is_completed: false
@@ -621,7 +827,7 @@ export default function ApplicationDetailContent({
       if (insertError) throw insertError
 
       // Reset form, close modal, and refresh
-      setExpertStepFormData({ stepName: '', description: '' })
+      setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
       setShowExpertStepForm(false)
       closeAddExpertStepModal()
       await fetchExpertSteps()
@@ -663,7 +869,8 @@ export default function ApplicationDetailContent({
     setEditingExpertStep(step.id)
     setExpertStepFormData({
       stepName: step.step_name,
-      description: step.description || ''
+      description: step.description || '',
+      phase: step.phase || 'Pre-Application'
     })
     setShowExpertStepForm(true)
   }
@@ -678,14 +885,15 @@ export default function ApplicationDetailContent({
         .from('application_steps')
         .update({
           step_name: expertStepFormData.stepName.trim(),
-          description: expertStepFormData.description.trim() || null
+          description: expertStepFormData.description.trim() || null,
+          phase: expertStepFormData.phase || null
         })
         .eq('id', editingExpertStep)
 
       if (error) throw error
 
       // Reset form and refresh
-      setExpertStepFormData({ stepName: '', description: '' })
+      setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
       setEditingExpertStep(null)
       setShowExpertStepForm(false)
       await fetchExpertSteps()
@@ -2303,26 +2511,50 @@ export default function ApplicationDetailContent({
 
       {activeTab === 'expert-process' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Expert Process Steps</h2>
+              <h2 className="text-xl font-bold text-gray-900">Expert Process Steps</h2>
               {currentUserRole === 'expert' && (
-                <button
-                  onClick={openAddExpertStepModal}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Step
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openAddExpertStepModal}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Step
+                  </button>
+                  {selectedListExpertStepIds.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsLoadingApplications(true)
+                        setShowCopyExpertStepsModal(true)
+                        const { data: allApplications } = await supabase
+                          .from('applications')
+                          .select('id, application_name, state')
+                          .neq('id', application.id)
+                          .order('created_at', { ascending: false })
+                          .limit(100)
+                        if (allApplications) setAvailableApplications(allApplications)
+                        setIsLoadingApplications(false)
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy Selected ({selectedListExpertStepIds.size})
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Add Step modal with 3 tabs (same as admin side) */}
+            {/* Add Expert Step modal with 3 tabs: New, Copy from Another License, Browse All Steps (same as admin) */}
             {currentUserRole === 'expert' && (
               <Modal
                 isOpen={showAddExpertStepModal}
                 onClose={closeAddExpertStepModal}
-                title="Add Step"
+                title="Add Expert Step"
                 size="xl"
               >
                 <div className="flex flex-col gap-4">
@@ -2341,7 +2573,10 @@ export default function ApplicationDetailContent({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAddExpertStepModalTab('copy')}
+                      onClick={() => {
+                        setAddExpertStepModalTab('copy')
+                        if (availableLicenseRequirements.length === 0) loadCopyExpertStepsData()
+                      }}
                       className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
                         addExpertStepModalTab === 'copy'
                           ? 'border-blue-600 text-blue-600'
@@ -2353,7 +2588,10 @@ export default function ApplicationDetailContent({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAddExpertStepModalTab('browse')}
+                      onClick={() => {
+                        setAddExpertStepModalTab('browse')
+                        if (allBrowseExpertSteps.length === 0 && !isLoadingBrowseExpertSteps) loadBrowseExpertStepsData()
+                      }}
                       className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-colors -mb-px ${
                         addExpertStepModalTab === 'browse'
                           ? 'border-blue-600 text-blue-600'
@@ -2370,7 +2608,21 @@ export default function ApplicationDetailContent({
                       <h4 className="text-base font-semibold text-gray-900 mb-4">Create New Expert Step</h4>
                       <form onSubmit={handleAddExpertStep} className="space-y-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Step Name</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
+                          <select
+                            value={expertStepFormData.phase}
+                            onChange={(e) => setExpertStepFormData({ ...expertStepFormData, phase: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="Pre-Application">Pre-Application</option>
+                            <option value="Post-Application">Post-Application</option>
+                            <option value="Application">Application</option>
+                            <option value="Review">Review</option>
+                            <option value="Post-Approval">Post-Approval</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Step Title</label>
                           <input
                             type="text"
                             value={expertStepFormData.stepName}
@@ -2387,26 +2639,17 @@ export default function ApplicationDetailContent({
                             onChange={(e) => setExpertStepFormData({ ...expertStepFormData, description: e.target.value })}
                             placeholder="Detailed description of this step"
                             rows={3}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         </div>
                         <div className="flex gap-3 pt-2">
                           <button
                             type="submit"
                             disabled={isSubmittingExpertStep}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                           >
-                            {isSubmittingExpertStep ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="w-4 h-4" />
-                                Save Step
-                              </>
-                            )}
+                            {isSubmittingExpertStep ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                            Save Step
                           </button>
                           <button
                             type="button"
@@ -2421,82 +2664,179 @@ export default function ApplicationDetailContent({
                   )}
 
                   {addExpertStepModalTab === 'copy' && (
-                    <div className="py-6 text-center text-gray-500">
-                      <Copy className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                      <p className="font-medium">Copy from Another License</p>
-                      <p className="text-sm mt-1">This feature is coming soon for Expert Process steps.</p>
+                    <div className="py-2 space-y-4">
+                      <h4 className="text-base font-semibold text-gray-900">Select License Type to Copy From</h4>
+                      <select
+                        value={selectedSourceRequirementId}
+                        onChange={(e) => handleSourceRequirementChangeForExpertSteps(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isLoadingCopyData}
+                      >
+                        <option value="">Select a license type...</option>
+                        {availableLicenseRequirements.map((req) => (
+                          <option key={req.id} value={req.id}>
+                            {req.state} - {req.license_type}
+                          </option>
+                        ))}
+                      </select>
+                      {expertStepsCopyError && (
+                        <p className="text-sm text-red-600">{expertStepsCopyError}</p>
+                      )}
+                      {selectedSourceRequirementId && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Select Expert Steps to Copy ({selectedExpertStepIds.size} selected)
+                          </label>
+                          <div className="border border-gray-300 rounded-lg max-h-[300px] overflow-y-auto bg-white">
+                            {isLoadingCopyData ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                              </div>
+                            ) : availableExpertSteps.length === 0 ? (
+                              <div className="text-center py-8 text-gray-500">
+                                <p>No expert steps available for this license type</p>
+                              </div>
+                            ) : (
+                              <div className="divide-y divide-gray-200">
+                                {availableExpertSteps.map((step) => (
+                                  <label
+                                    key={step.id}
+                                    className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedExpertStepIds.has(step.id)}
+                                      onChange={() => toggleExpertStepSelection(step.id)}
+                                      className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {step.step_order}. {step.step_name}
+                                      </span>
+                                      {step.phase && (
+                                        <span className="ml-2 text-xs text-gray-500">({step.phase})</span>
+                                      )}
+                                      {step.description && (
+                                        <p className="text-sm text-gray-600 mt-0.5">{step.description}</p>
+                                      )}
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex gap-3 pt-2 border-t border-gray-200">
+                        <button
+                          type="button"
+                          onClick={handleCopyExpertStepsFromRequirement}
+                          disabled={isSubmittingExpertStep || selectedExpertStepIds.size === 0 || isLoadingCopyData}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Copy className="w-4 h-4" />
+                          Copy {selectedExpertStepIds.size} {selectedExpertStepIds.size === 1 ? 'Step' : 'Steps'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeAddExpertStepModal}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   )}
 
                   {addExpertStepModalTab === 'browse' && (
-                    <div className="py-6 text-center text-gray-500">
-                      <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                      <p className="font-medium">Browse All Expert Steps</p>
-                      <p className="text-sm mt-1">This feature is coming soon.</p>
+                    <div className="py-2 flex flex-col gap-4 max-h-[60vh]">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Search Expert Steps</label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            value={browseExpertStepsSearch}
+                            onChange={(e) => setBrowseExpertStepsSearch(e.target.value)}
+                            placeholder="Search by title, description, phase, state, or license type..."
+                            className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Select Expert Steps to Add ({selectedBrowseExpertStepIds.size} selected)
+                      </p>
+                      {browseExpertStepsError && (
+                        <p className="text-sm text-red-600">{browseExpertStepsError}</p>
+                      )}
+                      <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50/50">
+                        {isLoadingBrowseExpertSteps ? (
+                          <div className="flex items-center justify-center py-12">
+                            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                          </div>
+                        ) : filteredBrowseExpertSteps.length === 0 ? (
+                          <div className="text-center py-12 text-gray-500">
+                            <p className="text-sm">No expert steps found</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-gray-200 p-2">
+                            {filteredBrowseExpertSteps.map((step) => (
+                              <label
+                                key={step.id}
+                                className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer rounded-lg"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedBrowseExpertStepIds.has(step.id)}
+                                  onChange={() => toggleBrowseExpertStepSelection(step.id)}
+                                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-gray-900">{step.step_name}</div>
+                                  {step.description && (
+                                    <p className="text-sm text-gray-600 mt-1">{step.description}</p>
+                                  )}
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {step.phase && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-100 text-xs text-blue-700">
+                                        {step.phase}
+                                      </span>
+                                    )}
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                      {step.state}
+                                    </span>
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-700">
+                                      {step.license_type}
+                                    </span>
+                                  </div>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-3 pt-2 border-t border-gray-200">
+                        <button
+                          type="button"
+                          onClick={handleAddBrowseExpertSteps}
+                          disabled={isSubmittingExpertStep || selectedBrowseExpertStepIds.size === 0 || isLoadingBrowseExpertSteps}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Copy className="w-4 h-4" />
+                          Copy {selectedBrowseExpertStepIds.size} {selectedBrowseExpertStepIds.size === 1 ? 'Step' : 'Steps'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeAddExpertStepModal}
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
               </Modal>
-            )}
-
-            {/* Edit Expert Step Form (inline when editing) */}
-            {showExpertStepForm && currentUserRole === 'expert' && editingExpertStep && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Expert Step</h3>
-                <form onSubmit={handleUpdateExpertStep} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Step Name</label>
-                    <input
-                      type="text"
-                      value={expertStepFormData.stepName}
-                      onChange={(e) => setExpertStepFormData({ ...expertStepFormData, stepName: e.target.value })}
-                      placeholder="e.g., Initial Client Consultation"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea
-                      value={expertStepFormData.description}
-                      onChange={(e) => setExpertStepFormData({ ...expertStepFormData, description: e.target.value })}
-                      placeholder="Detailed description of this step"
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    />
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="submit"
-                      disabled={isSubmittingExpertStep}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {isSubmittingExpertStep ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="w-4 h-4" />
-                          Save Step
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowExpertStepForm(false)
-                        setExpertStepFormData({ stepName: '', description: '' })
-                        setEditingExpertStep(null)
-                      }}
-                      className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              </div>
             )}
 
             {isLoadingExpertSteps ? (
@@ -2505,74 +2845,178 @@ export default function ApplicationDetailContent({
               </div>
             ) : expertSteps.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                <p className="text-sm">No expert process steps added yet</p>
-                {currentUserRole === 'expert' && (
-                  <p className="text-xs mt-1">Add steps to define your process for this application</p>
-                )}
+                <p className="text-sm">No expert process steps found</p>
+                <p className="text-xs mt-1">Expert steps added by the assigned expert will appear here</p>
               </div>
             ) : (
-              <div className="space-y-4 w-full">
-                {Object.entries(expertStepsByPhase).map(([phaseName, steps]) => (
-                  <div key={phaseName} className='w-full'>
-                    <div className="text-sm font-semibold text-gray-700 mb-2">{phaseName}</div>
-                    <div className="space-y-3 w-full">
-                      {steps.map((step) => (
-                        <div
-                          key={step.id}
-                          className={`flex items-start gap-3 p-4 border rounded-lg w-full ${
-                            step.is_completed
-                              ? 'bg-green-50 border-green-200'
-                              : 'bg-gray-50 border-gray-200'
-                          }`}
-                        >
-                          <div className="mt-1 flex-shrink-0">
-                            {currentUserRole === 'expert' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleExpertStepComplete(step)}
-                                disabled={togglingExpertStepId === step.id}
-                                className="p-0.5 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={step.is_completed ? 'Mark as not completed' : 'Mark as completed'}
-                                aria-label={step.is_completed ? 'Uncomplete step' : 'Complete step'}
-                              >
-                                {togglingExpertStepId === step.id ? (
-                                  <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
-                                ) : step.is_completed ? (
-                                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                                ) : (
-                                  <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
-                                )}
-                              </button>
-                            ) : (
-                              <>
-                                {step.is_completed ? (
-                                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                                ) : (
-                                  <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
-                                )}
-                              </>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 w-full grid-cols-[30%_70%]">
-                            <div>
-                              <div className="font-medium text-gray-900 mb-1">{step.phase}</div>
-                              {step.description && (
-                                <div className="text-sm text-gray-600 mb-2">{step.step_name}</div>
+              <div className="space-y-6">
+                {(() => {
+                  const phaseOrder = [
+                    'Pre-Application',
+                    'Pre-Application Steps',
+                    'Client Intake',
+                    'Application Preparation',
+                    'Application Submission',
+                    'Survey Preparation',
+                    'Survey Guidance',
+                    'Post-Application',
+                    'Post-Application Steps',
+                  ]
+                  const byPhase = new Map<string, Step[]>()
+                  for (const step of expertSteps) {
+                    const phase = step.phase?.trim() || 'Other'
+                    if (!byPhase.has(phase)) byPhase.set(phase, [])
+                    byPhase.get(phase)!.push(step)
+                  }
+                  Array.from(byPhase.values()).forEach((steps) => {
+                    steps.sort((a, b) => (a.step_order ?? 0) - (b.step_order ?? 0))
+                  })
+                  const orderedPhases = Array.from(byPhase.keys()).sort((a: string, b: string) => {
+                    const i = phaseOrder.indexOf(a)
+                    const j = phaseOrder.indexOf(b)
+                    if (i !== -1 && j !== -1) return i - j
+                    if (i !== -1) return -1
+                    if (j !== -1) return 1
+                    return a.localeCompare(b)
+                  })
+                  return orderedPhases.map((phase) => (
+                    <div key={phase}>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">{phase}:</h4>
+                      <div className="space-y-3">
+                        {(byPhase.get(phase) ?? []).map((step, index) => (
+                          <div
+                            key={step.id}
+                            className={`flex items-start gap-4 p-4 border rounded-lg transition-colors ${
+                              step.is_completed
+                                ? 'bg-green-50 border-green-200'
+                                : 'bg-white border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              {currentUserRole === 'expert' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleExpertStepComplete(step)}
+                                  disabled={togglingExpertStepId === step.id}
+                                  className="p-0.5 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={step.is_completed ? 'Mark as not completed' : 'Mark as completed'}
+                                  aria-label={step.is_completed ? 'Uncomplete step' : 'Complete step'}
+                                >
+                                  {togglingExpertStepId === step.id ? (
+                                    <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+                                  ) : step.is_completed ? (
+                                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                  ) : (
+                                    <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                                  )}
+                                </button>
+                              ) : (
+                                <>
+                                  {step.is_completed ? (
+                                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                  ) : (
+                                    <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                                  )}
+                                </>
                               )}
-                              <div className="text-xs text-gray-500">Step {step.step_order}</div>
+                              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                <span className="text-sm font-semibold text-white">{index + 1}</span>
                               </div>
-                              <div>
-                                {step.description && (
-                                  <div className="text-sm text-gray-600 mb-2">{step.description}</div>
-                                )}
-                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-gray-900 mb-1">{step.step_name}</h4>
+                              {step.description && (
+                                <p className="text-sm text-gray-600">{step.description}</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                })()}
               </div>
+            )}
+
+            {/* Copy Expert Steps to Another Application modal (same as admin) */}
+            {currentUserRole === 'expert' && (
+              <Modal
+                isOpen={showCopyExpertStepsModal}
+                onClose={() => {
+                  setShowCopyExpertStepsModal(false)
+                  setSelectedTargetApplicationId('')
+                }}
+                title="Copy Expert Steps to Another Application"
+                size="md"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Target Application
+                    </label>
+                    {isLoadingApplications ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                      </div>
+                    ) : availableApplications.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <p className="text-sm">No other applications found</p>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedTargetApplicationId}
+                        onChange={(e) => setSelectedTargetApplicationId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select an application...</option>
+                        {availableApplications.map((app) => (
+                          <option key={app.id} value={app.id}>
+                            {app.application_name} ({app.state})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
+                    <p className="font-medium mb-1">Selected Steps:</p>
+                    <p>{selectedListExpertStepIds.size} expert step(s) will be copied</p>
+                  </div>
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCopyExpertStepsModal(false)
+                        setSelectedTargetApplicationId('')
+                      }}
+                      className="px-6 py-2.5 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!selectedTargetApplicationId) {
+                          alert('Please select a target application')
+                          return
+                        }
+                        await handleCopyExpertStepsToApplication(selectedTargetApplicationId)
+                        setShowCopyExpertStepsModal(false)
+                        setSelectedTargetApplicationId('')
+                        setSelectedListExpertStepIds(new Set())
+                      }}
+                      disabled={isCopyingExpertSteps || !selectedTargetApplicationId}
+                      className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {isCopyingExpertSteps ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                      Copy Steps
+                    </button>
+                  </div>
+                </div>
+              </Modal>
             )}
           </div>
         </div>

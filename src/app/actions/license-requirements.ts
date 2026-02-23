@@ -983,3 +983,78 @@ export async function copyExpertSteps(targetRequirementId: string, sourceExpertS
   revalidatePath('/admin/license-requirements')
   return { error: null, data: inserted }
 }
+
+// Copy selected expert step templates from a license requirement into an application (for expert "Copy from Another License").
+export async function copySelectedExpertStepsFromRequirementToApplication(
+  applicationId: string,
+  requirementId: string,
+  stepIds: string[]
+): Promise<{ error: string | null }> {
+  if (!stepIds.length) return { error: 'No steps selected' }
+  const supabase = await createClient()
+  const { data: steps, error: fetchErr } = await supabase
+    .from('license_requirement_steps')
+    .select('step_name, step_order, description, phase')
+    .eq('license_requirement_id', requirementId)
+    .eq('is_expert_step', true)
+    .in('id', stepIds)
+    .order('step_order', { ascending: true })
+  if (fetchErr) return { error: fetchErr.message }
+  if (!steps?.length) return { error: 'No expert steps found' }
+  const { data: existing } = await supabase
+    .from('application_steps')
+    .select('step_order')
+    .eq('application_id', applicationId)
+    .eq('is_expert_step', true)
+    .order('step_order', { ascending: false })
+    .limit(1)
+  let nextOrder = existing?.length ? existing[0].step_order + 1 : 1
+  const rows = steps.map((s) => ({
+    application_id: applicationId,
+    step_name: s.step_name,
+    step_order: nextOrder++,
+    description: s.description ?? null,
+    phase: s.phase ?? null,
+    is_expert_step: true,
+    is_completed: false,
+  }))
+  const { error: insertErr } = await supabase.from('application_steps').insert(rows)
+  if (insertErr) return { error: insertErr.message }
+  return { error: null }
+}
+
+// Copy selected expert steps (from application_steps) into another application (for expert "Browse All Steps").
+export async function copyExpertStepsFromApplicationStepsToApplication(
+  applicationId: string,
+  sourceApplicationStepIds: string[]
+): Promise<{ error: string | null }> {
+  if (!sourceApplicationStepIds.length) return { error: 'No steps selected' }
+  const supabase = await createClient()
+  const { data: steps, error: fetchErr } = await supabase
+    .from('application_steps')
+    .select('step_name, step_order, description, phase')
+    .eq('is_expert_step', true)
+    .in('id', sourceApplicationStepIds)
+  if (fetchErr) return { error: fetchErr.message }
+  if (!steps?.length) return { error: 'No expert steps found' }
+  const { data: existing } = await supabase
+    .from('application_steps')
+    .select('step_order')
+    .eq('application_id', applicationId)
+    .eq('is_expert_step', true)
+    .order('step_order', { ascending: false })
+    .limit(1)
+  let nextOrder = existing?.length ? existing[0].step_order + 1 : 1
+  const rows = steps.map((s) => ({
+    application_id: applicationId,
+    step_name: s.step_name,
+    step_order: nextOrder++,
+    description: s.description ?? null,
+    phase: s.phase ?? null,
+    is_expert_step: true,
+    is_completed: false,
+  }))
+  const { error: insertErr } = await supabase.from('application_steps').insert(rows)
+  if (insertErr) return { error: insertErr.message }
+  return { error: null }
+}
