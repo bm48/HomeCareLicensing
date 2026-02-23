@@ -154,7 +154,7 @@ export default function ApplicationDetailContent({
   const [expertSteps, setExpertSteps] = useState<Step[]>([])
   const [isLoadingExpertSteps, setIsLoadingExpertSteps] = useState(false)
   const [showExpertStepForm, setShowExpertStepForm] = useState(false)
-  const [expertStepFormData, setExpertStepFormData] = useState({ stepName: '', description: '', phase: 'Pre-Application' })
+  const [expertStepFormData, setExpertStepFormData] = useState({ stepName: '', description: '', phase: 'Client Intake' })
   const [editingExpertStep, setEditingExpertStep] = useState<string | null>(null)
   const [isSubmittingExpertStep, setIsSubmittingExpertStep] = useState(false)
   const [showAddExpertStepModal, setShowAddExpertStepModal] = useState(false)
@@ -582,7 +582,7 @@ export default function ApplicationDetailContent({
   const openAddExpertStepModal = () => {
     setShowAddExpertStepModal(true)
     setAddExpertStepModalTab('new')
-    setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
+    setExpertStepFormData({ stepName: '', description: '', phase: 'Client Intake' })
     setExpertStepsCopyError(null)
     setBrowseExpertStepsError(null)
   }
@@ -590,7 +590,7 @@ export default function ApplicationDetailContent({
   const closeAddExpertStepModal = () => {
     setShowAddExpertStepModal(false)
     setAddExpertStepModalTab('new')
-    setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
+    setExpertStepFormData({ stepName: '', description: '', phase: 'Client Intake' })
     setAvailableExpertSteps([])
     setSelectedExpertStepIds(new Set())
     setSelectedSourceRequirementId('')
@@ -827,7 +827,7 @@ export default function ApplicationDetailContent({
       if (insertError) throw insertError
 
       // Reset form, close modal, and refresh
-      setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
+      setExpertStepFormData({ stepName: '', description: '', phase: 'Client Intake' })
       setShowExpertStepForm(false)
       closeAddExpertStepModal()
       await fetchExpertSteps()
@@ -893,7 +893,7 @@ export default function ApplicationDetailContent({
       if (error) throw error
 
       // Reset form and refresh
-      setExpertStepFormData({ stepName: '', description: '', phase: 'Pre-Application' })
+      setExpertStepFormData({ stepName: '', description: '', phase: 'Client Intake' })
       setEditingExpertStep(null)
       setShowExpertStepForm(false)
       await fetchExpertSteps()
@@ -2614,11 +2614,11 @@ export default function ApplicationDetailContent({
                             onChange={(e) => setExpertStepFormData({ ...expertStepFormData, phase: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
-                            <option value="Pre-Application">Pre-Application</option>
-                            <option value="Post-Application">Post-Application</option>
-                            <option value="Application">Application</option>
-                            <option value="Review">Review</option>
-                            <option value="Post-Approval">Post-Approval</option>
+                            <option value="Client Intake">Client Intake</option>
+                            <option value="Application Preparation">Application Preparation</option>
+                            <option value="Application Submission">Application Submission</option>
+                            <option value="Survey Preparation">Survey Preparation</option>
+                            <option value="Survey Guidance">Survey Guidance</option>
                           </select>
                         </div>
                         <div>
@@ -2852,8 +2852,6 @@ export default function ApplicationDetailContent({
               <div className="space-y-6">
                 {(() => {
                   const phaseOrder = [
-                    'Pre-Application',
-                    'Pre-Application Steps',
                     'Client Intake',
                     'Application Preparation',
                     'Application Submission',

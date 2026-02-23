@@ -540,7 +540,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setError(result.error)
       setIsSubmitting(false)
     } else {
-      setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+      setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
       setShowExpertForm(false)
       closeAddExpertStepModal()
       await loadData()
@@ -572,7 +572,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const handleEditExpertStep = (step: Step) => {
     setEditingExpertStep(step.id)
     setExpertFormData({
-      phase: step.phase || 'Pre-Application',
+      phase: step.phase || 'Client Intake',
       stepTitle: step.step_name,
       description: step.description || '',
     })
@@ -647,7 +647,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setError(result.error)
       setIsSubmitting(false)
     } else {
-      setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+      setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
       setShowExpertForm(false)
       setEditingExpertStep(null)
       await loadData()
@@ -1063,7 +1063,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     setShowAddExpertStepModal(false)
     setAddExpertStepModalTab('new')
     setShowExpertForm(false)
-    setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+    setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
     setAvailableExpertSteps([])
     setSelectedExpertStepIds(new Set())
     setBrowseExpertStepsSearch('')
@@ -1593,7 +1593,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                           type="text"
                           value={stepFormData.stepName}
                           onChange={(e) => setStepFormData({ ...stepFormData, stepName: e.target.value })}
-                          placeholder="e.g., Complete Pre-Application Training"
+                          placeholder="e.g., Complete Client Intake Training"
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           required
                         />
@@ -1854,7 +1854,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="text"
                       value={stepFormData.stepName}
                       onChange={(e) => setStepFormData({ ...stepFormData, stepName: e.target.value })}
-                      placeholder="e.g., Complete Pre-Application Training"
+                      placeholder="e.g., Complete Client Intake Training"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     />
@@ -2946,7 +2946,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 isOpen={!!editingExpertStep}
                 onClose={() => {
                   setEditingExpertStep(null)
-                  setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+                  setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
                   setShowExpertForm(false)
                   setError(null)
                 }}
@@ -2962,7 +2962,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     >
-                      <option value="Pre-Application">Pre-Application</option>
+                      <option value="Client Intake">Client Intake</option>
                       <option value="Post-Application">Post-Application</option>
                       <option value="Application">Application</option>
                       <option value="Review">Review</option>
@@ -3004,7 +3004,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="button"
                       onClick={() => {
                         setEditingExpertStep(null)
-                        setExpertFormData({ phase: 'Pre-Application', stepTitle: '', description: '' })
+                        setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
                         setShowExpertForm(false)
                         setError(null)
                       }}
@@ -3035,8 +3035,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 {(() => {
                   // Group steps by phase (display all phases; no hardcoded filter)
                   const phaseOrder = [
-                    'Pre-Application',
-                    'Pre-Application Steps',
                     'Client Intake',
                     'Application Preparation',
                     'Application Submission',
