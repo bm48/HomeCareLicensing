@@ -13,7 +13,7 @@ import {
   copyExpertStepsFromApplicationStepsToApplication,
   type ExpertStepWithRequirementInfo,
 } from '@/app/actions/license-requirements'
-import { EXPERT_STEP_PHASES, DEFAULT_EXPERT_STEP_PHASE, EXPERT_STEP_PHASE_ORDER } from '@/lib/expert-step-phase'
+import { EXPERT_STEP_PHASES, DEFAULT_EXPERT_STEP_PHASE } from '@/lib/constants'
 import {
   FileText,
   Download,
@@ -96,12 +96,12 @@ interface Step {
 interface ApplicationDetailContentProps {
   application: Application
   documents: Document[]
-  activeTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process'
-  onTabChange?: (tab:  'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process') => void
+  activeTab?: 'overview' | 'checklist' | 'documents' |  'next-steps' | 'requirements' | 'templates' | 'message' | 'expert-process'
+  onTabChange?: (tab:  'next-steps' | 'documents' | 'requirements' | 'templates' | 'message' | 'expert-process') => void
   showInlineTabs?: boolean // If true, show tabs under summary blocks instead of in sidebar
 }
 
-type TabType =  'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process'
+type TabType =  'next-steps' | 'documents' | 'requirements' | 'templates' | 'message' | 'expert-process'
 
 export default function ApplicationDetailContent({
   application,
@@ -2578,7 +2578,7 @@ export default function ApplicationDetailContent({
             ) : (
               <div className="space-y-6">
                 {(() => {
-                  const phaseOrder = EXPERT_STEP_PHASE_ORDER
+                  const phaseOrder = EXPERT_STEP_PHASES.map((p) => p.value)
                   const byPhase = new Map<string, Step[]>()
                   for (const step of expertSteps) {
                     const phase = step.phase?.trim() || 'Other'

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import LicenseTypesManager from '@/components/LicenseTypesManager'
 import LicenseTypeDetails from '@/components/LicenseTypeDetails'
 

@@ -76,8 +76,6 @@ export default function ManageLicensesModal({
         daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
       }
 
-      // Determine status for applications table
-      // Map to applications status: 'approved' for active licenses
       let status = 'approved'
       if (daysUntilExpiry !== null && daysUntilExpiry < 0) {
         status = 'rejected' // Use rejected to represent expired

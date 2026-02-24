@@ -3,11 +3,9 @@
 import { useState, useMemo } from 'react'
 import { Search, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import {
-  getCertificationTypes,
   createCertificationType,
   updateCertificationType,
   deleteCertificationType,
-  getStaffRoles,
   createStaffRole,
   updateStaffRole,
   deleteStaffRole

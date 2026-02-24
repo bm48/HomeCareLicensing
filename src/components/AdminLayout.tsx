@@ -6,12 +6,10 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, 
-  MessageSquare, 
   FileText, 
   DollarSign,
   UserCog,
   LogOut, 
-  Bell, 
   ChevronLeft,
   Menu,
   X,

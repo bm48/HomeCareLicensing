@@ -363,12 +363,9 @@ export default function LicensesContent({
 
   // Application statistics
   const requestedCount = applications?.filter(a => a.status === 'requested').length || 0
-  const cancelledCount = applications?.filter(a => a.status === 'cancelled').length || 0
   const inProgressCount = applications?.filter(a => a.status === 'in_progress').length || 0
   const underReviewCount = applications?.filter(a => a.status === 'under_review').length || 0
   const needsRevisionCount = applications?.filter(a => a.status === 'needs_revision').length || 0
-  const approvedCount = applications?.filter(a => a.status === 'approved').length || 0
-  const rejectedCount = applications?.filter(a => a.status === 'rejected').length || 0
 
   // Categorize applications
   const requestedApps = applications?.filter(a => a.status === 'requested') || []

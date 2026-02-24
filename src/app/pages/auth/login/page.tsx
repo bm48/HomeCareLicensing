@@ -19,12 +19,6 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
-// const DEMO_CREDENTIALS = [
-//   { role: 'Agency Admin', email: 'owner@demo.com', password: 'demo123', icon: User, color: 'bg-blue-500' },
-//   { role: 'Admin', email: 'admin@demo.com', password: 'demo123', icon: Shield, color: 'bg-purple-500' },
-//   { role: 'Caregiver', email: 'staff@demo.com', password: 'demo123', icon: RefreshCw, color: 'bg-green-500' },
-//   { role: 'Expert', email: 'expert@demo.com', password: 'demo123', icon: GraduationCap, color: 'bg-orange-500' },
-// ]
 
 function LoginPageContent() {
   const router = useRouter()
@@ -127,15 +121,11 @@ function LoginPageContent() {
     setError(null)
 
     try {
-      console.log('data.email', data.email)
-      console.log('data.password', data.password)
       const supabase = createClient()
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       })
-      console.log('authData', authData)
-      console.log('authError', authError)
       if (authError) {
         setError(
           authError.message?.toLowerCase().includes('invalid login credentials')
@@ -148,7 +138,6 @@ function LoginPageContent() {
 
       if (authData.session) {
         // Get user profile to check role
-        console.log("authData.session: ",authData.session)
         const { data: profile } = await q.getUserProfileRoleById(supabase, authData.user.id)
         // Refresh so middleware and server components see the new session
         router.refresh()
@@ -161,8 +150,6 @@ function LoginPageContent() {
           router.push('/pages/agency')
         }
 
-        
-        console.log("authData.session after redirect: ",authData.session)
       }
     } catch (err) {
       const isNetworkError =
@@ -176,52 +163,6 @@ function LoginPageContent() {
       setIsLoading(false)
     }
   }
-
-  // const handleQuickAccess = async (email: string, password: string) => {
-  //   console.log('email', email)
-  //   console.log('password', password)
-  //   setValue('email', email)
-  //   setValue('password', password)
-    
-  //   setIsLoading(true)
-  //   setError(null)
-
-  //   try {
-  //     const supabase = createClient()
-  //     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-  //       email,
-  //       password,
-  //     })
-
-  //     if (authError) {
-  //       setError(authError.message)
-  //       setIsLoading(false)
-  //       return
-  //     }
-
-  //     if (authData.session) {
-  //       // Get user profile to check role
-  //       const { data: profile } = await supabase
-  //         .from('user_profiles')
-  //         .select('role')
-  //         .eq('id', authData.user.id)
-  //         .single()
-        
-  //       // Redirect based on role
-  //       if (profile?.role === 'admin') {
-  //         router.push('/pages/admin')
-  //       } else if (profile?.role === 'staff_member') {
-  //         router.push('/pages/caregiver')
-  //       } else {
-  //         router.push('/pages/agency')
-  //       }
-  //       router.refresh()
-  //     }
-  //   } catch (err) {
-  //     setError('An unexpected error occurred. Please try again.')
-  //     setIsLoading(false)
-  //   }
-  // }
 
   return (
     <div 

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { Mail, Lock, FileText, Bot } from 'lucide-react'
+import { Mail, Lock, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const resetSchema = z.object({

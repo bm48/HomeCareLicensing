@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
 import { useRouter } from 'next/navigation'
 import { createAgencyAdminAccount } from '@/app/actions/users'
+import { US_STATES } from '@/lib/constants'
 
 type AddNewClientModalMode = 'agency_admin' | 'care_recipient'
 
@@ -16,19 +17,6 @@ interface AddNewClientModalProps {
   /** When 'agency_admin', form targets clients table (company/contact fields). When 'care_recipient', targets patients. */
   mode?: AddNewClientModalMode
 }
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
-  'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
-  'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana',
-  'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
-  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
-  'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
-  'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
-  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
-  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
-  'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 const AGENCY_FORM_INITIAL = {
   first_name: '',

@@ -7,18 +7,12 @@ import { usePathname } from 'next/navigation'
 import { 
   Home, 
   Medal,
-  FileText, 
   Users, 
-  User, 
   LogOut, 
-  Bell, 
   ChevronLeft,
   Menu,
   X,
-  MessageSquare,
   BarChart3,
-  Grid3x3,
-  CheckSquare,
   UserCircle
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
@@ -42,8 +36,8 @@ interface DashboardLayoutProps {
     state: string
     progress_percentage: number | null
   } | null
-  activeLicenseTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant'
-  onLicenseTabChange?: (tab: 'overview' | 'checklist' | 'documents' | 'ai-assistant') => void
+  activeLicenseTab?: 'overview' | 'checklist' | 'documents'
+  onLicenseTabChange?: (tab: 'overview' | 'checklist' | 'documents') => void
 }
 
 export default function DashboardLayout({ 
@@ -51,9 +45,7 @@ export default function DashboardLayout({
   user, 
   profile,
   unreadNotifications = 0,
-  application = null,
-  activeLicenseTab = 'overview',
-  onLicenseTabChange
+  application = null
 }: DashboardLayoutProps) {
   const pathname = usePathname()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -84,7 +76,6 @@ export default function DashboardLayout({
     { href: '/pages/agency/caregiver', label: 'Caregivers', icon: Users },
     { href: '/pages/agency/reports', label: 'Reports', icon: BarChart3 },
     // { href: '/pages/agency/messages', label: 'Messages', icon: MessageSquare },
-    // { href: '/pages/agency/profile', label: 'My Profile', icon: User },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
@@ -236,7 +227,6 @@ export default function DashboardLayout({
                     { id: 'overview', label: 'Overview', icon: Grid3x3 },
                     { id: 'checklist', label: 'Checklist', icon: CheckSquare },
                     { id: 'documents', label: 'Documents', icon: FileText },
-                    { id: 'ai-assistant', label: 'AI Assistant', icon: MessageSquare },
                   ].map((item) => {
                     const Icon = item.icon
                     const isActive = activeLicenseTab === item.id

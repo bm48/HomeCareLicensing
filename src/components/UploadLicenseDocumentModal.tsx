@@ -106,9 +106,7 @@ export default function UploadLicenseDocumentModal({
       const { data: { publicUrl } } = supabase.storage
         .from('application-documents')
         .getPublicUrl(filePath)
-      // Create document record in database
-      // Note: If expiry_date column doesn't exist in license_documents table, 
-      // you'll need to add it via migration first
+        
       const documentData: any = {
         license_id: licenseId,
         document_name: documentName,

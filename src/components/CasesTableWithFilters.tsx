@@ -35,7 +35,6 @@ export default function CasesTableWithFilters({ cases }: CasesTableWithFiltersPr
 
   // Get all unique states from cases
   const allStates = useMemo(() => {
-    console.log('cases', cases)
     const statesSet = new Set<string>()
     cases.forEach(c => {
       if (c.state) statesSet.add(c.state)

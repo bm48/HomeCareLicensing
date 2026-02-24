@@ -49,12 +49,6 @@ export default async function ExpertClientsPage({
     statesByClient[cs.client_id].push(cs.state)
   })
 
-  const formatDate = (date: string | Date | null) => {
-    if (!date) return 'N/A'
-    const d = typeof date === 'string' ? new Date(date) : date
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  }
-
   const getInitials = (name: string) => {
     return name
       .split(' ')

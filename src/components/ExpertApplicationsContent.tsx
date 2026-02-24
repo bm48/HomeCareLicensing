@@ -12,8 +12,6 @@ import {
   MapPin,
   User,
   Loader2,
-  Check,
-  X,
   Clock,
   Percent
 } from 'lucide-react'
@@ -84,7 +82,6 @@ export default function ExpertApplicationsContent({
     return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
   }
 
-  // Filter applications by search query
   const filteredApplications = applications.filter(app => {
     const query = searchQuery.toLowerCase()
     return (
@@ -95,7 +92,6 @@ export default function ExpertApplicationsContent({
     )
   })
 
-  // Group applications by status
   const underReviewApps = filteredApplications.filter(app => app.status === 'under_review')
   const needsRevisionApps = filteredApplications.filter(app => app.status === 'needs_revision')
   const approvedApps = filteredApplications.filter(app => app.status === 'approved')

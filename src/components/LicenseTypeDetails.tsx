@@ -25,7 +25,7 @@ import { updateLicenseType } from '@/app/actions/configuration'
 import ExpertProcessComingSoonModal from '@/components/ExpertProcessComingSoonModal'
 import Modal from '@/components/Modal'
 import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, getExpertStepsFromRequirement, copySteps, copyDocuments, copyExpertSteps, getAllStepsWithRequirementInfo, getAllDocumentsWithRequirementInfo, getAllExpertStepsWithRequirementInfo, type StepWithRequirementInfo, type DocumentWithRequirementInfo, type ExpertStepWithRequirementInfo } from '@/app/actions/license-requirements'
-import { EXPERT_STEP_PHASES, DEFAULT_EXPERT_STEP_PHASE, EXPERT_STEP_PHASE_ORDER } from '@/lib/expert-step-phase'
+import { EXPERT_STEP_PHASES, DEFAULT_EXPERT_STEP_PHASE } from '@/lib/constants'
 
 interface LicenseType {
   id: string
@@ -183,31 +183,25 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
 
   // Helper functions to extract and format values
   const extractNumber = (value: string): string => {
-    // Extract numeric value (including decimals)
     const match = value.replace(/[^0-9.]/g, '')
     return match || '0'
   }
 
   // Extract processing time value preserving ranges (dashes)
   const extractProcessingTime = (value: string): string => {
-    // Remove "days" and other text, but preserve numbers, dashes, and spaces
     const cleaned = value.replace(/days?/gi, '').trim()
-    // Extract numbers, dashes, and spaces (for ranges like "45-90")
     const match = cleaned.replace(/[^0-9.\-\s]/g, '').trim()
     return match || ''
   }
 
   // Extract currency value preserving ranges (dashes)
   const extractCurrency = (value: string): string => {
-    // Remove dollar signs and commas, but preserve numbers, dashes, and spaces
     const cleaned = value.replace(/[$,]/g, '').trim()
-    // Extract numbers, dashes, and spaces (for ranges like "2500-4500")
     const match = cleaned.replace(/[^0-9.\-\s]/g, '').trim()
     return match || ''
   }
 
   const formatProcessingTime = (value: string): string => {
-    // Check if it's a range (contains dash)
     if (value.includes('-')) {
       const parts = value.split('-').map(part => part.trim().replace(/[^0-9.]/g, ''))
       if (parts.length === 2 && parts[0] && parts[1]) {
@@ -220,7 +214,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   }
 
   const formatCurrency = (value: string): string => {
-    // Check if it's a range (contains dash)
     if (value.includes('-')) {
       const parts = value.split('-').map(part => {
         const num = part.trim().replace(/[^0-9.]/g, '')
@@ -271,7 +264,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const handleOverviewFieldChange = (field: string, value: string) => {
     if (!licenseType) return
 
-    // Update local state immediately
     const updatedFields = {
       ...overviewFields,
       [field]: value
@@ -721,7 +713,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     try {
       const fileExt = templateFile.name.split('.').pop()
       const filePath = `${requirementId}/${Date.now()}.${fileExt}`
-      console.log('filePath', filePath)
       const { error: uploadError } = await supabase.storage
         .from('license-templates')
         .upload(filePath, templateFile, {
@@ -1265,13 +1256,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
 
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 md:p-6">
-      {/* Header */}
-      {/* <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">{licenseType.name}</h2>
-        <p className="text-sm text-gray-600 mt-1">{licenseType.description}</p>
-      </div> */}
-
-      {/* Tabs */}
+      
       <div className="border-b border-gray-200 mb-6">
         <nav className="flex space-x-4" aria-label="Tabs">
           <button
@@ -2988,8 +2973,8 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
             ) : (
               <div className="space-y-6">
                 {(() => {
-                  // Group steps by phase (display all phases; order from expert-step-phase)
-                  const phaseOrder = EXPERT_STEP_PHASE_ORDER
+                  // Group steps by phase (display all phases; order from EXPERT_STEP_PHASES)
+                  const phaseOrder = EXPERT_STEP_PHASES.map((p) => p.value)
                   const byPhase = new Map<string, Step[]>()
                   for (const step of expertSteps) {
                     const phase = step.phase?.trim() || 'Other'

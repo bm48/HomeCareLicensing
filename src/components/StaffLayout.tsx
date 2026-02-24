@@ -7,7 +7,6 @@ import { usePathname } from 'next/navigation'
 import { 
   Home,
   Award,
-  User,
   LogOut, 
   ChevronLeft,
   Menu,

@@ -114,29 +114,14 @@ export default function UploadDocumentButton({
       try {
         const { data: applicationDetails } = await q.getApplicationExpertAndOwner(supabase, applicationId)
 
-        console.log("applicationDetails: ", applicationDetails)
-
         if (applicationDetails?.assigned_expert_id) {
           const { data: expertProfile } = await q.getUserProfileById(supabase, applicationDetails.assigned_expert_id)
-
-          console.log("expertProfile: ", expertProfile)
-
           const { data: ownerProfile } = applicationDetails.company_owner_id
             ? await q.getUserProfileById(supabase, applicationDetails.company_owner_id)
             : { data: null }
-
-          console.log("ownerProfile: ", ownerProfile)
-
           if (expertProfile?.email) {
             // Trim email to remove any whitespace/newline characters
             const trimmedEmail = expertProfile.email.trim()
-            // Send email notification (don't await - fire and forget)
-            console.log("trimmedEmail: ", trimmedEmail)
-            console.log("expertProfile.full_name: ", expertProfile.full_name)
-            console.log("ownerProfile?.full_name: ", ownerProfile?.full_name)
-            console.log("applicationDetails.application_name: ", applicationDetails.application_name)
-            console.log("file.name: ", file.name)
-            console.log("applicationId: ", applicationId)
             fetch('/api/send-email-notification', {
               method: 'POST',
               headers: {

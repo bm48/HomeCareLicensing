@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Users, 
@@ -10,7 +10,6 @@ import {
   Plus,
   Mail,
   Phone,
-  FileText,
   Clock as ClockIcon,
   Medal,
 } from 'lucide-react'

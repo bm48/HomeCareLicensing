@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { Users, CheckCircle2, FileText, Plus, Search, Eye, Loader2 } from 'lucide-react'
 import AddNewClientModal from './AddNewClientModal'
 import { createClient } from '@/lib/supabase/client'
@@ -41,7 +40,7 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
   const [clients, setClients] = useState(initialClients)
   const [navigatingClientId, setNavigatingClientId] = useState<string | null>(null)
 
-  // Sync state with props when data refreshes
+// Sync state with props when data refreshes
   useEffect(() => {
     setClients(initialClients)
   }, [initialClients])

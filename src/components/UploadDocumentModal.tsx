@@ -150,29 +150,15 @@ export default function UploadDocumentModal({
         // Get application details to find assigned expert
         const { data: application } = await q.getApplicationExpertAndOwner(supabase, applicationId)
 
-          console.log("application: ", application)
-
         if (application?.assigned_expert_id) {
           const { data: expertProfile } = await q.getUserProfileById(supabase, application.assigned_expert_id)
-
-          console.log("expertProfile: ", expertProfile)
-
           const { data: ownerProfile } = application.company_owner_id
             ? await q.getUserProfileById(supabase, application.company_owner_id)
             : { data: null }
-
-          console.log("ownerProfile: ", ownerProfile)
-
           if (expertProfile?.email) {
             // Trim email to remove any whitespace/newline characters
             const trimmedEmail = expertProfile.email.trim()
-            // Send email notification (don't await - fire and forget)
-            console.log("trimmedEmail: ", trimmedEmail)
-            console.log("expertProfile.full_name: ", expertProfile.full_name)
-            console.log("ownerProfile?.full_name: ", ownerProfile?.full_name)
-            console.log("application.application_name: ", application.application_name)
-            console.log("documentName: ", documentName)
-            console.log("applicationId: ", applicationId)
+            
             fetch('/api/send-email-notification', {
               method: 'POST',
               headers: {

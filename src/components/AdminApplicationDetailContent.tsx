@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
 import { copyExpertStepsFromRequirementToApplication } from '@/app/actions/license-requirements'
-import { closeApplication } from '@/app/actions/applications'
 import {
   FileText,
   Download,
@@ -15,16 +14,13 @@ import {
   Clock,
   Percent,
   CheckCircle2,
-  XCircle,
   AlertCircle,
   Loader2,
   Mail,
   Users,
   Send,
   Copy,
-  CheckSquare,
   Plus,
-  Lock
 } from 'lucide-react'
 import Modal from './Modal'
 
@@ -122,10 +118,6 @@ export default function AdminApplicationDetailContent({
   const [isLoadingConversation, setIsLoadingConversation] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
-  const router = useRouter()
-  const [isClosing, setIsClosing] = useState(false)
-  const canCloseApplication = (application.progress_percentage ?? 0) === 100 && application.status !== 'closed'
-
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'N/A'
@@ -604,13 +596,6 @@ export default function AdminApplicationDetailContent({
             )
           })
 
-          // DO NOT mark as read automatically when message arrives via real-time
-          // Messages should only be marked as read when:
-          // 1. Admin initially loads the conversation (handled in setupConversation)
-          // 2. Admin manually views/interacts with the conversation
-          // This ensures the notification badge updates correctly for unread messages
-
-          // Scroll to bottom
           setTimeout(() => {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
           }, 100)
@@ -626,7 +611,6 @@ export default function AdminApplicationDetailContent({
   // Scroll to bottom when messages change
   useEffect(() => {
     if (messages.length > 0) {
-      // If coming from notification, scroll immediately after a short delay to ensure DOM is ready
       const delay = fromNotification ? 500 : 0
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: fromNotification ? 'auto' : 'smooth' })
@@ -639,7 +623,6 @@ export default function AdminApplicationDetailContent({
 
     setIsSendingMessage(true)
     try {
-      // Get current user profile for optimistic update
       const { data: profiles } = await q.getUserProfilesByIds(supabase, [adminUserId])
       const currentUserProfile = profiles?.[0]
 
@@ -653,7 +636,6 @@ export default function AdminApplicationDetailContent({
 
       await q.updateConversationLastMessageAt(supabase, conversationId)
 
-      // Add message optimistically
       if (newMessage) {
         const optimisticMessage = {
           ...newMessage,

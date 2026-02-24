@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
 import Modal from './Modal'
 import { Loader2 } from 'lucide-react'
+import { US_STATES } from '@/lib/constants'
 
 const applicationSchema = z.object({
   application_name: z.string().min(1, 'Application name is required').min(3, 'Application name must be at least 3 characters'),
@@ -16,16 +17,6 @@ const applicationSchema = z.object({
 })
 
 type ApplicationFormData = z.infer<typeof applicationSchema>
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
-  'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
-  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi',
-  'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico',
-  'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania',
-  'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
-  'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 interface NewApplicationModalProps {
   isOpen: boolean

@@ -5,6 +5,7 @@ import Modal from './Modal'
 import { Upload, X, Loader2, Calendar, FileText } from 'lucide-react'
 import { createCertification, type CreateCertificationData } from '@/app/actions/certifications'
 import { createClient } from '@/lib/supabase/client'
+import { US_STATES } from '@/lib/constants'
 
 interface AddCertificationModalProps {
   isOpen: boolean
@@ -12,19 +13,6 @@ interface AddCertificationModalProps {
   onSuccess?: () => void
   certificationTypes: Array<{ id: number; certification_type: string }>
 }
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
-  'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
-  'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana',
-  'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
-  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
-  'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
-  'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
-  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
-  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
-  'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 export default function AddCertificationModal({
   isOpen,
@@ -201,19 +189,6 @@ export default function AddCertificationModal({
     if (!isSubmitting && !isUploading) {
       onClose()
     }
-  }
-
-  // Format date for input (YYYY-MM-DD)
-  const formatDateForInput = (date: string) => {
-    if (!date) return ''
-    return date
-  }
-
-  // Convert date from input format to display format
-  const formatDateForDisplay = (date: string) => {
-    if (!date) return ''
-    const d = new Date(date)
-    return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
   }
 
   return (

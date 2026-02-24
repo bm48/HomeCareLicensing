@@ -181,7 +181,6 @@ export default function ExpertApplicationDetailModal({
         }
 
         if (!licenseType || !licenseType.name) {
-          console.log('License type not found for application:', application.license_type_id)
           setSteps([])
           setIsLoadingSteps(false)
           return
@@ -198,7 +197,6 @@ export default function ExpertApplicationDetailModal({
         }
 
         if (!licenseRequirement) {
-          console.log('License requirement not found for state:', application.state, 'license type:', licenseType.name)
           setSteps([])
           setIsLoadingSteps(false)
           return

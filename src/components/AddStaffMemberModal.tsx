@@ -92,8 +92,6 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         agencyName || undefined
       )
 
-      console.log('createStaffUserAccount result:', result)
-
       if (result.error || !result.data) {
         setError(result.error || 'Failed to create user account. Please try again.')
         setIsLoading(false)
@@ -121,8 +119,6 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         return
       }
 
-      console.log('Creating staff member with userId:', userIdToUse, 'for client:', client.id)
-
       const { data: staffMember, error: insertError } = await q.insertStaffMemberReturning(supabase, {
         company_owner_id: client.id,
         agency_id: client.agency_id ?? null,
@@ -137,7 +133,6 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         employee_id: data.employee_id || null,
         start_date: data.start_date || null,
       })
-        console.log("staffMember: +",staffMember)
 
       if (insertError) {
         console.error('Error creating staff member record:', insertError)

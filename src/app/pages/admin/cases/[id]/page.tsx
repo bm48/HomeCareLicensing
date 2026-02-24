@@ -10,8 +10,7 @@ import {
   User,
   MapPin,
   Calendar,
-  Clock,
-  Activity
+  Clock
 } from 'lucide-react'
 
 export default async function CaseDetailPage({

@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Folder, Upload, Download, FileText } from 'lucide-react'
+import { Folder, Download, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
-import UploadDocumentButton from './UploadDocumentButton'
 
 interface Document {
   id: string
@@ -23,8 +22,6 @@ interface ApplicationDocumentsPanelProps {
 
 export default function ApplicationDocumentsPanel({
   applicationId,
-  documentCount,
-  onDocumentUploaded
 }: ApplicationDocumentsPanelProps) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [isLoading, setIsLoading] = useState(true)

@@ -55,18 +55,6 @@ export default async function AdminLicensesPage() {
     console.error('Error fetching owner profiles:', profilesError)
   }
 
-  // Debug: Log query results (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Admin licenses page - Query results:', {
-      requestedCount: requestedApplications?.length || 0,
-      allCount: allApplications?.length || 0,
-      requestedError: requestedError?.message,
-      allAppsError: allAppsError?.message,
-      profilesError: profilesError?.message,
-      userRole: profile?.role,
-      userId: user.id
-    })
-  }
 
   type ExpertProfileRow = { id: string; email: string | null; full_name: string | null; role: string | null }
   const { data: expertsDataRaw, error: expertsError } = await q.getUserProfilesByRole(
@@ -94,15 +82,6 @@ export default async function AdminLicensesPage() {
   // Log errors if any (for debugging)
   if (expertsError) {
     console.error('Error fetching experts:', expertsError)
-  }
-
-  // Debug: Log experts query results (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Admin licenses page - Experts query results:', {
-      expertsCount: experts?.length || 0,
-      expertsError: expertsError?.message,
-      experts: experts?.map(e => ({ id: e.id, first_name: e.first_name, last_name: e.last_name, email: e.email }))
-    })
   }
 
   return (

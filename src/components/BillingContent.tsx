@@ -57,15 +57,6 @@ interface BaseBillingItem {
   allCases: Case[] // All cases for this agency (will be filtered by month)
 }
 
-interface BillingItem extends BaseBillingItem {
-  applicationsCount: number
-  totalApplicationFee: number
-  govFee: number
-  serviceFee: number
-  monthlyTotal: number
-  cases: Case[] // Filtered cases for selected month
-}
-
 interface BillingContentProps {
   baseBillingData: BaseBillingItem[]
   selectedMonth: number
@@ -96,20 +87,16 @@ export default function BillingContent({
   const [isNavigatingPrevious, setIsNavigatingPrevious] = useState(false)
   const [isNavigatingNext, setIsNavigatingNext] = useState(false)
 
-  // Track the last URL we set to avoid syncing back our own changes
   const lastSetUrlRef = useRef<string | null>(null)
 
-  // Sync local state with props when they change (happens after server re-render)
-  // This ensures we update when the page re-renders with new data after navigation
   useEffect(() => {
     // Only sync if props actually differ from current state
     if (initialMonth !== selectedMonth || initialYear !== selectedYear) {
       setSelectedMonth(initialMonth)
       setSelectedYear(initialYear)
-      // Reset loading states when props change (navigation completed)
       setIsNavigatingPrevious(false)
       setIsNavigatingNext(false)
-      // Clear the ref if props match the URL we set
+
       const urlMonth = searchParams.get('month')
       const urlYear = searchParams.get('year')
       if (urlMonth && urlYear) {
@@ -121,8 +108,6 @@ export default function BillingContent({
     }
   }, [selectedMonth, selectedYear, initialMonth, initialYear, searchParams]) // Only depend on props, not state
 
-  // Sync with URL params and reset loading state when navigation completes
-  // Using a ref to track if we're currently navigating to prevent loops
   const isNavigatingRef = useRef(false)
   
   useEffect(() => {
@@ -158,9 +143,6 @@ export default function BillingContent({
     }
   }, [searchParams]) // Only depend on searchParams to avoid loops
 
-  // Filter cases by selected month and calculate billing data
-  // Note: License fees are recalculated here using the rates passed as props
-  // which are for the selected month (fetched server-side)
   const billingData = useMemo(() => {
     const monthStart = new Date(selectedYear, selectedMonth - 1, 1)
     const monthEnd = new Date(selectedYear, selectedMonth, 0) // Last day of the month
@@ -174,8 +156,6 @@ export default function BillingContent({
         return caseDate >= monthStartStr && caseDate <= monthEndStr
       })
 
-      // Recalculate license fees using the rates for the selected month
-      // (ownerLicenseRate and staffLicenseRate are passed as props and are for the selected month)
       const ownerLicenseFee = baseItem.ownerCount * ownerLicenseRate
       const staffLicenseFee = baseItem.staffCount * staffLicenseRate
       const totalLicenseFee = ownerLicenseFee + staffLicenseFee
@@ -317,8 +297,6 @@ export default function BillingContent({
     params.set('month', newMonth.toString())
     params.set('year', newYear.toString())
     router.push(`/pages/admin/billing?${params.toString()}`)
-    // Note: Server component will automatically re-render when searchParams change
-    // The useEffect hooks will reset loading state when navigation completes
   }
 
   const handleExportCSV = () => {

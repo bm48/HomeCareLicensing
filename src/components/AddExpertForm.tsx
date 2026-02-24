@@ -58,9 +58,7 @@ export default function AddExpertForm() {
         role: data.role || undefined,
         status: data.status,
       }
-      console.log('Expert data:', expertData)
       const result = await createExpert(expertData)
-      console.log('Create expert result:', result)
       if (result.error) {
         setError(result.error)
         setIsLoading(false)

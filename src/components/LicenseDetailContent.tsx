@@ -13,7 +13,6 @@ import {
   XCircle,
   Upload
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import UploadLicenseDocumentModal from './UploadLicenseDocumentModal'
 
@@ -48,7 +47,6 @@ export default function LicenseDetailContent({
   documents
 }: LicenseDetailContentProps) {
   const router = useRouter()
-  const [isUploading, setIsUploading] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
   const formatDate = (date: string | Date | null) => {

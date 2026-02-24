@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
-import { MessageSquare, Search, Paperclip, Send, Check, X } from 'lucide-react'
+import { MessageSquare, Search, Paperclip, Send, Check } from 'lucide-react'
 
 interface Conversation {
   id: string

@@ -69,30 +69,6 @@ export default function ClientCardMenu({
     }
   }
 
-  const handleOpenMessages = () => {
-    setIsOpen(false)
-    try {
-      router.push(`/pages/admin/applications?client=${clientId}`)
-    } catch (error) {
-      console.error('Navigation error:', error)
-      // Fallback to window.location if router fails
-      window.location.href = `/pages/admin/messages?client=${clientId}`
-    }
-  }
-
-  const handleChangeExpert = () => {
-    // TODO: Implement change expert functionality
-    console.log('Change expert for client:', clientId)
-    setIsOpen(false)
-  }
-
-  const handleViewApplications = () => {
-    // TODO: Navigate to applications or filter by client
-    // router.push(`/admin?client=${clientId}`)
-    console.log('View applications for client:', clientId)
-    setIsOpen(false)
-  }
-
   const handleEditClient = async () => {
     setIsOpen(false)
     setIsLoadingClient(true)

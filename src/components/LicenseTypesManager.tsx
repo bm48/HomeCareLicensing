@@ -5,6 +5,7 @@ import { Plus, Trash2, Save, X, FileText } from 'lucide-react'
 import { createLicenseType, deleteLicenseType, type CreateLicenseTypeData } from '@/app/actions/license-types'
 import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
+import { US_STATES } from '@/lib/constants'
 
 interface LicenseType {
   id: string
@@ -22,19 +23,6 @@ interface LicenseTypesManagerProps {
   onSelectLicenseType?: (licenseType: LicenseType | null) => void
   onStateChange?: (state: string) => void
 }
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
-  'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
-  'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana',
-  'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
-  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
-  'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
-  'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
-  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
-  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
-  'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 export default function LicenseTypesManager({ 
   initialState = 'California',

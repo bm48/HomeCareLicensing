@@ -61,10 +61,6 @@ export default function ClientMessagesContent({
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId)
 
-  useEffect(() => {
-    console.log("userId", userId)
-  }, [userId])
-  // Load messages for selected conversation
   const loadMessages = async (conversationId: string) => {
     try {
       setLoading(true)
@@ -187,7 +183,6 @@ export default function ClientMessagesContent({
   }
 
   // Filter conversations by search
-  console.log("conversations", conversations)
   const filteredConversations = conversations.filter(conv => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()

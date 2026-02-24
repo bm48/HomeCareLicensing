@@ -10,7 +10,6 @@ import {
   Award,
   Calendar,
   MapPin,
-  FileText,
   Building,
   CheckCircle2,
   Clock,
@@ -60,7 +59,6 @@ export default async function CertificationDetailPage({
       if (!appError && appData) {
         isApplication = true
         application = appData
-        // Map application to certification-like structure for display
         certification = {
           id: appData.id,
           type: appData.application_name,

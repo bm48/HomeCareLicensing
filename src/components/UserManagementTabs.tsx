@@ -10,7 +10,6 @@ import AddUserModal from './AddUserModal'
 import AddNewClientModal from './AddNewClientModal'
 import { toggleUserStatus } from '@/app/actions/users'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
 type TabType = 'users' | 'clients' | 'experts'

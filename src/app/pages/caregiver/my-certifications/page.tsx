@@ -75,7 +75,6 @@ function MyCertificationsContent() {
       ])
 
       if (certsResult.data) {
-        console.log('Certifications loaded:', certsResult.data)
         setCertifications(certsResult.data as Certification[])
       }
       if (typesResult.data) {
@@ -144,14 +143,6 @@ function MyCertificationsContent() {
         </span>
       )
     }
-  }
-
-  const formatCertificationId = (cert: Certification) => {
-    const parts = [cert.license_number]
-    if (cert.state) {
-      parts.push(cert.state)
-    }
-    return parts.join(' • ')
   }
 
   const toggleSort = (col: Column) => {

@@ -6,9 +6,8 @@ import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { Mail, Lock, User as UserIcon, ArrowLeft, Shield } from 'lucide-react'
+import { Mail, Lock, User as UserIcon, ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { UserRole } from '@/types/auth'
 
 const signupSchema = z
   .object({
@@ -16,7 +15,7 @@ const signupSchema = z
     email: z.string().email('Please enter a valid email address'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string().min(6, 'Please confirm your password'),
-    role: z.enum(['company_owner', 'expert', 'admin']), // Expert in middle for balanced UI; staff_member (Caregiver) commented out
+    role: z.enum(['company_owner', 'expert', 'admin']),
     rememberMe: z.boolean().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {

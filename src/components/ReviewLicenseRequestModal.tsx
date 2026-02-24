@@ -40,7 +40,6 @@ export default function ReviewLicenseRequestModal({
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser()
-      console.log('user: ', user)
       if (!user) {
         setError('You must be logged in to submit a license request')
         setIsLoading(false)
@@ -50,10 +49,6 @@ export default function ReviewLicenseRequestModal({
       const today = new Date()
       const todayStr = today.toISOString().split('T')[0]
 
-      // Create the application request with status 'requested'
-      // The database trigger will automatically notify admin users
-      console.log('Creating application request for user:', user.id)
-      console.log('License type:', licenseType.name)
       const { data: application, error: insertError } = await q.insertApplication(supabase, {
         company_owner_id: user.id,
         application_name: licenseType.name,
@@ -66,7 +61,6 @@ export default function ReviewLicenseRequestModal({
         submitted_date: todayStr,
       })
 
-      console.log('Application created:', application)
       if (insertError) {
         setError(insertError.message || 'Failed to create application. Please try again.')
         setIsLoading(false)

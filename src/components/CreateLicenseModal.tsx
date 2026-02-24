@@ -9,6 +9,7 @@ import * as q from '@/lib/supabase/query'
 import { revalidateLicensesPage } from '@/app/actions/licenses'
 import { Loader2, Upload, X, FileText } from 'lucide-react'
 import Modal from './Modal'
+import { US_STATES } from '@/lib/constants'
 
 const licenseSchema = z.object({
   license_name: z.string().min(1, 'License name is required').min(3, 'License name must be at least 3 characters'),
@@ -20,16 +21,6 @@ const licenseSchema = z.object({
 })
 
 export type CreateLicenseFormData = z.infer<typeof licenseSchema>
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
-  'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
-  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi',
-  'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico',
-  'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania',
-  'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
-  'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 interface CreateLicenseModalProps {
   isOpen: boolean
