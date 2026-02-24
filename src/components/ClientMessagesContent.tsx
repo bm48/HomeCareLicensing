@@ -209,9 +209,9 @@ export default function ClientMessagesContent({
           table: 'messages',
           filter: `conversation_id=eq.${selectedConversationId}`
         },
-        async (payload) => {
+        async (payload: { new: Message }) => {
           // Get the new message
-          const newMessage = payload.new as Message
+          const newMessage = payload.new
           
           const { data: profiles } = await q.getUserProfilesByIds(supabase, [newMessage.sender_id])
           type ProfileRow = { id: string; full_name?: string | null; role?: string | null }

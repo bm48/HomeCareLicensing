@@ -105,7 +105,7 @@ export default function AdminApplicationMessagesTab({
                   </div>
                 )
               })}
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef as React.RefObject<HTMLDivElement>} />
             </>
           )}
         </div>

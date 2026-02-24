@@ -370,8 +370,8 @@ export default function NotificationDropdown({
           table: 'messages'
           // Remove filter - we'll check in the callback to ensure reliability
         },
-        async (payload) => {
-          const newMessage = payload.new as any
+        async (payload: { new: { sender_id?: string } | null }) => {
+          const newMessage = payload.new
 
           if (!newMessage || newMessage.sender_id === userId) return
 
@@ -386,15 +386,15 @@ export default function NotificationDropdown({
           table: 'messages'
           // Remove filter - we'll check in the callback
         },
-        async (payload) => {
-          const updatedMessage = payload.new as any
+        async (payload: { new: { sender_id?: string } | null }) => {
+          const updatedMessage = payload.new
 
           if (updatedMessage && updatedMessage.sender_id !== userId) {
             debouncedRefreshBadge()
           }
         }
       )
-      .subscribe((status, err) => {
+      .subscribe((status: string, err: { message?: string } | null) => {
         if (status === 'SUBSCRIBED') {
           // Refresh badge count when subscription is established
           refreshBadgeCount()

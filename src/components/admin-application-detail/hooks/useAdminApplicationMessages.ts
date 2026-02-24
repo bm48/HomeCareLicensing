@@ -150,16 +150,16 @@ export function useAdminApplicationMessages(
           table: 'messages',
           filter: `conversation_id=eq.${conversationId}`
         },
-        async (payload) => {
-          const newMessage = payload.new as any
+        async (payload: { new: { id: string; sender_id: string; created_at: string; content: string } }) => {
+          const newMessage = payload.new
           const { data: profiles } = await q.getUserProfilesByIds(supabase, [newMessage.sender_id])
-          const userProfile = profiles?.[0]
+          const userProfile = profiles?.[0] as { full_name?: string | null; role?: string | null } | undefined
 
-          const messageWithSender = {
+          const messageWithSender: MessageWithSender = {
             ...newMessage,
             sender: {
               id: newMessage.sender_id,
-              user_profiles: userProfile || null
+              user_profiles: userProfile ?? null
             },
             is_own: newMessage.sender_id === adminUserId
           }

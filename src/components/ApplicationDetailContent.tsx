@@ -983,8 +983,8 @@ export default function ApplicationDetailContent({
           table: 'messages',
           filter: `conversation_id=eq.${conversationId}`
         },
-        async (payload) => {
-          const newMessage = payload.new as any
+        async (payload: { new: { id: string; sender_id: string; created_at: string } }) => {
+          const newMessage = payload.new
 
           const { data: userProfile } = await q.getUserProfilesByIds(supabase, [newMessage.sender_id])
           const senderProfile = userProfile?.[0] ?? null
