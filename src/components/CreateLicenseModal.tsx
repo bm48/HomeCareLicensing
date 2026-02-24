@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { revalidateLicensesPage } from '@/app/actions/licenses'
 import { Loader2, Upload, X, FileText } from 'lucide-react'
 import Modal from './Modal'
@@ -94,20 +95,16 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
         return
       }
 
-      const { data: newLicense, error } = await supabase
-        .from('licenses')
-        .insert({
-          company_owner_id: authUser.id,
-          license_name: data.license_name,
-          license_number: data.license_number || null,
-          state: data.state,
-          status: 'active',
-          expiry_date: data.expiry_date,
-          activated_date: data.activated_date || null,
-          renewal_due_date: data.renewal_due_date || null,
-        })
-        .select()
-        .single()
+      const { data: newLicense, error } = await q.insertLicenseReturning(supabase, {
+        company_owner_id: authUser.id,
+        license_name: data.license_name,
+        license_number: data.license_number || null,
+        state: data.state,
+        status: 'active',
+        expiry_date: data.expiry_date,
+        activated_date: data.activated_date || null,
+        renewal_due_date: data.renewal_due_date || null,
+      })
 
       if (error) throw error
       if (!newLicense?.id) throw new Error('License was created but no ID returned')
@@ -136,9 +133,7 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
         }
         if (data.expiry_date) docData.expiry_date = data.expiry_date
 
-        const { error: docError } = await supabase
-          .from('license_documents')
-          .insert(docData)
+        const { error: docError } = await q.insertLicenseDocument(supabase, docData)
         if (docError) {
           await supabase.storage.from('application-documents').remove([fileName])
           throw new Error(`Document record failed: ${docError.message}`)

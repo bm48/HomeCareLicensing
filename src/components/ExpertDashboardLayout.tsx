@@ -58,33 +58,9 @@ export default function ExpertDashboardLayout({
   }
 
   const menuItems = [
-    { href: '/dashboard/expert/clients', label: 'Licenses', icon: Users },
-    // { href: '/dashboard/expert/messages', label: 'Messages', icon: MessageSquare },
+    { href: '/pages/expert/clients', label: 'Licenses', icon: Users },
+    // { href: '/pages/expert/messages', label: 'Messages', icon: MessageSquare },
   ]
-
-  const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
-    if (name) {
-      return name
-        .split(' ')
-        .map(n => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    }
-    if (email) {
-      return email[0].toUpperCase()
-    }
-    return 'U'
-  }
-
-  const getDisplayName = () => {
-    return profile?.full_name || user?.email || 'User'
-  }
-
-  const getRoleDisplay = () => {
-    if (!profile?.role) return 'User'
-    return profile.role === 'expert' ? 'Licensing Expert' : 'Expert'
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -129,8 +105,8 @@ export default function ExpertDashboardLayout({
               <UserDropdown 
                 user={user} 
                 profile={profile} 
-                profileUrl="/dashboard/expert/profile"
-                changePasswordUrl="/change-password"
+                profileUrl="/pages/expert/profile"
+                changePasswordUrl="/pages/auth/change-password"
               />
             )}
           </div>

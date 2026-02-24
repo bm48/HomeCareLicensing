@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { CheckCircle2, Clock, DollarSign, Calendar, Loader2, Plus, Save, X, FileText, UserCog, Edit2, Trash2, GripVertical, Users2, Copy, Search, ChevronDown, Upload } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { 
   createStep, 
   createDocument, 
@@ -24,6 +25,7 @@ import { updateLicenseType } from '@/app/actions/configuration'
 import ExpertProcessComingSoonModal from '@/components/ExpertProcessComingSoonModal'
 import Modal from '@/components/Modal'
 import { getAllLicenseRequirements, getStepsFromRequirement, getDocumentsFromRequirement, getExpertStepsFromRequirement, copySteps, copyDocuments, copyExpertSteps, getAllStepsWithRequirementInfo, getAllDocumentsWithRequirementInfo, getAllExpertStepsWithRequirementInfo, type StepWithRequirementInfo, type DocumentWithRequirementInfo, type ExpertStepWithRequirementInfo } from '@/app/actions/license-requirements'
+import { EXPERT_STEP_PHASES, DEFAULT_EXPERT_STEP_PHASE, EXPERT_STEP_PHASE_ORDER } from '@/lib/expert-step-phase'
 
 interface LicenseType {
   id: string
@@ -77,7 +79,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [activeTab, setActiveTab] = useState<TabType>('general')
   const prevLicenseTypeRef = useRef<LicenseType | null>(null)
   const [stepsCount, setStepsCount] = useState(0)
-  const [expertStepsCount, setExpertStepsCount] = useState(0)
   const [documentsCount, setDocumentsCount] = useState(0)
   const [templatesCount, setTemplatesCount] = useState(0)
   const [steps, setSteps] = useState<Step[]>([])
@@ -88,15 +89,10 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [requirementId, setRequirementId] = useState<string | null>(null)
   
   // Form states
-  const [showStepForm, setShowStepForm] = useState(false)
-  const [showDocumentForm, setShowDocumentForm] = useState(false)
-  const [showExpertForm, setShowExpertForm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
   // Copy form states (used inside Add Step/Document modals)
-  const [showCopyStepsForm, setShowCopyStepsForm] = useState(false)
-  const [showCopyDocumentsForm, setShowCopyDocumentsForm] = useState(false)
   const [showExpertComingSoonModal, setShowExpertComingSoonModal] = useState(false)
   
   // Add Step modal (for Steps tab) – single button opens modal with 3 tabs
@@ -126,7 +122,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const [selectedBrowseStepIds, setSelectedBrowseStepIds] = useState<Set<string>>(new Set())
   const [isLoadingBrowseSteps, setIsLoadingBrowseSteps] = useState(false)
   const [browseStepsError, setBrowseStepsError] = useState<string | null>(null)
-  const [expandedBrowseStepId, setExpandedBrowseStepId] = useState<string | null>(null)
   
   // Browse All Documents (inside Add Document modal)
   const [browseDocumentsSearch, setBrowseDocumentsSearch] = useState('')
@@ -160,7 +155,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   // Form data
   const [stepFormData, setStepFormData] = useState({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
   const [documentFormData, setDocumentFormData] = useState({ documentName: '', description: '', isRequired: true })
-  const [expertFormData, setExpertFormData] = useState({ phase: 'Client Intake', stepTitle: '', description: '' })
+  const [expertFormData, setExpertFormData] = useState({ phase: DEFAULT_EXPERT_STEP_PHASE, stepTitle: '', description: '' })
   const [templateEditData, setTemplateEditData] = useState({ templateName: '', description: '' })
   
   // Overview tab editable fields
@@ -170,7 +165,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     serviceFee: '',
     renewalPeriod: ''
   })
-  const [isSavingOverview, setIsSavingOverview] = useState(false)
   const [overviewSaveStatus, setOverviewSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
@@ -355,22 +349,9 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       // const [stepsResult, docsResult, templatesResult] = await Promise.all([
       // Load steps, documents, and expert steps (expert steps live in application_steps)
       const [stepsResult, docsResult, templatesResult, expertResult] = await Promise.all([
-        supabase
-          .from('license_requirement_steps')
-          .select('*')
-          .eq('license_requirement_id', reqId)
-          .eq('is_expert_step', false)
-          .order('step_order', { ascending: true }),
-        supabase
-          .from('license_requirement_documents')
-          .select('*')
-          .eq('license_requirement_id', reqId)
-          .order('document_name', { ascending: true }),
-        supabase
-          .from('license_requirement_templates')
-          .select('*')
-          .eq('license_requirement_id', reqId)
-          .order('template_name', { ascending: true }),
+        q.getRegularStepsFromRequirement(supabase, reqId),
+        q.getDocumentsFromRequirement(supabase, reqId),
+        q.getTemplatesFromRequirement(supabase, reqId),
         getExpertStepsFromRequirement(reqId),
       ])
 
@@ -385,11 +366,9 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
 
       if (expertResult.error) {
         setExpertSteps([])
-        setExpertStepsCount(0)
       } else {
         const expertStepsData = expertResult.data ?? []
         setExpertSteps(expertStepsData)
-        setExpertStepsCount(expertStepsData.length)
       }
 
       if (docsResult.data) {
@@ -435,7 +414,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setDocuments([])
       setTemplates([])
       setStepsCount(0)
-      setExpertStepsCount(0)
       setDocumentsCount(0)
       setTemplatesCount(0)
       setIsLoading(false)
@@ -479,7 +457,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setIsSubmitting(false)
     } else {
       setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
-      setShowStepForm(false)
       closeAddStepModal()
       await loadData()
       setIsSubmitting(false)
@@ -510,7 +487,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setIsSubmitting(false)
     } else {
       setDocumentFormData({ documentName: '', description: '', isRequired: true })
-      setShowDocumentForm(false)
       closeAddDocumentModal()
       await loadData()
       setIsSubmitting(false)
@@ -540,8 +516,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setError(result.error)
       setIsSubmitting(false)
     } else {
-      setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
-      setShowExpertForm(false)
+      setExpertFormData({ phase: DEFAULT_EXPERT_STEP_PHASE, stepTitle: '', description: '' })
       closeAddExpertStepModal()
       await loadData()
       setIsSubmitting(false)
@@ -572,7 +547,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const handleEditExpertStep = (step: Step) => {
     setEditingExpertStep(step.id)
     setExpertFormData({
-      phase: step.phase || 'Client Intake',
+      phase: step.phase || DEFAULT_EXPERT_STEP_PHASE,
       stepTitle: step.step_name,
       description: step.description || '',
     })
@@ -598,7 +573,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setIsSubmitting(false)
     } else {
       setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
-      setShowStepForm(false)
       setEditingStep(null)
       await loadData()
       setIsSubmitting(false)
@@ -623,7 +597,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setIsSubmitting(false)
     } else {
       setDocumentFormData({ documentName: '', description: '', isRequired: true })
-      setShowDocumentForm(false)
       setEditingDocument(null)
       await loadData()
       setIsSubmitting(false)
@@ -647,8 +620,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
       setError(result.error)
       setIsSubmitting(false)
     } else {
-      setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
-      setShowExpertForm(false)
+      setExpertFormData({ phase: DEFAULT_EXPERT_STEP_PHASE, stepTitle: '', description: '' })
       setEditingExpertStep(null)
       await loadData()
       setIsSubmitting(false)
@@ -906,7 +878,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     setBrowseStepsSearch('')
     setSelectedBrowseStepIds(new Set())
     setBrowseStepsError(null)
-    setExpandedBrowseStepId(null)
     setIsLoadingBrowseSteps(true)
     try {
       const result = await getAllStepsWithRequirementInfo(requirementId ?? undefined)
@@ -933,9 +904,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const closeAddStepModal = () => {
     setShowAddStepModal(false)
     setAddStepModalTab('new')
-    setShowStepForm(false)
     setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
-    setShowCopyStepsForm(false)
     setSelectedSourceRequirementId('')
     setAvailableSteps([])
     setSelectedStepIds(new Set())
@@ -943,7 +912,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
     setAllBrowseSteps([])
     setSelectedBrowseStepIds(new Set())
     setBrowseStepsError(null)
-    setExpandedBrowseStepId(null)
   }
 
   const filteredBrowseSteps = browseStepsSearch.trim()
@@ -1034,9 +1002,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const closeAddDocumentModal = () => {
     setShowAddDocumentModal(false)
     setAddDocumentModalTab('new')
-    setShowDocumentForm(false)
     setDocumentFormData({ documentName: '', description: '', isRequired: true })
-    setShowCopyDocumentsForm(false)
     setSelectedSourceRequirementId('')
     setAvailableDocuments([])
     setSelectedDocumentIds(new Set())
@@ -1062,8 +1028,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
   const closeAddExpertStepModal = () => {
     setShowAddExpertStepModal(false)
     setAddExpertStepModalTab('new')
-    setShowExpertForm(false)
-    setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
+    setExpertFormData({ phase: DEFAULT_EXPERT_STEP_PHASE, stepTitle: '', description: '' })
     setAvailableExpertSteps([])
     setSelectedExpertStepIds(new Set())
     setBrowseExpertStepsSearch('')
@@ -1841,7 +1806,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 onClose={() => {
                   setEditingStep(null)
                   setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
-                  setShowStepForm(false)
                   setError(null)
                 }}
                 title="Edit Step"
@@ -1906,7 +1870,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       onClick={() => {
                         setEditingStep(null)
                         setStepFormData({ stepName: '', description: '', instructions: '', estimatedDays: '', isRequired: true })
-                        setShowStepForm(false)
                         setError(null)
                       }}
                       className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -2299,7 +2262,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 onClose={() => {
                   setEditingDocument(null)
                   setDocumentFormData({ documentName: '', description: '', isRequired: true })
-                  setShowDocumentForm(false)
                   setError(null)
                 }}
                 title="Edit Document"
@@ -2354,7 +2316,6 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       onClick={() => {
                         setEditingDocument(null)
                         setDocumentFormData({ documentName: '', description: '', isRequired: true })
-                        setShowDocumentForm(false)
                         setError(null)
                       }}
                       className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -2719,11 +2680,9 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           required
                         >
-                          <option value="Client Intake">Client Intake</option>
-                          <option value="Application Preparation">Application Preparation</option>
-                          <option value="Application Submission">Application Submission</option>
-                          <option value="Survey Preparation">Survey Preparation</option>
-                          <option value="Survey Guidance">Survey Guidance</option>
+                          {EXPERT_STEP_PHASES.map((p) => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
                         </select>
                       </div>
                       <div>
@@ -2946,8 +2905,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                 isOpen={!!editingExpertStep}
                 onClose={() => {
                   setEditingExpertStep(null)
-                  setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
-                  setShowExpertForm(false)
+                  setExpertFormData({ phase: DEFAULT_EXPERT_STEP_PHASE, stepTitle: '', description: '' })
                   setError(null)
                 }}
                 title="Edit Expert Step"
@@ -2962,11 +2920,9 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     >
-                      <option value="Client Intake">Client Intake</option>
-                      <option value="Post-Application">Post-Application</option>
-                      <option value="Application">Application</option>
-                      <option value="Review">Review</option>
-                      <option value="Post-Approval">Post-Approval</option>
+                      {EXPERT_STEP_PHASES.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -3004,8 +2960,7 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
                       type="button"
                       onClick={() => {
                         setEditingExpertStep(null)
-                        setExpertFormData({ phase: 'Client Intake', stepTitle: '', description: '' })
-                        setShowExpertForm(false)
+                        setExpertFormData({ phase: DEFAULT_EXPERT_STEP_PHASE, stepTitle: '', description: '' })
                         setError(null)
                       }}
                       className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -3033,16 +2988,8 @@ export default function LicenseTypeDetails({ licenseType, selectedState }: Licen
             ) : (
               <div className="space-y-6">
                 {(() => {
-                  // Group steps by phase (display all phases; no hardcoded filter)
-                  const phaseOrder = [
-                    'Client Intake',
-                    'Application Preparation',
-                    'Application Submission',
-                    'Survey Preparation',
-                    'Survey Guidance',
-                    'Post-Application',
-                    'Post-Application Steps',
-                  ]
+                  // Group steps by phase (display all phases; order from expert-step-phase)
+                  const phaseOrder = EXPERT_STEP_PHASE_ORDER
                   const byPhase = new Map<string, Step[]>()
                   for (const step of expertSteps) {
                     const phase = step.phase?.trim() || 'Other'

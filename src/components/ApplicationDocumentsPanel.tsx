@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Folder, Upload, Download, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import UploadDocumentButton from './UploadDocumentButton'
 
 interface Document {
@@ -33,11 +34,7 @@ export default function ApplicationDocumentsPanel({
     setIsLoading(true)
     try {
       const supabase = createClient()
-      const { data, error } = await supabase
-        .from('application_documents')
-        .select('*')
-        .eq('application_id', applicationId)
-        .order('created_at', { ascending: false })
+      const { data, error } = await q.getApplicationDocumentsByApplicationId(supabase, applicationId)
 
       if (error) {
         console.error('Error fetching documents:', error)
@@ -105,13 +102,6 @@ export default function ApplicationDocumentsPanel({
     } catch (error) {
       console.error('Error downloading file:', error)
       window.open(documentUrl, '_blank')
-    }
-  }
-
-  const handleUploadSuccess = () => {
-    fetchDocuments()
-    if (onDocumentUploaded) {
-      onDocumentUploaded()
     }
   }
 

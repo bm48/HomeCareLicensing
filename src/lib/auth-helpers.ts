@@ -8,7 +8,7 @@ export async function requireAdmin() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/login')
+    redirect('/pages/auth/login')
   }
 
   // Get user profile with role
@@ -19,7 +19,7 @@ export async function requireAdmin() {
     .single()
 
   if (!profile || profile.role !== 'admin') {
-    redirect('/dashboard')
+    redirect('/pages/agency')
   }
 
   return { user, profile }

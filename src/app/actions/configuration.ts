@@ -53,8 +53,8 @@ export async function updatePricing(data: UpdatePricingData) {
       return { error: error.message, data: null }
     }
 
-    revalidatePath('/admin/configuration')
-    revalidatePath('/admin/billing')
+    revalidatePath('/pages/admin/configuration')
+    revalidatePath('/pages/admin/billing')
     return { error: null, data: pricing }
   } catch (err: any) {
     return { error: err.message || 'Failed to update pricing', data: null }
@@ -114,8 +114,8 @@ export async function updateLicenseType(data: UpdateLicenseTypeData) {
       return { error: error.message, data: null }
     }
 
-    revalidatePath('/admin/configuration')
-    revalidatePath('/admin/billing')
+    revalidatePath('/pages/admin/configuration')
+    revalidatePath('/pages/admin/billing')
     return { error: null, data: licenseType }
   } catch (err: any) {
     return { error: err.message || 'Failed to update license type', data: null }

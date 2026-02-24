@@ -19,12 +19,6 @@ interface CertificationType {
   created_at?: string
 }
 
-interface IssuingAuthority {
-  id: number
-  name: string
-  created_at?: string
-}
-
 interface StaffRole {
   id: number
   name: string
@@ -135,9 +129,6 @@ export default function SystemListsManagement({
       setLoadingCertType(false)
     }
   }
-
-
-
 
   // Staff Roles Handlers (UI only)
   const handleAddRole = async () => {

@@ -72,7 +72,7 @@ export default function ApplicationDetailWrapper({
 
   const handleBackToLicenses = () => {
     setIsNavigatingBack(true)
-    router.push('/dashboard/licenses')
+    router.push('/pages/agency/licenses')
   }
 
   return (

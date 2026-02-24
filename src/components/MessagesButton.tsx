@@ -14,7 +14,7 @@ export default function MessagesButton({ clientId, unreadCount = 0 }: MessagesBu
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
-    const href = clientId ? `/admin/messages?client=${clientId}` : '/admin/messages'
+    const href = clientId ? `/pages/admin/messages?client=${clientId}` : '/pages/admin/messages'
     router.push(href)
   }
   

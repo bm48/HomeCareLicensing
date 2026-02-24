@@ -60,7 +60,7 @@ export default function DashboardLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [currentPath, setCurrentPath] = useState(pathname)
-  const isApplicationDetailPage = pathname?.startsWith('/dashboard/applications/') && pathname !== '/dashboard/applications'
+  const isApplicationDetailPage = pathname?.startsWith('/pages/agency/applications/') && pathname !== '/pages/agency/applications'
 
   // Track pathname changes to show/hide loading
   useEffect(() => {
@@ -78,13 +78,13 @@ export default function DashboardLayout({
   }
 
   const menuItems = [
-    { href: '/dashboard', label: 'Home', icon: Home },
-    { href: '/dashboard/licenses', label: 'Licenses', icon: Medal },
-    { href: '/dashboard/clients', label: 'Clients', icon: UserCircle },
-    { href: '/dashboard/caregiver', label: 'Caregivers', icon: Users },
-    { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
-    // { href: '/dashboard/messages', label: 'Messages', icon: MessageSquare },
-    // { href: '/dashboard/profile', label: 'My Profile', icon: User },
+    { href: '/pages/agency', label: 'Home', icon: Home },
+    { href: '/pages/agency/licenses', label: 'Licenses', icon: Medal },
+    { href: '/pages/agency/clients', label: 'Clients', icon: UserCircle },
+    { href: '/pages/agency/caregiver', label: 'Caregivers', icon: Users },
+    { href: '/pages/agency/reports', label: 'Reports', icon: BarChart3 },
+    // { href: '/pages/agency/messages', label: 'Messages', icon: MessageSquare },
+    // { href: '/pages/agency/profile', label: 'My Profile', icon: User },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
@@ -102,16 +102,6 @@ export default function DashboardLayout({
     return 'U'
   }
 
-  const getDisplayName = () => {
-    return profile?.full_name || user.email || 'User'
-  }
-
-  const getRoleDisplay = () => {
-    if (!profile?.role) return 'User'
-    return profile.role.split('_').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ')
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -154,8 +144,8 @@ export default function DashboardLayout({
             <UserDropdown 
               user={user} 
               profile={profile} 
-              profileUrl="/dashboard/profile"
-              changePasswordUrl="/change-password"
+              profileUrl="/pages/agency/profile"
+              changePasswordUrl="/pages/auth/change-password"
             />
           </div>
         </div>
@@ -195,7 +185,7 @@ export default function DashboardLayout({
 
               <nav className="space-y-1">
                 {menuItems.map((item) => {
-                  const isActive = pathname === item.href || (pathname.startsWith(item.href + '/') && item.href !== '/dashboard')
+                  const isActive = pathname === item.href || (pathname.startsWith(item.href + '/') && item.href !== '/pages/agency')
                   // const isActive = pathname === item.href
                   const Icon = item.icon
                   return (

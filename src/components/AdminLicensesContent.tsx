@@ -19,6 +19,7 @@ import {
   Users
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import Modal from './Modal'
 
 interface Application {
@@ -137,13 +138,10 @@ export default function AdminLicensesContent({
 
       // Update application with assigned expert
       // expert.id is user_profiles.id which is auth.users.id (same as what assigned_expert_id stores)
-      const { error } = await supabase
-        .from('applications')
-        .update({ 
-          assigned_expert_id: expert.id, // expert.id is already the user_id
-          last_updated_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('id', selectedApplication.id)
+      const { error } = await q.updateApplicationById(supabase, selectedApplication.id, {
+        assigned_expert_id: expert.id,
+        last_updated_date: new Date().toISOString().split('T')[0]
+      })
 
       if (error) {
         throw error
@@ -195,13 +193,10 @@ export default function AdminLicensesContent({
       
       // Update application status to 'in_progress'
       // The trigger will automatically initialize steps and notify owner
-      const { error } = await supabase
-        .from('applications')
-        .update({ 
-          status: 'in_progress',
-          last_updated_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('id', applicationId)
+      const { error } = await q.updateApplicationById(supabase, applicationId, {
+        status: 'in_progress',
+        last_updated_date: new Date().toISOString().split('T')[0]
+      })
 
       if (error) {
         throw error
@@ -223,13 +218,10 @@ export default function AdminLicensesContent({
       const supabase = createClient()
       
       // Update application status to 'rejected'
-      const { error } = await supabase
-        .from('applications')
-        .update({ 
-          status: 'rejected',
-          last_updated_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('id', applicationId)
+      const { error } = await q.updateApplicationById(supabase, applicationId, {
+        status: 'rejected',
+        last_updated_date: new Date().toISOString().split('T')[0]
+      })
 
       if (error) {
         throw error
@@ -425,7 +417,7 @@ export default function AdminLicensesContent({
             filteredAll.map((application) => (
               <div 
                 key={application.id} 
-                onClick={() => router.push(`/admin/licenses/applications/${application.id}`)}
+                onClick={() => router.push(`/pages/admin/licenses/applications/${application.id}`)}
                 className="bg-white rounded-xl shadow-md border border-gray-100 p-6 cursor-pointer hover:shadow-lg transition-shadow"
               >
                 <div className="flex items-center justify-between">

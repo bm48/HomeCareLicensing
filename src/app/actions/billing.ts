@@ -42,7 +42,7 @@ export async function createBilling(data: CreateBillingData) {
       return { error: error.message, data: null }
     }
 
-    revalidatePath('/admin/billing')
+    revalidatePath('/pages/admin/billing')
     return { error: null, data: billing }
   } catch (err: any) {
     return { error: err.message || 'Failed to create billing record', data: null }

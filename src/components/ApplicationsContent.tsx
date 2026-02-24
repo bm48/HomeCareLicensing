@@ -189,7 +189,7 @@ export default function ApplicationsContent({ applications, documentCounts }: Ap
                     <div className="flex items-center gap-3">
                       <UploadDocumentButton applicationId={application.id} />
                       <Link
-                        href={`/dashboard/applications/${application.id}`}
+                        href={`/pages/agency/applications/${application.id}`}
                         className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
                       >
                         View Details
@@ -266,7 +266,7 @@ export default function ApplicationsContent({ applications, documentCounts }: Ap
                     <div className="flex items-center gap-3">
                       <UploadDocumentButton applicationId={application.id} />
                       <Link
-                        href={`/dashboard/applications/${application.id}`}
+                        href={`/pages/agency/applications/${application.id}`}
                         className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
                       >
                         View Details
@@ -343,7 +343,7 @@ export default function ApplicationsContent({ applications, documentCounts }: Ap
                     <div className="flex items-center gap-3">
                       <UploadDocumentButton applicationId={application.id} />
                       <Link
-                        href={`/dashboard/applications/${application.id}`}
+                        href={`/pages/agency/applications/${application.id}`}
                         className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
                       >
                         View Details

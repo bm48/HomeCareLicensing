@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { UserRole } from '@/types/auth'
 import { saveCompanyDetails } from '@/app/actions/agencies'
 
@@ -217,19 +218,15 @@ export default function ProfileTabs({ user, profile, initialAgency }: ProfileTab
     try {
       const supabase = createClient()
 
-      // Update user profile
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({
-          full_name: `${data.firstName} ${data.lastName}`,
-          phone: data.phone || null,
-          job_title: data.jobTitle || null,
-          department: data.department || null,
-          work_location: data.workLocation || null,
-          start_date: data.startDate || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
+      const { error: updateError } = await q.updateUserProfileById(supabase, user.id, {
+        full_name: `${data.firstName} ${data.lastName}`,
+        phone: data.phone || null,
+        job_title: data.jobTitle || null,
+        department: data.department || null,
+        work_location: data.workLocation || null,
+        start_date: data.startDate || null,
+        updated_at: new Date().toISOString(),
+      })
 
       if (updateError) {
         setError(updateError.message)

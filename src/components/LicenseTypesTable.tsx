@@ -83,7 +83,7 @@ export default function LicenseTypesTable({ licenseTypes }: LicenseTypesTablePro
   const handleViewDetail = (e: React.MouseEvent, licenseTypeId: string) => {
     e.stopPropagation()
     setLoadingLicenseId(licenseTypeId)
-    router.push(`/admin/license-requirements/${licenseTypeId}`)
+    router.push(`/pages/admin/license-requirements/${licenseTypeId}`)
   }
 
   const getAverageProcessingTime = (licenseType: LicenseType) => {

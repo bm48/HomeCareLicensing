@@ -316,7 +316,7 @@ export default function BillingContent({
     const params = new URLSearchParams(searchParams.toString())
     params.set('month', newMonth.toString())
     params.set('year', newYear.toString())
-    router.push(`/admin/billing?${params.toString()}`)
+    router.push(`/pages/admin/billing?${params.toString()}`)
     // Note: Server component will automatically re-render when searchParams change
     // The useEffect hooks will reset loading state when navigation completes
   }
@@ -611,7 +611,7 @@ export default function BillingContent({
                         return (
                           <Link
                             key={caseItem.id}
-                            href={`/admin/cases/${caseItem.id}`}
+                            href={`/pages/admin/cases/${caseItem.id}`}
                             className="block border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:shadow-md transition-all cursor-pointer"
                           >
                             <div className="flex items-start justify-between">

@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import Modal from './Modal'
 import { Loader2 } from 'lucide-react'
 
@@ -63,20 +64,15 @@ export default function NewApplicationModal({ isOpen, onClose, onSuccess }: NewA
 
       const today = new Date().toISOString().split('T')[0]
 
-      // Create the application
-      const { data: application, error: insertError } = await supabase
-        .from('applications')
-        .insert({
-          company_owner_id: user.id,
-          application_name: data.application_name,
-          state: data.state,
-          status: 'in_progress',
-          progress_percentage: 0,
-          started_date: today,
-          last_updated_date: today,
-        })
-        .select()
-        .single()
+      const { data: application, error: insertError } = await q.insertApplication(supabase, {
+        company_owner_id: user.id,
+        application_name: data.application_name,
+        state: data.state,
+        status: 'in_progress',
+        progress_percentage: 0,
+        started_date: today,
+        last_updated_date: today,
+      })
 
       if (insertError) {
         throw insertError

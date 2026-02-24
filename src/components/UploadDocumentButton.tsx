@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 
 interface UploadDocumentButtonProps {
   applicationId: string
@@ -37,12 +38,7 @@ export default function UploadDocumentButton({
         throw new Error('You must be logged in to upload documents')
       }
 
-      // Get application to check license type
-      const { data: application, error: appError } = await supabase
-        .from('applications')
-        .select('license_type_id, state, status')
-        .eq('id', applicationId)
-        .single()
+      const { data: application, error: appError } = await q.getApplicationLicenseTypeState(supabase, applicationId)
 
       if (appError || !application) {
         throw new Error('Application not found')
@@ -51,37 +47,18 @@ export default function UploadDocumentButton({
       // Validate if application has license_type_id (should have for approved applications)
       if (application.license_type_id) {
         // Get license type name
-        const { data: licenseType, error: licenseTypeError } = await supabase
-          .from('license_types')
-          .select('name')
-          .eq('id', application.license_type_id)
-          .single()
+        const { data: licenseType, error: licenseTypeError } = await q.getLicenseTypeById(supabase, application.license_type_id)
 
         if (licenseTypeError || !licenseType) {
           throw new Error('License type not found')
         }
 
         // Find license_requirement_id for this state and license type
-        const { data: licenseRequirement, error: reqError } = await supabase
-          .from('license_requirements')
-          .select('id')
-          .eq('state', application.state)
-          .eq('license_type', licenseType.name)
-          .single()
+        const { data: licenseRequirement } = await q.getLicenseRequirementByStateAndType(supabase, application.state, licenseType.name)
 
-        if (!reqError && licenseRequirement) {
-          // Count documents and steps for this license requirement
-          const { count: documentsCount } = await supabase
-            .from('license_requirement_documents')
-            .select('*', { count: 'exact', head: true })
-            .eq('license_requirement_id', licenseRequirement.id)
-
-          const { count: stepsCount } = await supabase
-            .from('license_requirement_steps')
-            .select('*', { count: 'exact', head: true })
-            .eq('license_requirement_id', licenseRequirement.id)
-
-          const totalItems = (documentsCount || 0) + (stepsCount || 0)
+        if (licenseRequirement) {
+          const { steps: stepsCount, documents: documentsCount } = await q.getRequirementCounts(supabase, licenseRequirement.id)
+          const totalItems = stepsCount + documentsCount
 
           // If no documents and no steps, show error
           if (totalItems === 0) {
@@ -117,16 +94,13 @@ export default function UploadDocumentButton({
         .from('application-documents')
         .getPublicUrl(filePath)
 
-      // Create document record in database
-      const { error: insertError } = await supabase
-        .from('application_documents')
-        .insert({
-          application_id: applicationId,
-          document_name: file.name,
-          document_url: publicUrl,
-          document_type: null,
-          status: 'draft'
-        })
+      const { error: insertError } = await q.insertApplicationDocument(supabase, {
+        application_id: applicationId,
+        document_name: file.name,
+        document_url: publicUrl,
+        document_type: null,
+        status: 'draft'
+      })
 
       if (insertError) {
         // If insert fails, try to delete the uploaded file
@@ -138,32 +112,17 @@ export default function UploadDocumentButton({
 
       // Send email notification to expert if assigned
       try {
-        // Get application details to find assigned expert
-        const { data: applicationDetails } = await supabase
-          .from('applications')
-          .select('assigned_expert_id, application_name, company_owner_id')
-          .eq('id', applicationId)
-          .single()
+        const { data: applicationDetails } = await q.getApplicationExpertAndOwner(supabase, applicationId)
 
         console.log("applicationDetails: ", applicationDetails)
 
         if (applicationDetails?.assigned_expert_id) {
-          // Get expert's email
-          const { data: expertProfile } = await supabase
-            .from('user_profiles')
-            .select('email, full_name')
-            .eq('id', applicationDetails.assigned_expert_id)
-            .single()
+          const { data: expertProfile } = await q.getUserProfileById(supabase, applicationDetails.assigned_expert_id)
 
           console.log("expertProfile: ", expertProfile)
 
-          // Get owner's name
           const { data: ownerProfile } = applicationDetails.company_owner_id
-            ? await supabase
-                .from('user_profiles')
-                .select('full_name')
-                .eq('id', applicationDetails.company_owner_id)
-                .single()
+            ? await q.getUserProfileById(supabase, applicationDetails.company_owner_id)
             : { data: null }
 
           console.log("ownerProfile: ", ownerProfile)

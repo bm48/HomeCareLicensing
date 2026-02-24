@@ -16,6 +16,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 
 interface SmallClient {
   id: string
@@ -93,10 +94,7 @@ export default function ClientDetailContent({ client, allClients }: ClientDetail
     
     try {
       const supabase = createClient()
-      const { error } = await supabase
-        .from('patients')
-        .update({ status: newStatus })
-        .eq('id', client.id)
+      const { error } = await q.updatePatientStatus(supabase, client.id, newStatus)
 
       if (error) {
         console.error('Error updating status:', error)
@@ -111,18 +109,18 @@ export default function ClientDetailContent({ client, allClients }: ClientDetail
   }
 
   const handleClientChange = (clientId: string) => {
-    router.push(`/dashboard/clients/${clientId}`)
+    router.push(`/pages/agency/clients/${clientId}`)
   }
 
   const handlePrevious = () => {
     if (previousClient) {
-      router.push(`/dashboard/clients/${previousClient.id}`)
+      router.push(`/pages/agency/clients/${previousClient.id}`)
     }
   }
 
   const handleNext = () => {
     if (nextClient) {
-      router.push(`/dashboard/clients/${nextClient.id}`)
+      router.push(`/pages/agency/clients/${nextClient.id}`)
     }
   }
 
@@ -142,7 +140,7 @@ export default function ClientDetailContent({ client, allClients }: ClientDetail
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <Link
-            href="/dashboard/clients"
+            href="/pages/agency/clients"
             className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

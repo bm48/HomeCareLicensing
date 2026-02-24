@@ -14,6 +14,7 @@ import {
   Upload
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { useState } from 'react'
 
 interface License {
@@ -158,14 +159,12 @@ export default function StaffLicenseDetailContent({
           .getPublicUrl(fileName)
 
         // Create document record
-        const { error: docError } = await supabase
-          .from('application_documents')
-          .insert({
-            application_id: license.id,
-            document_name: file.name,
-            document_url: publicUrl,
-            document_type: fileExt?.toLowerCase() || null
-          })
+        const { error: docError } = await q.insertApplicationDocument(supabase, {
+          application_id: license.id,
+          document_name: file.name,
+          document_url: publicUrl,
+          document_type: fileExt?.toLowerCase() || null
+        })
 
         if (docError) {
           // If insert fails, try to delete the uploaded file
@@ -208,7 +207,7 @@ export default function StaffLicenseDetailContent({
         {/* Header */}
         <div className="flex items-center gap-4">
           <Link
-            href="/staff-dashboard/my-licenses"
+            href="/pages/caregiver/my-licenses"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />

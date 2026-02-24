@@ -57,9 +57,6 @@ export default function LicenseDetailContent({
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   }
 
-  const getStateAbbr = (state: string) => {
-    return state.length > 2 ? state.substring(0, 2).toUpperCase() : state.toUpperCase()
-  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -151,7 +148,7 @@ export default function LicenseDetailContent({
         {/* Header */}
         <div className="flex items-center gap-4">
           <Link
-            href="/dashboard/licenses"
+            href="/pages/agency/licenses"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />

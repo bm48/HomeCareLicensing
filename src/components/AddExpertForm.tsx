@@ -68,7 +68,7 @@ export default function AddExpertForm() {
       }
 
       // Success - redirect to experts page
-      router.push('/admin/users?tab=experts')
+      router.push('/pages/admin/users?tab=experts')
     } catch (err: any) {
       setError(err.message || 'Failed to create expert. Please try again.')
     } finally {
@@ -81,7 +81,7 @@ export default function AddExpertForm() {
       {/* Header */}
       <div>
         <Link
-          href="/admin/users?tab=experts"
+          href="/pages/admin/users?tab=experts"
           className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -274,7 +274,7 @@ export default function AddExpertForm() {
               )}
             </button>
             <Link
-              href="/admin/users?tab=experts"
+              href="/pages/admin/users?tab=experts"
               className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-center"
             >
               Cancel

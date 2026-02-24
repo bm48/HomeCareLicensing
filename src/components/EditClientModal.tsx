@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import Modal from './Modal'
 import { Loader2 } from 'lucide-react'
 
@@ -81,18 +82,15 @@ export default function EditClientModal({
     try {
       const supabase = createClient()
 
-      const { error: updateError } = await supabase
-        .from('clients')
-        .update({
-          company_name: data.company_name,
-          contact_name: data.contact_name,
-          contact_email: data.contact_email,
-          contact_phone: data.contact_phone || null,
-          status: data.status,
-          start_date: data.start_date || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', client.id)
+      const { error: updateError } = await q.updateClientById(supabase, client.id, {
+        company_name: data.company_name,
+        contact_name: data.contact_name,
+        contact_email: data.contact_email,
+        contact_phone: data.contact_phone || null,
+        status: data.status,
+        start_date: data.start_date || null,
+        updated_at: new Date().toISOString(),
+      })
 
       if (updateError) {
         throw updateError

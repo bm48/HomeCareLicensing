@@ -59,8 +59,8 @@ export default function StaffLayout({
   }
 
   const menuItems = [
-    { href: '/staff-dashboard', label: 'Dashboard', icon: Home },
-    { href: '/staff-dashboard/my-certifications', label: 'My Certifications', icon: Award },
+    { href: '/pages/caregiver', label: 'Dashboard', icon: Home },
+    { href: '/pages/caregiver/my-certifications', label: 'My Certifications', icon: Award },
   ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
@@ -76,17 +76,6 @@ export default function StaffLayout({
       return email[0].toUpperCase()
     }
     return 'U'
-  }
-
-  const getDisplayName = () => {
-    return profile?.full_name || user?.email || 'User'
-  }
-
-  const getRoleDisplay = () => {
-    if (!profile?.role) return 'User'
-    return profile.role.split('_').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ')
   }
 
   return (
@@ -132,8 +121,8 @@ export default function StaffLayout({
               <UserDropdown 
                 user={user} 
                 profile={profile} 
-                profileUrl="/staff-dashboard/profile"
-                changePasswordUrl="/change-password"
+                profileUrl="/pages/caregiver/profile"
+                changePasswordUrl="/pages/auth/change-password"
               />
             )}
           </div>

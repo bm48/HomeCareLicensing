@@ -62,7 +62,7 @@ export default function NewLicenseApplicationModal({
       }
 
       // Otherwise, navigate to the new license page with state parameter
-      router.push(`/dashboard/licenses/new?state=${encodeURIComponent(data.state)}`)
+      router.push(`/pages/agency/licenses/new?state=${encodeURIComponent(data.state)}`)
       reset()
       onClose()
     } catch (err: any) {

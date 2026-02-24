@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import Modal from './Modal'
 import { Loader2 } from 'lucide-react'
 
@@ -103,20 +104,17 @@ export default function EditStaffModal({ isOpen, onClose, staff, onSuccess }: Ed
     try {
       const supabase = createClient()
 
-      const { error: updateError } = await supabase
-        .from('staff_members')
-        .update({
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          phone: data.phone || null,
-          role: data.role,
-          job_title: data.job_title || null,
-          status: data.status,
-          employee_id: data.employee_id || null,
-          start_date: data.start_date || null,
-        })
-        .eq('id', staff.id)
+      const { error: updateError } = await q.updateStaffMember(supabase, staff.id, {
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        phone: data.phone || null,
+        role: data.role,
+        job_title: data.job_title || null,
+        status: data.status,
+        employee_id: data.employee_id || null,
+        start_date: data.start_date || null,
+      })
 
       if (updateError) {
         throw updateError

@@ -27,6 +27,7 @@ import ReviewLicenseRequestModal from './ReviewLicenseRequestModal'
 import CreateLicenseModal from './CreateLicenseModal'
 import { LicenseType } from '@/types/license'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { useRouter } from 'next/navigation'
 
 interface License {
@@ -141,13 +142,10 @@ export default function LicensesContent({
       const supabase = createClient()
       
       // Change status from 'needs_revision' to 'in_progress' to allow resubmission
-      const { error } = await supabase
-        .from('applications')
-        .update({
-          status: 'in_progress',
-          revision_reason: null // Clear revision reason on resubmit
-        })
-        .eq('id', applicationId)
+      const { error } = await q.updateApplicationById(supabase, applicationId, {
+        status: 'in_progress',
+        revision_reason: null
+      })
 
       if (error) throw error
 
@@ -170,12 +168,7 @@ export default function LicensesContent({
     try {
       const supabase = createClient()
       
-      const { error } = await supabase
-        .from('applications')
-        .update({
-          status: 'cancelled'
-        })
-        .eq('id', applicationId)
+      const { error } = await q.updateApplicationById(supabase, applicationId, { status: 'cancelled' })
 
       if (error) throw error
 
@@ -192,12 +185,12 @@ export default function LicensesContent({
 
   const handleViewLicenseDetails = (licenseId: string) => {
     setLoadingLicenseId(licenseId)
-    router.push(`/dashboard/licenses/${licenseId}`)
+    router.push(`/pages/agency/licenses/${licenseId}`)
   }
 
   const handleViewApplicationDetails = (applicationId: string) => {
     setLoadingApplicationId(applicationId)
-    router.push(`/dashboard/applications/${applicationId}`)
+    router.push(`/pages/agency/applications/${applicationId}`)
   }
 
   const handleDownloadLatestDocument = async (applicationId: string, e: React.MouseEvent) => {
@@ -208,13 +201,7 @@ export default function LicensesContent({
       const supabase = createClient()
       
       // Fetch the latest document for this application
-      const { data: documents, error } = await supabase
-        .from('application_documents')
-        .select('document_url, document_name')
-        .eq('application_id', applicationId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+      const { data: documents, error } = await q.getLatestApplicationDocumentByApplicationId(supabase, applicationId)
 
       if (error || !documents) {
         if (error?.code === 'PGRST116') {
@@ -256,13 +243,7 @@ export default function LicensesContent({
       const supabase = createClient()
       
       // Fetch the latest document for this license
-      const { data: documents, error } = await supabase
-        .from('license_documents')
-        .select('document_url, document_name')
-        .eq('license_id', licenseId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+      const { data: documents, error } = await q.getLatestLicenseDocumentByLicenseId(supabase, licenseId)
 
       if (error || !documents) {
         if (error?.code === 'PGRST116') {
