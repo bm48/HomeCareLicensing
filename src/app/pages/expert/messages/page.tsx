@@ -257,9 +257,9 @@ function ExpertMessagesContent() {
           table: 'messages',
           filter: `conversation_id=eq.${selectedConversation}`
         },
-        async (payload) => {
+        async (payload: { new: Message }) => {
           // Get the new message
-          const newMessage = payload.new as Message
+          const newMessage = payload.new
           
           const { data: userProfiles } = await q.getUserProfilesByIds(supabase, [newMessage.sender_id], 'id, full_name, role')
           type ProfileShape = { id: string; full_name: string | null; role: string | null }
