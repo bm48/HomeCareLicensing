@@ -341,22 +341,13 @@ export default function NotificationDropdown({
     }
 
     fetchTimeoutRef.current = setTimeout(async () => {
-      // Add a delay to ensure database transaction is fully committed before querying
-      // This prevents race conditions where the query runs before the message is visible
-      await new Promise(resolve => setTimeout(resolve, 400))
-      
-      // Always refresh badge count when message arrives (even if dropdown is open)
+      // Realtime events fire after the transaction is committed; no fixed delay needed.
       await refreshBadgeCount()
-      
-      // If dropdown is open, also refresh the full list if cache expired
-      // Add a small delay to ensure database transaction is committed before fetching
+
       if (isOpen) {
         const now = Date.now()
         if (now - lastFetchRef.current > CACHE_TTL) {
-          // Wait a bit longer to ensure the new message is committed to the database
-          setTimeout(() => {
-            fetchApplicationsWithUnread()
-          }, 500)
+          fetchApplicationsWithUnread()
         }
       }
     }, DEBOUNCE_MS)
@@ -381,15 +372,8 @@ export default function NotificationDropdown({
         },
         async (payload) => {
           const newMessage = payload.new as any
-          
-          // Skip if message is from current user
-          if (!newMessage || newMessage.sender_id === userId) {
-            return
-          }
-          
-          // Add a small delay to ensure database transaction is fully committed
-          // This prevents race conditions where the query runs before the message is visible
-          await new Promise(resolve => setTimeout(resolve, 300))
+
+          if (!newMessage || newMessage.sender_id === userId) return
 
           debouncedRefreshBadge()
         }
@@ -404,12 +388,8 @@ export default function NotificationDropdown({
         },
         async (payload) => {
           const updatedMessage = payload.new as any
-          
-          // Only refresh if message is from another user (not our own messages being marked as read)
+
           if (updatedMessage && updatedMessage.sender_id !== userId) {
-            // Add a small delay to ensure the update is committed
-            await new Promise(resolve => setTimeout(resolve, 200))
-            
             debouncedRefreshBadge()
           }
         }
@@ -443,8 +423,7 @@ export default function NotificationDropdown({
             table: 'notifications',
             filter: `user_id=eq.${userId}`
           },
-          async () => {
-            await new Promise(resolve => setTimeout(resolve, 300))
+          () => {
             debouncedRefreshBadge()
           }
         )

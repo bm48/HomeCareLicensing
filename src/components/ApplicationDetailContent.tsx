@@ -946,17 +946,15 @@ export default function ApplicationDetailContent({
 
           setMessages(messagesWithSenders)
 
-          // Mark messages as read by adding current user ID to is_read array
-          // Use RPC function to add user ID to array for all unread messages
-          const unreadMessages = messagesWithSenders.filter(msg => 
-            msg.sender_id !== currentUserId && 
-            (!msg.is_read || !Array.isArray(msg.is_read) || !msg.is_read.includes(currentUserId))
-          )
-          
-          if (unreadMessages.length > 0) {
-            for (const msg of unreadMessages) {
-              await q.rpcMarkMessageAsReadByUser(supabase, msg.id, currentUserId)
-            }
+          // Mark messages as read in one batch (avoids N+1)
+          const unreadIds = messagesWithSenders
+            .filter(msg =>
+              msg.sender_id !== currentUserId &&
+              (!msg.is_read || !Array.isArray(msg.is_read) || !msg.is_read.includes(currentUserId))
+            )
+            .map(msg => msg.id)
+          if (unreadIds.length > 0) {
+            await q.rpcMarkMessagesAsReadByUser(supabase, unreadIds, currentUserId)
           }
         }
       } catch (error) {

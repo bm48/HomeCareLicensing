@@ -71,6 +71,29 @@ function parseFullName(fullName: string): { first_name: string; last_name: strin
   }
 }
 
+/**
+ * Wait for handle_new_user trigger to create the user_profiles row by polling.
+ * Avoids fixed sleeps; returns as soon as the profile exists or after maxWaitMs.
+ */
+async function waitForUserProfile(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  options: { maxWaitMs?: number; intervalMs?: number } = {}
+): Promise<boolean> {
+  const { maxWaitMs = 2000, intervalMs = 50 } = options
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    const { data, error } = await supabaseAdmin
+      .from('user_profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle()
+    if (!error && data) return true
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  return false
+}
+
 /** Ensure the role-specific table has a row for this user (idempotent). Used when user already exists. */
 async function ensureRoleTableRow(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
@@ -195,8 +218,10 @@ export async function createUserAccount(
     }
     userId = newUser.user.id
 
-    // Wait for handle_new_user trigger to create user_profiles
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    const profileReady = await waitForUserProfile(supabaseAdmin, userId)
+    if (!profileReady) {
+      console.warn('user_profiles row not yet created by handle_new_user trigger; proceeding anyway')
+    }
 
     // Insert into role-specific table so the user appears in the right tab
     const fullNameTrimmed = fullName.trim()
@@ -402,7 +427,10 @@ export async function createAgencyAdminAccount(
     }
     userId = newUser.user.id
 
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    const profileReady = await waitForUserProfile(supabaseAdmin, userId)
+    if (!profileReady) {
+      console.warn('user_profiles row not yet created by handle_new_user trigger; proceeding anyway')
+    }
 
     const { error: clientError } = await supabaseAdmin.from('clients').insert({
       company_owner_id: userId,
@@ -544,8 +572,10 @@ export async function createStaffUserAccount(
       return { error: 'Failed to create user account - user ID is missing', data: null }
     }
 
-    // Wait for handle_new_user trigger to create user_profiles
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    const profileReady = await waitForUserProfile(supabaseAdmin, userId)
+    if (!profileReady) {
+      console.warn('user_profiles row not yet created by handle_new_user trigger; proceeding with fallback lookup')
+    }
 
     let verifiedUserId = userId
     const { data: profile, error: profileError } = await supabaseAdmin

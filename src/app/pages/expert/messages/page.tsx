@@ -183,16 +183,15 @@ function ExpertMessagesContent() {
 
         setMessages(messagesWithSenders)
 
-        // Mark messages as read by adding current user ID to is_read array
-        const unreadMessages = messagesWithSenders.filter(msg => 
-          msg.sender_id !== currentUser.id && 
-          (!msg.is_read || !Array.isArray(msg.is_read) || !msg.is_read.includes(currentUser.id))
-        )
-        
-        if (unreadMessages.length > 0) {
-          for (const msg of unreadMessages) {
-            await q.rpcMarkMessageAsReadByUser(supabase, msg.id, currentUser.id)
-          }
+        // Mark messages as read in one batch (avoids N+1)
+        const unreadIds = messagesWithSenders
+          .filter(msg =>
+            msg.sender_id !== currentUser.id &&
+            (!msg.is_read || !Array.isArray(msg.is_read) || !msg.is_read.includes(currentUser.id))
+          )
+          .map(msg => msg.id)
+        if (unreadIds.length > 0) {
+          await q.rpcMarkMessagesAsReadByUser(supabase, unreadIds, currentUser.id)
         }
 
         // Scroll to bottom if coming from notification

@@ -56,6 +56,19 @@ export async function rpcMarkMessageAsReadByUser(
   })
 }
 
+/** Mark multiple messages as read for a user in one RPC (avoids N+1 when opening a conversation). */
+export async function rpcMarkMessagesAsReadByUser(
+  supabase: Supabase,
+  messageIds: string[],
+  userId: string
+) {
+  if (messageIds.length === 0) return { data: null, error: null }
+  return supabase.rpc('mark_messages_as_read_by_user', {
+    message_ids: messageIds,
+    user_id: userId,
+  })
+}
+
 export async function insertMessage(
   supabase: Supabase,
   data: { conversation_id: string; sender_id: string; content: string }
