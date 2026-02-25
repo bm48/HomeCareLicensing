@@ -79,9 +79,7 @@ export default function UserDropdown({
     if (role === 'staff_member') {
       role = 'Caregiver'
     }
-    return profile.role.split('_').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ')
+    return role;
   }
 
   return (
