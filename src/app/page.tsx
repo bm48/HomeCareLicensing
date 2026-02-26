@@ -17,7 +17,7 @@ export default async function Home() {
   const session = await getSession()
 
   if (session) {
-    redirect('/dashboard')
+    redirect('/pages/agency')
   }
 
   return (
@@ -46,13 +46,13 @@ export default async function Home() {
           </div>
           <div className="flex items-center gap-4">
             <Link
-              href="/login"
+              href="/pages/auth/login"
               className="px-4 py-2 text-white font-medium hover:text-gray-200 transition-colors"
             >
               Login
             </Link>
             {/* <Link
-              href="/signup"
+              href="/pages/auth/signup"
               className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
               Get Started
@@ -80,14 +80,14 @@ export default async function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
-              href="/login"
+              href="/pages/auth/login"
               className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center gap-2"
             >
               Start Free Trial
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
             {/* <Link
-              href="/login"
+              href="/pages/auth/login"
               className="px-8 py-4 bg-white text-gray-900 font-semibold rounded-xl hover:bg-gray-50 transition-all shadow-lg border border-gray-200"
             >
               Sign In
@@ -187,14 +187,14 @@ export default async function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             {/* <Link
-              href="/signup"
+              href="/pages/auth/signup"
               className="group px-8 py-4 bg-white text-blue-600 font-semibold rounded-xl hover:bg-gray-50 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-1 flex items-center gap-2"
             >
               Create Free Account
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link> */}
             <Link
-              href="/login"
+              href="/pages/auth/login"
               className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-xl hover:bg-white/20 transition-all border border-white/20"
             >
               Sign In

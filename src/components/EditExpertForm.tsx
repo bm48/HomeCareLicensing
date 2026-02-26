@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { Loader2 } from 'lucide-react'
 
 const expertSchema = z.object({
@@ -74,25 +75,22 @@ export default function EditExpertForm({ expert }: EditExpertFormProps) {
     try {
       const supabase = createClient()
 
-      const { error: updateError } = await supabase
-        .from('licensing_experts')
-        .update({
-          first_name: data.firstName,
-          last_name: data.lastName,
-          phone: data.phone || null,
-          expertise: data.expertise || null,
-          role: data.role || null,
-          status: data.status,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', expert.id)
+      const { error: updateError } = await q.updateLicensingExpertById(supabase, expert.id, {
+        first_name: data.firstName,
+        last_name: data.lastName,
+        phone: data.phone || null,
+        expertise: data.expertise || null,
+        role: data.role || null,
+        status: data.status,
+        updated_at: new Date().toISOString(),
+      })
 
       if (updateError) {
         throw updateError
       }
 
       router.refresh()
-      router.push(`/admin/experts/${expert.id}`)
+      router.push(`/pages/admin/experts/${expert.id}`)
     } catch (err: any) {
       setError(err.message || 'Failed to update expert. Please try again.')
     } finally {

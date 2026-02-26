@@ -35,7 +35,6 @@ export default function CasesTableWithFilters({ cases }: CasesTableWithFiltersPr
 
   // Get all unique states from cases
   const allStates = useMemo(() => {
-    console.log('cases', cases)
     const statesSet = new Set<string>()
     cases.forEach(c => {
       if (c.state) statesSet.add(c.state)
@@ -79,12 +78,12 @@ export default function CasesTableWithFilters({ cases }: CasesTableWithFiltersPr
   }, [cases, searchQuery, selectedStatus, selectedState])
 
   const handleRowClick = (caseId: string) => {
-    router.push(`/admin/cases/${caseId}`)
+    router.push(`/pages/admin/cases/${caseId}`)
   }
 
   const handleViewClick = (e: React.MouseEvent, caseId: string) => {
     e.stopPropagation()
-    router.push(`/admin/cases/${caseId}`)
+    router.push(`/pages/admin/cases/${caseId}`)
   }
 
   return (

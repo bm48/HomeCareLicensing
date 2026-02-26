@@ -32,7 +32,7 @@ export async function sendDocumentUploadNotification({
     // Trim email to remove any whitespace/newline characters
     const trimmedEmail = expertEmail.trim()
 
-    const applicationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/expert/applications/${applicationId}`
+    const applicationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pages/expert/applications/${applicationId}`
 
     const { data, error } = await resend.emails.send({
       // Use Resend's default domain until homesightsconsulting.com is verified

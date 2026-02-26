@@ -7,22 +7,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import Modal from './Modal'
 import { MapPin } from 'lucide-react'
+import { US_STATES } from '@/lib/constants'
 
 const stateSchema = z.object({
   state: z.string().min(1, 'State is required'),
 })
 
 type StateFormData = z.infer<typeof stateSchema>
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
-  'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
-  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi',
-  'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico',
-  'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania',
-  'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
-  'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 interface NewLicenseApplicationModalProps {
   isOpen: boolean
@@ -62,7 +53,7 @@ export default function NewLicenseApplicationModal({
       }
 
       // Otherwise, navigate to the new license page with state parameter
-      router.push(`/dashboard/licenses/new?state=${encodeURIComponent(data.state)}`)
+      router.push(`/pages/agency/licenses/new?state=${encodeURIComponent(data.state)}`)
       reset()
       onClose()
     } catch (err: any) {

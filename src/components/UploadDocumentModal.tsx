@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Modal from './Modal'
 import { Upload, X, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 
 interface UploadDocumentModalProps {
   isOpen: boolean
@@ -133,9 +134,7 @@ export default function UploadDocumentModal({
         if (licenseRequirementDocumentId) {
           insertPayload.license_requirement_document_id = licenseRequirementDocumentId
         }
-        const { error: insertError } = await supabase
-          .from('application_documents')
-          .insert(insertPayload)
+        const { error: insertError } = await q.insertApplicationDocument(supabase, insertPayload)
 
         if (insertError) {
           // If insert fails, try to delete uploaded files
@@ -149,45 +148,17 @@ export default function UploadDocumentModal({
       // Send email notification to expert if assigned
       try {
         // Get application details to find assigned expert
-        const { data: application } = await supabase
-          .from('applications')
-          .select('assigned_expert_id, application_name, company_owner_id')
-          .eq('id', applicationId)
-          .single()
-
-          console.log("application: ", application)
+        const { data: application } = await q.getApplicationExpertAndOwner(supabase, applicationId)
 
         if (application?.assigned_expert_id) {
-          // Get expert's email
-          const { data: expertProfile } = await supabase
-            .from('user_profiles')
-            .select('email, full_name')
-            .eq('id', application.assigned_expert_id)
-            .single()
-
-          console.log("expertProfile: ", expertProfile)
-
-          // Get owner's name
+          const { data: expertProfile } = await q.getUserProfileById(supabase, application.assigned_expert_id)
           const { data: ownerProfile } = application.company_owner_id
-            ? await supabase
-                .from('user_profiles')
-                .select('full_name')
-                .eq('id', application.company_owner_id)
-                .single()
+            ? await q.getUserProfileById(supabase, application.company_owner_id)
             : { data: null }
-
-          console.log("ownerProfile: ", ownerProfile)
-
           if (expertProfile?.email) {
             // Trim email to remove any whitespace/newline characters
             const trimmedEmail = expertProfile.email.trim()
-            // Send email notification (don't await - fire and forget)
-            console.log("trimmedEmail: ", trimmedEmail)
-            console.log("expertProfile.full_name: ", expertProfile.full_name)
-            console.log("ownerProfile?.full_name: ", ownerProfile?.full_name)
-            console.log("application.application_name: ", application.application_name)
-            console.log("documentName: ", documentName)
-            console.log("applicationId: ", applicationId)
+            
             fetch('/api/send-email-notification', {
               method: 'POST',
               headers: {

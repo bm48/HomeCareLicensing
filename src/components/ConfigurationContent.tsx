@@ -27,11 +27,6 @@ interface CertificationType {
   created_at?: string
 }
 
-interface IssuingAuthority {
-  id: number
-  name: string
-  created_at?: string
-}
 
 interface StaffRole {
   id: number

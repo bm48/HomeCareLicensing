@@ -89,7 +89,7 @@ export default function ChangePasswordModal({
       reset()
 
       // Redirect to login page
-      router.push('/login?passwordChanged=true')
+      router.push('/pages/auth/login?passwordChanged=true')
     } catch (err: any) {
       setError('An unexpected error occurred. Please try again.')
       setIsLoading(false)

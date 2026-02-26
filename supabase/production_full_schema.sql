@@ -6764,48 +6764,8 @@ CREATE TRIGGER notify_expert_on_assignment_insert_trigger
   FOR EACH ROW
   EXECUTE FUNCTION notify_expert_on_assignment_insert();
 
--- ========== notify_expert_on_assignment_update (trigger) ==========
-CREATE OR REPLACE FUNCTION notify_expert_on_assignment_update()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  owner_profile RECORD;
-  expert_profile RECORD;
-BEGIN
-  IF NEW.assigned_expert_id IS NOT NULL AND
-     (OLD.assigned_expert_id IS NULL OR OLD.assigned_expert_id != NEW.assigned_expert_id) THEN
-    SELECT full_name, email INTO owner_profile
-    FROM user_profiles
-    WHERE id = NEW.company_owner_id;
-
-    SELECT id, full_name, email INTO expert_profile
-    FROM user_profiles
-    WHERE id = NEW.assigned_expert_id;
-
-    IF expert_profile.id IS NOT NULL THEN
-      INSERT INTO notifications (user_id, title, message, type, icon_type)
-      VALUES (
-        NEW.assigned_expert_id,
-        'New Application Assigned',
-        'You have been assigned to review application "' || NEW.application_name || '" (' || NEW.state || ') for ' || COALESCE(owner_profile.full_name, owner_profile.email, 'an owner') || '.',
-        'application_update',
-        'document'
-      );
-    END IF;
-  END IF;
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS notify_expert_on_assignment_update_trigger ON applications;
-CREATE TRIGGER notify_expert_on_assignment_update_trigger
-  AFTER UPDATE ON applications
-  FOR EACH ROW
-  EXECUTE FUNCTION notify_expert_on_assignment_update();
+-- ========== notify_expert_on_assignment_update (REMOVED - duplicate of notify_expert_when_assigned) ==========
+-- Previously created a second notification when admin assigned expert. Dropped so experts get only one.
 
 -- ========== notify_expert_on_document_submitted (trigger) ==========
 CREATE OR REPLACE FUNCTION notify_expert_on_document_submitted()
@@ -7033,40 +6993,5 @@ CREATE TRIGGER auto_review_on_100_percent_trigger
   FOR EACH ROW
   EXECUTE FUNCTION auto_review_on_100_percent();
 
--- ========== notify_admin_on_application_submission (trigger) ==========
-CREATE OR REPLACE FUNCTION notify_admin_on_application_submission()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  admin_user RECORD;
-  owner_profile RECORD;
-BEGIN
-  SELECT full_name, email INTO owner_profile
-  FROM user_profiles
-  WHERE id = NEW.company_owner_id;
-
-  FOR admin_user IN
-    SELECT id FROM user_profiles WHERE role = 'admin'
-  LOOP
-    INSERT INTO notifications (user_id, title, message, type, icon_type)
-    VALUES (
-      admin_user.id,
-      'New Application Request',
-      COALESCE(owner_profile.full_name, owner_profile.email, 'An owner') || ' submitted a new license application: ' || NEW.application_name || ' (' || NEW.state || ')',
-      'application_update',
-      'document'
-    );
-  END LOOP;
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS notify_admin_on_application_submission_trigger ON applications;
-CREATE TRIGGER notify_admin_on_application_submission_trigger
-  AFTER INSERT ON applications
-  FOR EACH ROW
-  EXECUTE FUNCTION notify_admin_on_application_submission();
+-- ========== notify_admin_on_application_submission (REMOVED - duplicate of notify_admins_new_application) ==========
+-- Previously created a second notification per admin on new application. Dropped so admins get only one notification.

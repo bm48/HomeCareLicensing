@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { 
   Search,
   Mail,
@@ -116,22 +117,22 @@ export default function ExpertListWithFilters({
   // All routes navigate to admin-side pages (not expert dashboard)
   const handleViewProfile = (expert: Expert) => {
     setOpenDropdownId(null)
-    router.push(`/admin/experts/${expert.id}`)
+    router.push(`/pages/admin/experts/${expert.id}`)
   }
 
   const handleEditInformation = (expert: Expert) => {
     setOpenDropdownId(null)
-    router.push(`/admin/experts/${expert.id}/edit`)
+    router.push(`/pages/admin/experts/${expert.id}/edit`)
   }
 
   const handleManageClients = (expert: Expert) => {
     setOpenDropdownId(null)
-    router.push(`/admin/experts/${expert.id}/clients`)
+    router.push(`/pages/admin/experts/${expert.id}/clients`)
   }
 
   const handleViewPerformance = (expert: Expert) => {
     setOpenDropdownId(null)
-    router.push(`/admin/experts/${expert.id}/performance`)
+    router.push(`/pages/admin/experts/${expert.id}/performance`)
   }
 
   const handleToggleStatus = async (expert: Expert) => {
@@ -148,13 +149,10 @@ export default function ExpertListWithFilters({
       const supabase = createClient()
       const newStatus = isActive ? 'inactive' : 'active'
       
-      const { error } = await supabase
-        .from('licensing_experts')
-        .update({ 
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', expert.id)
+      const { error } = await q.updateLicensingExpertById(supabase, expert.id, {
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
 
       if (error) {
         alert(`Failed to ${actionText} expert: ${error.message}`)

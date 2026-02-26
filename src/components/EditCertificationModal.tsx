@@ -5,6 +5,7 @@ import Modal from './Modal'
 import { Upload, X, Loader2, Calendar, FileText } from 'lucide-react'
 import { updateCertification, type UpdateCertificationData } from '@/app/actions/certifications'
 import { createClient } from '@/lib/supabase/client'
+import { US_STATES } from '@/lib/constants'
 
 interface EditCertificationModalProps {
   isOpen: boolean
@@ -23,19 +24,6 @@ interface EditCertificationModalProps {
     document_url: string | null
   }
 }
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
-  'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
-  'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana',
-  'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
-  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
-  'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
-  'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
-  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
-  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
-  'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 export default function EditCertificationModal({
   isOpen,

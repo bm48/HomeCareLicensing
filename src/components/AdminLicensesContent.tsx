@@ -5,11 +5,7 @@ import { useRouter } from 'next/navigation'
 import { 
   FileText, 
   Calendar, 
-  CheckCircle2, 
-  AlertCircle, 
-  XCircle,
   Search,
-  ArrowRight,
   Clock,
   User,
   Loader2,
@@ -19,6 +15,7 @@ import {
   Users
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import Modal from './Modal'
 
 interface Application {
@@ -67,9 +64,7 @@ export default function AdminLicensesContent({
   const [assignExpertModalOpen, setAssignExpertModalOpen] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
   const [selectedExpertId, setSelectedExpertId] = useState<string>('')
-  // After assigning expert, keep Assign Expert button disabled until list refreshes and Approve enables
   const [pendingAssignApplicationId, setPendingAssignApplicationId] = useState<string | null>(null)
-  // After clicking Approve, keep button disabled until list refreshes (application leaves requested list)
   const [pendingApproveApplicationId, setPendingApproveApplicationId] = useState<string | null>(null)
 
   const formatDate = (date: string | Date | null) => {
@@ -112,7 +107,6 @@ export default function AdminLicensesContent({
 
   const handleAssignExpert = (application: Application) => {
     setSelectedApplication(application)
-    // Find the expert that matches the assigned_expert_id (which is user_id, same as expert.id from user_profiles)
     const currentExpert = experts.find(e => e.id === application.assigned_expert_id)
     setSelectedExpertId(currentExpert ? currentExpert.id : '')
     setAssignExpertModalOpen(true)
@@ -128,22 +122,15 @@ export default function AdminLicensesContent({
     try {
       const supabase = createClient()
       
-      // Find the expert - experts array comes from user_profiles table
-      // selectedExpertId is user_profiles.id (which is user_id/auth.users.id)
       const expert = experts.find(e => e.id === selectedExpertId)
       if (!expert) {
         throw new Error('Expert not found')
       }
 
-      // Update application with assigned expert
-      // expert.id is user_profiles.id which is auth.users.id (same as what assigned_expert_id stores)
-      const { error } = await supabase
-        .from('applications')
-        .update({ 
-          assigned_expert_id: expert.id, // expert.id is already the user_id
-          last_updated_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('id', selectedApplication.id)
+      const { error } = await q.updateApplicationById(supabase, selectedApplication.id, {
+        assigned_expert_id: expert.id,
+        last_updated_date: new Date().toISOString().split('T')[0]
+      })
 
       if (error) {
         throw error
@@ -162,8 +149,7 @@ export default function AdminLicensesContent({
     }
   }
 
-  // Clear pending assign when list has refreshed and this application shows assigned_expert_id (Approve is then enabled)
-  useEffect(() => {
+   useEffect(() => {
     if (!pendingAssignApplicationId) return
     const app = requestedApplications.find(a => a.id === pendingAssignApplicationId)
     if (app?.assigned_expert_id) {
@@ -171,7 +157,6 @@ export default function AdminLicensesContent({
     }
   }, [pendingAssignApplicationId, requestedApplications])
 
-  // Clear pending approve when list has refreshed (approved application has left the requested list)
   useEffect(() => {
     if (!pendingApproveApplicationId) return
     const stillInList = requestedApplications.some(a => a.id === pendingApproveApplicationId)
@@ -185,7 +170,6 @@ export default function AdminLicensesContent({
     try {
       const supabase = createClient()
       
-      // Check if expert is assigned
       const application = requestedApplications.find(a => a.id === applicationId)
       if (!application || !application.assigned_expert_id) {
         alert('Please assign an expert before approving the application')
@@ -193,15 +177,10 @@ export default function AdminLicensesContent({
         return
       }
       
-      // Update application status to 'in_progress'
-      // The trigger will automatically initialize steps and notify owner
-      const { error } = await supabase
-        .from('applications')
-        .update({ 
-          status: 'in_progress',
-          last_updated_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('id', applicationId)
+      const { error } = await q.updateApplicationById(supabase, applicationId, {
+        status: 'in_progress',
+        last_updated_date: new Date().toISOString().split('T')[0]
+      })
 
       if (error) {
         throw error
@@ -223,13 +202,10 @@ export default function AdminLicensesContent({
       const supabase = createClient()
       
       // Update application status to 'rejected'
-      const { error } = await supabase
-        .from('applications')
-        .update({ 
-          status: 'rejected',
-          last_updated_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('id', applicationId)
+      const { error } = await q.updateApplicationById(supabase, applicationId, {
+        status: 'rejected',
+        last_updated_date: new Date().toISOString().split('T')[0]
+      })
 
       if (error) {
         throw error
@@ -425,7 +401,7 @@ export default function AdminLicensesContent({
             filteredAll.map((application) => (
               <div 
                 key={application.id} 
-                onClick={() => router.push(`/admin/licenses/applications/${application.id}`)}
+                onClick={() => router.push(`/pages/admin/licenses/applications/${application.id}`)}
                 className="bg-white rounded-xl shadow-md border border-gray-100 p-6 cursor-pointer hover:shadow-lg transition-shadow"
               >
                 <div className="flex items-center justify-between">

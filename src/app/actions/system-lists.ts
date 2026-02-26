@@ -39,7 +39,7 @@ export async function createCertificationType(certificationType: string) {
       return { error: error.message, data: null }
     }
 
-    revalidatePath('/admin/configuration')
+    revalidatePath('/pages/admin/configuration')
     return { error: null, data }
   } catch (err: any) {
     return { error: err.message || 'Failed to create certification type', data: null }
@@ -61,7 +61,7 @@ export async function updateCertificationType(id: number, certificationType: str
       return { error: error.message, data: null }
     }
 
-    revalidatePath('/admin/configuration')
+    revalidatePath('/pages/admin/configuration')
     return { error: null, data }
   } catch (err: any) {
     return { error: err.message || 'Failed to update certification type', data: null }
@@ -81,7 +81,7 @@ export async function deleteCertificationType(id: number) {
       return { error: error.message }
     }
 
-    revalidatePath('/admin/configuration')
+    revalidatePath('/pages/admin/configuration')
     return { error: null }
   } catch (err: any) {
     return { error: err.message || 'Failed to delete certification type' }
@@ -127,7 +127,7 @@ export async function createStaffRole(name: string) {
       return { error: error.message, data: null }
     }
 
-    revalidatePath('/admin/configuration')
+    revalidatePath('/pages/admin/configuration')
     return { error: null, data }
   } catch (err: any) {
     return { error: err.message || 'Failed to create staff role', data: null }
@@ -149,7 +149,7 @@ export async function updateStaffRole(id: number, name: string) {
       return { error: error.message, data: null }
     }
     
-    revalidatePath('/admin/configuration')
+    revalidatePath('/pages/admin/configuration')
     return { error: null, data }
   } catch (err: any) {
     return { error: err.message || 'Failed to update staff role', data: null }
@@ -169,7 +169,7 @@ export async function deleteStaffRole(id: number) {
       return { error: error.message }
     }
 
-    revalidatePath('/admin/configuration')
+    revalidatePath('/pages/admin/configuration')
     return { error: null }
   } catch (err: any) {
     return { error: err.message || 'Failed to delete staff role' }

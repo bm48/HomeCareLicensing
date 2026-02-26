@@ -72,9 +72,14 @@ export default function UserDropdown({
 
   const getRoleDisplay = () => {
     if (!profile?.role) return 'User'
-    return profile.role.split('_').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ')
+    let role = profile.role
+    if (role === 'company_owner') {
+      role = 'Agency Admin'
+    }
+    if (role === 'staff_member') {
+      role = 'Caregiver'
+    }
+    return role;
   }
 
   return (

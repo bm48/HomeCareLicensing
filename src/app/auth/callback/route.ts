@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       
       // Create redirect URL to login page first
       // Add 'from_callback' parameter to prevent middleware from redirecting
-      const loginUrl = new URL('/login', requestUrl.origin)
+      const loginUrl = new URL('/pages/auth/login', requestUrl.origin)
       loginUrl.searchParams.set('message', 'Account activated successfully! Please sign in with your email and password.')
       loginUrl.searchParams.set('from_callback', 'true')
       if (userEmail) {
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     // If it's a signup confirmation (type=signup) but no session, redirect to login
     if (type === 'signup' && error) {
-      const url = new URL('/login', requestUrl.origin)
+      const url = new URL('/pages/auth/login', requestUrl.origin)
       url.searchParams.set('message', 'Email confirmed successfully. Please sign in.')
       return NextResponse.redirect(url)
     }
@@ -74,21 +74,21 @@ export async function GET(request: NextRequest) {
       error?.message?.includes('PKCE') ||
       error?.message?.toLowerCase().includes('code verifier')
     if (error && isPkceError) {
-      const url = new URL('/login', requestUrl.origin)
+      const url = new URL('/pages/auth/login', requestUrl.origin)
       url.searchParams.set('message', 'Please sign in with your email and password below.')
       return NextResponse.redirect(url)
     }
 
     // Other magic link / callback errors: show error
     if (error) {
-      const url = new URL('/login', requestUrl.origin)
+      const url = new URL('/pages/auth/login', requestUrl.origin)
       url.searchParams.set('error', error.message || 'Failed to activate account. Please try again.')
       return NextResponse.redirect(url)
     }
   }
 
   // If there's no code or other error, redirect to login with error message
-  const url = new URL('/login', requestUrl.origin)
+  const url = new URL('/pages/auth/login', requestUrl.origin)
   url.searchParams.set('error', 'Invalid authentication link. Please try again.')
   return NextResponse.redirect(url)
 }

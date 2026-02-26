@@ -3,11 +3,9 @@
 import { useState, useMemo } from 'react'
 import { Search, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import {
-  getCertificationTypes,
   createCertificationType,
   updateCertificationType,
   deleteCertificationType,
-  getStaffRoles,
   createStaffRole,
   updateStaffRole,
   deleteStaffRole
@@ -16,12 +14,6 @@ import {
 interface CertificationType {
   id: number
   certification_type: string
-  created_at?: string
-}
-
-interface IssuingAuthority {
-  id: number
-  name: string
   created_at?: string
 }
 
@@ -135,9 +127,6 @@ export default function SystemListsManagement({
       setLoadingCertType(false)
     }
   }
-
-
-
 
   // Staff Roles Handlers (UI only)
   const handleAddRole = async () => {

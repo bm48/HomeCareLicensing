@@ -37,8 +37,6 @@ export default function CopyDocumentsModal({
   const [isLoading, setIsLoading] = useState(false)
   const [isCopying, setIsCopying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
-
 
   const loadLicenseRequirements = useCallback(async () => {
     setIsLoading(true)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Users, 
@@ -10,11 +10,11 @@ import {
   Plus,
   Mail,
   Phone,
-  FileText,
   Clock as ClockIcon,
   Medal,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import AddStaffMemberModal from './AddStaffMemberModal'
 import StaffActionsDropdown from './StaffActionsDropdown'
 import ViewStaffDetailsModal from './ViewStaffDetailsModal'
@@ -76,41 +76,9 @@ export default function StaffManagementClient({
   const [selectedRole, setSelectedRole] = useState('all')
   const [selectedStatus, setSelectedStatus] = useState('all')
 
-  // Helper functions
-  const formatDate = (date: string | Date | null) => {
-    if (!date) return 'N/A'
-    const d = typeof date === 'string' ? new Date(date) : date
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  }
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName[0]}${lastName[0]}`.toUpperCase()
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-700'
-      case 'inactive':
-        return 'bg-gray-100 text-gray-700'
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
-    }
-  }
-
-  const getLicenseStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-700'
-      case 'expiring':
-        return 'bg-orange-100 text-orange-700'
-      case 'expired':
-        return 'bg-red-100 text-red-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
-    }
   }
 
   // Filter staff members based on search query and filters
@@ -171,10 +139,7 @@ export default function StaffManagementClient({
 
     try {
       const supabase = createClient()
-      const { error } = await supabase
-        .from('staff_members')
-        .update({ status: newStatus })
-        .eq('id', staff.id)
+      const { error } = await q.updateStaffMember(supabase, staff.id, { status: newStatus })
 
       if (error) {
         // Revert the toggle on error

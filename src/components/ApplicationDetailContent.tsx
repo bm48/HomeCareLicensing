@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import {
   copyExpertStepsFromRequirementToApplication,
   getAllLicenseRequirements,
@@ -12,6 +13,7 @@ import {
   copyExpertStepsFromApplicationStepsToApplication,
   type ExpertStepWithRequirementInfo,
 } from '@/app/actions/license-requirements'
+import { EXPERT_STEP_PHASES, DEFAULT_EXPERT_STEP_PHASE } from '@/lib/constants'
 import {
   FileText,
   Download,
@@ -35,7 +37,6 @@ import {
 import { closeApplication } from '@/app/actions/applications'
 import UploadDocumentModal from './UploadDocumentModal'
 import Modal from './Modal'
-import { info } from 'console'
 
 interface Application {
   id: string
@@ -95,12 +96,12 @@ interface Step {
 interface ApplicationDetailContentProps {
   application: Application
   documents: Document[]
-  activeTab?: 'overview' | 'checklist' | 'documents' | 'ai-assistant' | 'next-steps' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process'
-  onTabChange?: (tab:  'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process') => void
+  activeTab?: 'overview' | 'checklist' | 'documents' |  'next-steps' | 'requirements' | 'templates' | 'message' | 'expert-process'
+  onTabChange?: (tab:  'next-steps' | 'documents' | 'requirements' | 'templates' | 'message' | 'expert-process') => void
   showInlineTabs?: boolean // If true, show tabs under summary blocks instead of in sidebar
 }
 
-type TabType =  'next-steps' | 'documents' | 'quick-actions' | 'requirements' | 'templates' | 'message' | 'expert-process'
+type TabType =  'next-steps' | 'documents' | 'requirements' | 'templates' | 'message' | 'expert-process'
 
 export default function ApplicationDetailContent({
   application,
@@ -135,9 +136,7 @@ export default function ApplicationDetailContent({
   const [uploadForRequirementDoc, setUploadForRequirementDoc] = useState<RequirementDocument | null>(null)
   const [isLoadingLicenseType, setIsLoadingLicenseType] = useState(false)
   const [expertProfile, setExpertProfile] = useState<{ id: string; full_name: string | null; email: string | null } | null>(null)
-  const [isLoadingExpert, setIsLoadingExpert] = useState(false)
   const [clientProfile, setClientProfile] = useState<{ id: string; full_name: string | null; email: string | null } | null>(null)
-  const [isLoadingClient, setIsLoadingClient] = useState(false)
   const [messages, setMessages] = useState<any[]>([])
   const [messageContent, setMessageContent] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
@@ -153,9 +152,7 @@ export default function ApplicationDetailContent({
   const [isReviewing, setIsReviewing] = useState(false)
   const [expertSteps, setExpertSteps] = useState<Step[]>([])
   const [isLoadingExpertSteps, setIsLoadingExpertSteps] = useState(false)
-  const [showExpertStepForm, setShowExpertStepForm] = useState(false)
-  const [expertStepFormData, setExpertStepFormData] = useState({ stepName: '', description: '', phase: 'Client Intake' })
-  const [editingExpertStep, setEditingExpertStep] = useState<string | null>(null)
+  const [expertStepFormData, setExpertStepFormData] = useState<{ stepName: string; description: string; phase: string }>({ stepName: '', description: '', phase: DEFAULT_EXPERT_STEP_PHASE })
   const [isSubmittingExpertStep, setIsSubmittingExpertStep] = useState(false)
   const [showAddExpertStepModal, setShowAddExpertStepModal] = useState(false)
   const [addExpertStepModalTab, setAddExpertStepModalTab] = useState<'new' | 'copy' | 'browse'>('new')
@@ -185,9 +182,6 @@ export default function ApplicationDetailContent({
   const supabase = createClient()
   const canCloseApplication = currentUserRole === 'expert' && (application.progress_percentage ?? 0) === 100 && application.status !== 'closed'
 
-  useEffect(() => {
-    console.log('infomodalstep', infoModalStep)
-  }, [infoModalStep])
 
   const handleCloseApplication = async () => {
     if (!canCloseApplication || isClosing) return
@@ -209,11 +203,7 @@ export default function ApplicationDetailContent({
   const refreshDocuments = useCallback(async () => {
     if (!application.id) return
     try {
-      const { data, error } = await supabase
-        .from('application_documents')
-        .select('*')
-        .eq('application_id', application.id)
-        .order('created_at', { ascending: false })
+      const { data, error } = await q.getApplicationDocumentsByApplicationId(supabase, application.id)
       if (error) throw error
       if (data) {
         setDocuments(data.map((doc: any) => ({
@@ -233,9 +223,6 @@ export default function ApplicationDetailContent({
     }
   }, [application.id, supabase])
 
-  const getStateAbbr = (state: string) => {
-    return state.length > 2 ? state.substring(0, 2).toUpperCase() : state.toUpperCase()
-  }
 
   const formatDate = (date: string | Date | null) => {
     if (!date) return 'N/A'
@@ -250,19 +237,13 @@ export default function ApplicationDetailContent({
     setIsLoadingSteps(true)
     try {
       // First, try to fetch application_steps (steps specific to this application)
-      const { data: applicationSteps, error: appStepsError } = await supabase
-        .from('application_steps')
-        .select('*')
-        .eq('application_id', application.id)
-        .order('step_order', { ascending: true })
+      const { data: applicationSteps, error: appStepsError } = await q.getApplicationStepsByApplicationId(supabase, application.id)
 
-        console.log('Fetched application steps:',  applicationSteps)
       if (appStepsError) {
         console.error('Error fetching application steps:', appStepsError)
       }
 
       // If application_steps exist, separate regular steps from expert steps
-      console.log('applicationSteps', applicationSteps?.length ?? 0, applicationSteps)
       if (applicationSteps && applicationSteps.length > 0) {
         const regularSteps = applicationSteps
           .filter((step: any) => !step.is_expert_step)
@@ -275,7 +256,6 @@ export default function ApplicationDetailContent({
             is_completed: step.is_completed,
             is_expert_step: false
           }))
-          console.log('regularSteps', regularSteps?.length ?? 0, regularSteps)
         
         const expertStepsData = applicationSteps
           .filter((step: any) => step.is_expert_step)
@@ -290,7 +270,6 @@ export default function ApplicationDetailContent({
             created_by_expert_id: step.created_by_expert_id
           }))
 
-          console.log('expertStepsData', expertStepsData?.length ?? 0, expertStepsData)
         
         setSteps(regularSteps)
         setExpertSteps(expertStepsData)
@@ -300,12 +279,7 @@ export default function ApplicationDetailContent({
 
       // If no application_steps exist, fetch required steps from license_requirement_steps
       if (application.license_type_id) {
-        // Get license type name and state (match same license_requirement as admin)
-        const { data: licenseType, error: licenseTypeError } = await supabase
-          .from('license_types')
-          .select('name, state')
-          .eq('id', application.license_type_id)
-          .maybeSingle()
+        const { data: licenseType, error: licenseTypeError } = await q.getLicenseTypeById(supabase, application.license_type_id)
 
         if (licenseTypeError || !licenseType || !licenseType.name) {
           setSteps([])
@@ -320,13 +294,7 @@ export default function ApplicationDetailContent({
           return
         }
 
-        // Find license_requirement_id by license type's (state, name)
-        const { data: licenseRequirement, error: reqError } = await supabase
-          .from('license_requirements')
-          .select('id')
-          .eq('state', requirementState)
-          .eq('license_type', licenseType.name)
-          .maybeSingle()
+        const { data: licenseRequirement, error: reqError } = await q.getLicenseRequirementByStateAndTypeSingle(supabase, requirementState, licenseType.name)
 
         if (reqError || !licenseRequirement) {
           setSteps([])
@@ -334,19 +302,14 @@ export default function ApplicationDetailContent({
           return
         }
 
-        // Fetch required steps from license_requirement_steps
-        const { data: requiredSteps, error: stepsError } = await supabase
-          .from('license_requirement_steps')
-          .select('*')
-          .eq('license_requirement_id', licenseRequirement.id)
-          .eq('is_expert_step', false)
-          .order('step_order', { ascending: true })
+        const { data: allRequirementSteps, error: stepsError } = await q.getStepsFromRequirement(supabase, licenseRequirement.id)
+        const requiredSteps = (allRequirementSteps || []).filter((s: { is_expert_step?: boolean }) => !s.is_expert_step)
 
         if (stepsError) {
           console.error('Error fetching required steps:', stepsError)
           setSteps([])
         } else {
-          setSteps((requiredSteps || []).map((step: any) => ({
+          setSteps(requiredSteps.map((step: any) => ({
             id: step.id,
             step_name: step.step_name,
             step_order: step.step_order,
@@ -378,36 +341,22 @@ export default function ApplicationDetailContent({
     }
     setIsLoadingRequirementDocuments(true)
     try {
-      const { data: licenseTypeRow, error: licenseTypeError } = await supabase
-        .from('license_types')
-        .select('name, state')
-        .eq('id', application.license_type_id)
-        .maybeSingle()
+      const { data: licenseTypeRow, error: licenseTypeError } = await q.getLicenseTypeById(supabase, application.license_type_id)
       if (licenseTypeError || !licenseTypeRow?.name) {
         setRequirementDocuments([])
         return
       }
-      // Use license type's state (and name) so we match the same license_requirement as admin
       const requirementState = licenseTypeRow.state ?? application.state
       if (!requirementState) {
         setRequirementDocuments([])
         return
       }
-      const { data: licenseRequirement, error: reqError } = await supabase
-        .from('license_requirements')
-        .select('id')
-        .eq('state', requirementState)
-        .eq('license_type', licenseTypeRow.name)
-        .maybeSingle()
+      const { data: licenseRequirement, error: reqError } = await q.getLicenseRequirementByStateAndTypeSingle(supabase, requirementState, licenseTypeRow.name)
       if (reqError || !licenseRequirement) {
         setRequirementDocuments([])
         return
       }
-      const { data: reqDocs, error: docsError } = await supabase
-        .from('license_requirement_documents')
-        .select('id, document_name, document_type, is_required')
-        .eq('license_requirement_id', licenseRequirement.id)
-        .order('document_name', { ascending: true })
+      const { data: reqDocs, error: docsError } = await q.getRequirementDocumentsForDisplay(supabase, licenseRequirement.id)
       if (docsError) {
         setRequirementDocuments([])
         return
@@ -446,11 +395,7 @@ export default function ApplicationDetailContent({
     }
     setIsLoadingTemplates(true)
     try {
-      const { data: licenseTypeRow, error: licenseTypeError } = await supabase
-        .from('license_types')
-        .select('name, state')
-        .eq('id', application.license_type_id)
-        .maybeSingle()
+      const { data: licenseTypeRow, error: licenseTypeError } = await q.getLicenseTypeById(supabase, application.license_type_id)
       if (licenseTypeError || !licenseTypeRow?.name) {
         setTemplates([])
         return
@@ -460,21 +405,12 @@ export default function ApplicationDetailContent({
         setTemplates([])
         return
       }
-      const { data: licenseRequirement, error: reqError } = await supabase
-        .from('license_requirements')
-        .select('id')
-        .eq('state', requirementState)
-        .eq('license_type', licenseTypeRow.name)
-        .maybeSingle()
+      const { data: licenseRequirement, error: reqError } = await q.getLicenseRequirementByStateAndTypeSingle(supabase, requirementState, licenseTypeRow.name)
       if (reqError || !licenseRequirement) {
         setTemplates([])
         return
       }
-      const { data: templateRows, error: templatesError } = await supabase
-        .from('license_requirement_templates')
-        .select('id, template_name, description, file_url, file_name, created_at')
-        .eq('license_requirement_id', licenseRequirement.id)
-        .order('template_name', { ascending: true })
+      const { data: templateRows, error: templatesError } = await q.getRequirementTemplatesForDisplay(supabase, licenseRequirement.id)
       if (templatesError) {
         setTemplates([])
         return
@@ -511,12 +447,8 @@ export default function ApplicationDetailContent({
     
     setIsLoadingExpertSteps(true)
     try {
-      const { data: expertStepsData, error } = await supabase
-        .from('application_steps')
-        .select('*')
-        .eq('application_id', application.id)
-        .eq('is_expert_step', true)
-        .order('step_order', { ascending: true })
+      const { data: allSteps, error } = await q.getApplicationStepsByApplicationId(supabase, application.id)
+      const expertStepsData = (allSteps || []).filter((s: { is_expert_step?: boolean }) => s.is_expert_step)
 
       if (error) {
         console.error('Error fetching expert steps:', error)
@@ -526,21 +458,13 @@ export default function ApplicationDetailContent({
 
       const steps = expertStepsData || []
       if (steps.length === 0 && application.license_type_id && application.state) {
-        const { data: licenseType } = await supabase
-          .from('license_types')
-          .select('name')
-          .eq('id', application.license_type_id)
-          .maybeSingle()
+        const { data: licenseType } = await q.getLicenseTypeById(supabase, application.license_type_id)
         if (licenseType?.name) {
           await copyExpertStepsFromRequirementToApplication(application.id, application.state, licenseType.name)
-          const { data: refetched, error: refetchErr } = await supabase
-            .from('application_steps')
-            .select('*')
-            .eq('application_id', application.id)
-            .eq('is_expert_step', true)
-            .order('step_order', { ascending: true })
-          if (!refetchErr && refetched?.length) {
-            setExpertSteps(refetched.map((step: any) => ({
+          const { data: refetched, error: refetchErr } = await q.getApplicationStepsByApplicationId(supabase, application.id)
+          const refetchedExpert = (refetched || []).filter((s: { is_expert_step?: boolean }) => s.is_expert_step)
+          if (!refetchErr && refetchedExpert?.length) {
+            setExpertSteps(refetchedExpert.map((step: any) => ({
               id: step.id,
               step_name: step.step_name,
               step_order: step.step_order,
@@ -582,7 +506,7 @@ export default function ApplicationDetailContent({
   const openAddExpertStepModal = () => {
     setShowAddExpertStepModal(true)
     setAddExpertStepModalTab('new')
-    setExpertStepFormData({ stepName: '', description: '', phase: 'Client Intake' })
+    setExpertStepFormData({ stepName: '', description: '', phase: DEFAULT_EXPERT_STEP_PHASE })
     setExpertStepsCopyError(null)
     setBrowseExpertStepsError(null)
   }
@@ -590,7 +514,7 @@ export default function ApplicationDetailContent({
   const closeAddExpertStepModal = () => {
     setShowAddExpertStepModal(false)
     setAddExpertStepModalTab('new')
-    setExpertStepFormData({ stepName: '', description: '', phase: 'Client Intake' })
+    setExpertStepFormData({ stepName: '', description: '', phase: DEFAULT_EXPERT_STEP_PHASE })
     setAvailableExpertSteps([])
     setSelectedExpertStepIds(new Set())
     setSelectedSourceRequirementId('')
@@ -738,15 +662,6 @@ export default function ApplicationDetailContent({
     }
   }
 
-  const toggleExpertStepSelectionInList = (stepId: string) => {
-    setSelectedListExpertStepIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(stepId)) next.delete(stepId)
-      else next.add(stepId)
-      return next
-    })
-  }
-
   const handleCopyExpertStepsToApplication = async (targetApplicationId: string) => {
     if (selectedListExpertStepIds.size === 0 || !targetApplicationId || isCopyingExpertSteps) return
     setIsCopyingExpertSteps(true)
@@ -757,13 +672,7 @@ export default function ApplicationDetailContent({
         setIsCopyingExpertSteps(false)
         return
       }
-      const { data: existingSteps } = await supabase
-        .from('application_steps')
-        .select('step_order')
-        .eq('application_id', targetApplicationId)
-        .eq('is_expert_step', true)
-        .order('step_order', { ascending: false })
-        .limit(1)
+      const { data: existingSteps } = await q.getMaxApplicationExpertStepOrder(supabase, targetApplicationId)
       let nextOrder = existingSteps?.length ? existingSteps[0].step_order + 1 : 1
       const stepsToInsert = stepsToCopy.map((step) => ({
         application_id: targetApplicationId,
@@ -775,7 +684,7 @@ export default function ApplicationDetailContent({
         is_completed: false,
         created_by_expert_id: currentUserId ?? null,
       }))
-      const { error: insertError } = await supabase.from('application_steps').insert(stepsToInsert)
+      const { error: insertError } = await q.insertApplicationStepsRows(supabase, stepsToInsert)
       if (insertError) throw insertError
       alert(`Successfully copied ${stepsToCopy.length} expert step(s)`)
       setSelectedListExpertStepIds(new Set())
@@ -798,37 +707,24 @@ export default function ApplicationDetailContent({
 
     setIsSubmittingExpertStep(true)
     try {
-      // Get the highest step_order for expert steps in this application
-      const { data: existingSteps } = await supabase
-        .from('application_steps')
-        .select('step_order')
-        .eq('application_id', application.id)
-        .eq('is_expert_step', true)
-        .order('step_order', { ascending: false })
-        .limit(1)
+      const { data: existingSteps } = await q.getMaxApplicationExpertStepOrder(supabase, application.id)
+      const nextOrder = existingSteps && existingSteps.length > 0 ? existingSteps[0].step_order + 1 : 1
 
-      const nextOrder = existingSteps && existingSteps.length > 0 
-        ? existingSteps[0].step_order + 1 
-        : 1
-
-      const { error: insertError } = await supabase
-        .from('application_steps')
-        .insert({
-          application_id: application.id,
-          step_name: expertStepFormData.stepName.trim(),
-          step_order: nextOrder,
-          description: expertStepFormData.description.trim() || null,
-          phase: expertStepFormData.phase || null,
-          is_expert_step: true,
-          created_by_expert_id: currentUserId,
-          is_completed: false
-        })
+      const { error: insertError } = await q.insertApplicationStepRow(supabase, {
+        application_id: application.id,
+        step_name: expertStepFormData.stepName.trim(),
+        step_order: nextOrder,
+        description: expertStepFormData.description.trim() || null,
+        phase: expertStepFormData.phase || null,
+        is_expert_step: true,
+        created_by_expert_id: currentUserId,
+        is_completed: false,
+      })
 
       if (insertError) throw insertError
 
       // Reset form, close modal, and refresh
-      setExpertStepFormData({ stepName: '', description: '', phase: 'Client Intake' })
-      setShowExpertStepForm(false)
+      setExpertStepFormData({ stepName: '', description: '', phase: DEFAULT_EXPERT_STEP_PHASE })
       closeAddExpertStepModal()
       await fetchExpertSteps()
     } catch (error: any) {
@@ -844,14 +740,10 @@ export default function ApplicationDetailContent({
     setTogglingExpertStepId(step.id)
     try {
       const newCompleted = !step.is_completed
-      const { error } = await supabase
-        .from('application_steps')
-        .update({
-          is_completed: newCompleted,
-          ...(newCompleted ? { completed_at: new Date().toISOString() } : { completed_at: null })
-        })
-        .eq('id', step.id)
-        .eq('application_id', application.id)
+      const { error } = await q.updateApplicationStepCompleteById(supabase, step.id, application.id, {
+        is_completed: newCompleted,
+        completed_at: newCompleted ? new Date().toISOString() : null,
+      })
 
       if (error) throw error
       setExpertSteps((prev) =>
@@ -865,64 +757,6 @@ export default function ApplicationDetailContent({
     }
   }
 
-  const handleEditExpertStep = (step: Step) => {
-    setEditingExpertStep(step.id)
-    setExpertStepFormData({
-      stepName: step.step_name,
-      description: step.description || '',
-      phase: step.phase || 'Pre-Application'
-    })
-    setShowExpertStepForm(true)
-  }
-
-  const handleUpdateExpertStep = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingExpertStep || isSubmittingExpertStep) return
-
-    setIsSubmittingExpertStep(true)
-    try {
-      const { error } = await supabase
-        .from('application_steps')
-        .update({
-          step_name: expertStepFormData.stepName.trim(),
-          description: expertStepFormData.description.trim() || null,
-          phase: expertStepFormData.phase || null
-        })
-        .eq('id', editingExpertStep)
-
-      if (error) throw error
-
-      // Reset form and refresh
-      setExpertStepFormData({ stepName: '', description: '', phase: 'Client Intake' })
-      setEditingExpertStep(null)
-      setShowExpertStepForm(false)
-      await fetchExpertSteps()
-    } catch (error: any) {
-      console.error('Error updating expert step:', error)
-      alert('Failed to update expert step: ' + (error.message || 'Unknown error'))
-    } finally {
-      setIsSubmittingExpertStep(false)
-    }
-  }
-
-  const handleDeleteExpertStep = async (stepId: string) => {
-    if (!confirm('Are you sure you want to delete this expert step?')) return
-
-    try {
-      const { error } = await supabase
-        .from('application_steps')
-        .delete()
-        .eq('id', stepId)
-        .eq('is_expert_step', true)
-
-      if (error) throw error
-
-      await fetchExpertSteps()
-    } catch (error: any) {
-      console.error('Error deleting expert step:', error)
-      alert('Failed to delete expert step: ' + (error.message || 'Unknown error'))
-    }
-  }
 
   // Fetch license type data
   useEffect(() => {
@@ -931,11 +765,7 @@ export default function ApplicationDetailContent({
       
       setIsLoadingLicenseType(true)
       try {
-        const { data, error } = await supabase
-          .from('license_types')
-          .select('*')
-          .eq('id', application.license_type_id)
-          .single()
+        const { data, error } = await q.getLicenseTypeByIdFull(supabase, application.license_type_id)
 
         if (error) throw error
         setLicenseType(data)
@@ -957,22 +787,15 @@ export default function ApplicationDetailContent({
         return
       }
       
-      setIsLoadingExpert(true)
       try {
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .select('id, full_name, email')
-          .eq('id', application.assigned_expert_id)
-          .single()
+        const { data, error } = await q.getUserProfileById(supabase, application.assigned_expert_id)
 
         if (error) throw error
         setExpertProfile(data)
       } catch (error) {
         console.error('Error fetching expert profile:', error)
         setExpertProfile(null)
-      } finally {
-        setIsLoadingExpert(false)
-      }
+      } 
     }
 
     fetchExpertProfile()
@@ -985,23 +808,15 @@ export default function ApplicationDetailContent({
         setClientProfile(null)
         return
       }
-      
-      setIsLoadingClient(true)
       try {
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .select('id, full_name, email')
-          .eq('id', application.company_owner_id)
-          .single()
+        const { data, error } = await q.getUserProfileById(supabase, application.company_owner_id)
 
         if (error) throw error
         setClientProfile(data)
       } catch (error) {
         console.error('Error fetching client profile:', error)
         setClientProfile(null)
-      } finally {
-        setIsLoadingClient(false)
-      }
+      } 
     }
 
     fetchClientProfile()
@@ -1013,12 +828,7 @@ export default function ApplicationDetailContent({
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setCurrentUserId(user.id)
-        // Get user profile to determine role
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
+        const { data: profile } = await q.getUserProfileRoleById(supabase, user.id)
         if (profile) {
           setCurrentUserRole(profile.role)
         }
@@ -1042,23 +852,19 @@ export default function ApplicationDetailContent({
         let convId = conversationId
 
         if (!convId) {
-          // Try to find existing conversation for this application
-          const { data: existingConv } = await supabase
-            .from('conversations')
-            .select('id')
-            .eq('application_id', application.id)
-            .maybeSingle()
+          const { data: existingConv } = await q.getConversationByApplicationId(supabase, application.id)
 
           if (existingConv) {
             convId = existingConv.id
             setConversationId(convId)
           } else {
-            // conversations.client_id is NOT NULL: get client for this application's company owner
-            const { data: clientRow, error: clientErr } = await supabase
-              .from('clients')
-              .select('id')
-              .eq('company_owner_id', application.company_owner_id)
-              .maybeSingle()
+            if (!application.company_owner_id) {
+              setMessages([])
+              setConversationId(null)
+              setIsLoadingConversation(false)
+              return
+            }
+            const { data: clientRow, error: clientErr } = await q.getClientByCompanyOwnerId(supabase, application.company_owner_id)
 
             if (clientErr || !clientRow?.id) {
               console.error('Error resolving client for conversation:', clientErr || 'No client record')
@@ -1068,22 +874,14 @@ export default function ApplicationDetailContent({
               return
             }
 
-            const { data: newConv, error: convError } = await supabase
-              .from('conversations')
-              .insert({
-                client_id: clientRow.id,
-                application_id: application.id,
-              })
-              .select()
-              .single()
+            const { data: newConv, error: convError } = await q.insertConversation(supabase, {
+              client_id: clientRow.id,
+              application_id: application.id,
+            })
 
             if (convError) {
               if (convError.code === '23505') {
-                const { data: existing } = await supabase
-                  .from('conversations')
-                  .select('id')
-                  .eq('application_id', application.id)
-                  .maybeSingle()
+                const { data: existing } = await q.getConversationByApplicationId(supabase, application.id)
                 if (existing?.id) {
                   convId = existing.id
                   setConversationId(convId)
@@ -1108,12 +906,13 @@ export default function ApplicationDetailContent({
           }
         }
 
+        if (!convId) {
+          setMessages([])
+          setIsLoadingConversation(false)
+          return
+        }
         // Load existing messages
-        const { data: messagesData, error: messagesError } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('conversation_id', convId)
-          .order('created_at', { ascending: true })
+        const { data: messagesData, error: messagesError } = await q.getMessagesByConversationId(supabase, convId)
 
         if (messagesError) {
           console.error('Error loading messages:', messagesError)
@@ -1123,18 +922,16 @@ export default function ApplicationDetailContent({
         } else {
           // Get sender profiles
           const senderIds = Array.from(new Set(messagesData.map(m => m.sender_id)))
-          
-          const { data: userProfiles, error: profilesError } = senderIds.length > 0 ? await supabase
-            .from('user_profiles')
-            .select('id, full_name, role')
-            .in('id', senderIds) : { data: [], error: null }
+          const { data: userProfiles, error: profilesError } = senderIds.length > 0 ? await q.getUserProfilesByIds(supabase, senderIds) : { data: [], error: null }
 
           if (profilesError) {
             console.error('Error fetching user profiles:', profilesError)
           }
 
-          const profilesById: Record<string, any> = {}
-          userProfiles?.forEach(p => {
+          type ProfileRow = { id: string; full_name?: string | null; role?: string | null }
+          const profilesList = (userProfiles ?? []) as unknown as ProfileRow[]
+          const profilesById: Record<string, ProfileRow> = {}
+          profilesList.forEach(p => {
             profilesById[p.id] = p
           })
 
@@ -1157,12 +954,8 @@ export default function ApplicationDetailContent({
           )
           
           if (unreadMessages.length > 0) {
-            // Update each message to add current user ID to is_read array
             for (const msg of unreadMessages) {
-              await supabase.rpc('mark_message_as_read_by_user', {
-                message_id: msg.id,
-                user_id: currentUserId
-              })
+              await q.rpcMarkMessageAsReadByUser(supabase, msg.id, currentUserId)
             }
           }
         }
@@ -1195,18 +988,14 @@ export default function ApplicationDetailContent({
         async (payload) => {
           const newMessage = payload.new as any
 
-          // Get sender information
-          const { data: userProfile } = await supabase
-            .from('user_profiles')
-            .select('id, full_name, role')
-            .eq('id', newMessage.sender_id)
-            .single()
+          const { data: userProfile } = await q.getUserProfilesByIds(supabase, [newMessage.sender_id])
+          const senderProfile = userProfile?.[0] ?? null
 
           const messageWithSender = {
             ...newMessage,
             sender: {
               id: newMessage.sender_id,
-              user_profiles: userProfile || null
+              user_profiles: senderProfile || null
             },
             is_own: newMessage.sender_id === currentUserId
           }
@@ -1263,44 +1052,29 @@ export default function ApplicationDetailContent({
       // If no conversation exists, create one
 
       if (!convId) {
-        // Try to find existing conversation for this application
-        const { data: existingConv } = await supabase
-          .from('conversations')
-          .select('id')
-          .eq('application_id', application.id)
-          .maybeSingle()
-
+        const { data: existingConv } = await q.getConversationByApplicationId(supabase, application.id)
 
         if (existingConv) {
           convId = existingConv.id
           setConversationId(convId)
         } else {
-          const { data: clientRow, error: clientErr } = await supabase
-            .from('clients')
-            .select('id')
-            .eq('company_owner_id', application.company_owner_id)
-            .maybeSingle()
+          if (!application.company_owner_id) {
+            throw new Error('Could not resolve client for conversation. Please try again.')
+          }
+          const { data: clientRow, error: clientErr } = await q.getClientByCompanyOwnerId(supabase, application.company_owner_id)
 
           if (clientErr || !clientRow?.id) {
             throw new Error('Could not resolve client for conversation. Please try again.')
           }
 
-          const { data: newConv, error: convError } = await supabase
-            .from('conversations')
-            .insert({
-              client_id: clientRow.id,
-              application_id: application.id,
-            })
-            .select()
-            .single()
+          const { data: newConv, error: convError } = await q.insertConversation(supabase, {
+            client_id: clientRow.id,
+            application_id: application.id,
+          })
 
           if (convError) {
             if (convError.code === '23505') {
-              const { data: existing } = await supabase
-                .from('conversations')
-                .select('id')
-                .eq('application_id', application.id)
-                .maybeSingle()
+              const { data: existing } = await q.getConversationByApplicationId(supabase, application.id)
               if (existing?.id) {
                 convId = existing.id
                 setConversationId(convId)
@@ -1311,38 +1085,27 @@ export default function ApplicationDetailContent({
               throw new Error('Failed to create conversation. Please try again.')
             }
           } else {
-            convId = newConv.id
+            convId = newConv!.id
             setConversationId(convId)
           }
         }
       }
 
-      // Get current user profile for optimistic update
-      const { data: currentUserProfile } = await supabase
-        .from('user_profiles')
-        .select('id, full_name, role')
-        .eq('id', currentUserId)
-        .single()
+      if (!convId || !currentUserId) {
+        throw new Error('Conversation or user not available.')
+      }
+      const { data: currentUserProfileRows } = await q.getUserProfilesByIds(supabase, [currentUserId])
+      const currentUserProfile = currentUserProfileRows?.[0] ?? null
 
-
-      // Send message
-      const { data: newMessage, error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: convId,
-          sender_id: currentUserId,
-          content: messageContent.trim()
-        })
-        .select()
-        .single()
+      const { data: newMessage, error: messageError } = await q.insertMessage(supabase, {
+        conversation_id: convId,
+        sender_id: currentUserId,
+        content: messageContent.trim(),
+      })
 
       if (messageError) throw messageError
 
-      // Update conversation's last_message_at
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', convId)
+      await q.updateConversationLastMessageAt(supabase, convId)
 
       // Add message optimistically (real-time subscription will also catch it)
       if (newMessage) {
@@ -1473,64 +1236,45 @@ export default function ApplicationDetailContent({
         throw new Error('Step not found')
       }
 
-      // First, check if an application_steps entry exists with this ID
-      const { data: existingAppStep } = await supabase
-        .from('application_steps')
-        .select('id')
-        .eq('application_id', application.id)
-        .eq('id', stepId)
-        .maybeSingle()
+      const { data: existingAppStep } = await q.getApplicationStepByAppAndId(supabase, application.id, stepId)
 
       if (existingAppStep) {
-        // Update existing application_steps entry
-        const { error: updateError } = await supabase
-          .from('application_steps')
-          .update({
-            is_completed: isCompleted,
-            completed_at: new Date().toISOString()
-          })
-          .eq('id', stepId)
-          .eq('application_id', application.id)
-
+        const { error: updateError } = await q.updateApplicationStepComplete(
+          supabase,
+          stepId,
+          application.id,
+          isCompleted,
+          new Date().toISOString()
+        )
         if (updateError) throw updateError
       } else {
-        // Step doesn't exist in application_steps yet
-        // Check if it exists by step_name and step_order (in case it was created differently)
-        const { data: existingByName } = await supabase
-          .from('application_steps')
-          .select('id')
-          .eq('application_id', application.id)
-          .eq('step_name', selectedStep.step_name)
-          .eq('step_order', selectedStep.step_order)
-          .maybeSingle()
+        const { data: existingByName } = await q.getApplicationStepByAppNameOrder(
+          supabase,
+          application.id,
+          selectedStep.step_name,
+          selectedStep.step_order
+        )
 
         if (existingByName) {
-          // Update by step_name and step_order
-          const { error: updateError } = await supabase
-            .from('application_steps')
-            .update({
-              is_completed: isCompleted,
-              completed_at: isCompleted ? new Date().toISOString() : null
-            })
-            .eq('id', existingByName.id)
-            .eq('application_id', application.id)
-
+          const { error: updateError } = await q.updateApplicationStepComplete(
+            supabase,
+            existingByName.id,
+            application.id,
+            isCompleted,
+            isCompleted ? new Date().toISOString() : null
+          )
           if (updateError) throw updateError
         } else {
-          // Create new application_steps entry
-          const { error: insertError } = await supabase
-            .from('application_steps')
-            .insert({
-              application_id: application.id,
-              step_name: selectedStep.step_name,
-              step_order: selectedStep.step_order,
-              description: selectedStep.description,
-              is_completed: isCompleted,
-              completed_at: isCompleted ? new Date().toISOString() : null,
-              is_expert_step: selectedStep.is_expert_step,
-              created_by_expert_id: selectedStep.created_by_expert_id
-            })
-
+          const { error: insertError } = await q.insertApplicationStepRow(supabase, {
+            application_id: application.id,
+            step_name: selectedStep.step_name,
+            step_order: selectedStep.step_order,
+            description: selectedStep.description,
+            is_completed: isCompleted,
+            completed_at: isCompleted ? new Date().toISOString() : null,
+            is_expert_step: selectedStep.is_expert_step,
+            created_by_expert_id: selectedStep.created_by_expert_id,
+          })
           if (insertError) throw insertError
         }
       }
@@ -1621,20 +1365,12 @@ export default function ApplicationDetailContent({
     if (!application?.id || submittingDocumentId) return
     setSubmittingDocumentId(documentId)
     try {
-      const { data: app } = await supabase
-        .from('applications')
-        .select('assigned_expert_id')
-        .eq('id', application.id)
-        .single()
+      const { data: app } = await q.getApplicationAssignedExpertId(supabase, application.id)
       if (!app?.assigned_expert_id) {
         alert('An expert must be assigned to this application before you can submit documents. Please contact support.')
         return
       }
-      const { error } = await supabase
-        .from('application_documents')
-        .update({ status: 'pending' })
-        .eq('id', documentId)
-        .eq('application_id', application.id)
+      const { error } = await q.updateApplicationDocumentStatus(supabase, documentId, application.id, 'pending')
 
       if (error) throw error
       await refreshDocuments()
@@ -1652,13 +1388,10 @@ export default function ApplicationDetailContent({
 
     setIsReviewing(true)
     try {
-      const { error } = await supabase
-        .from('application_documents')
-        .update({
-          status: action === 'approve' ? 'approved' : 'draft',
-          expert_review_notes: reviewNotes.trim() || null
-        })
-        .eq('id', selectedDocumentForReview.id)
+      const { error } = await q.updateApplicationDocumentReview(supabase, selectedDocumentForReview.id, {
+        status: action === 'approve' ? 'approved' : 'draft',
+        expert_review_notes: reviewNotes.trim() || null,
+      })
 
       if (error) throw error
 
@@ -1834,7 +1567,7 @@ export default function ApplicationDetailContent({
                   ) : steps.filter(s => !s.is_completed).length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <p className="text-sm">All steps completed!</p>
-            </div>
+                </div>
                   ) : (
                     <div className="space-y-3">
                       {steps
@@ -1861,7 +1594,7 @@ export default function ApplicationDetailContent({
                   <button className="w-full mt-4 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium">
                     Continue Checklist
                   </button>
-          </div>
+              </div>
 
                 {/* Documents */}
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -1872,12 +1605,13 @@ export default function ApplicationDetailContent({
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
-          {documents.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-sm">No documents yet</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
+
+                  {documents.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                              <p className="text-sm">No documents yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
                       {documents.slice(0, 2).map((doc) => (
                         <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                           <div className="flex items-center gap-3 flex-1">
@@ -1888,11 +1622,11 @@ export default function ApplicationDetailContent({
                                 {doc.document_type || 'Document'}
                               </div>
                             </div>
-                    </div>
+                          </div>
                           <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
                             completed
-                        </span>
-                      </div>
+                          </span>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -2530,12 +2264,7 @@ export default function ApplicationDetailContent({
                       onClick={async () => {
                         setIsLoadingApplications(true)
                         setShowCopyExpertStepsModal(true)
-                        const { data: allApplications } = await supabase
-                          .from('applications')
-                          .select('id, application_name, state')
-                          .neq('id', application.id)
-                          .order('created_at', { ascending: false })
-                          .limit(100)
+                        const { data: allApplications } = await q.getApplicationsListForDropdown(supabase, application.id)
                         if (allApplications) setAvailableApplications(allApplications)
                         setIsLoadingApplications(false)
                       }}
@@ -2614,11 +2343,9 @@ export default function ApplicationDetailContent({
                             onChange={(e) => setExpertStepFormData({ ...expertStepFormData, phase: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
-                            <option value="Client Intake">Client Intake</option>
-                            <option value="Application Preparation">Application Preparation</option>
-                            <option value="Application Submission">Application Submission</option>
-                            <option value="Survey Preparation">Survey Preparation</option>
-                            <option value="Survey Guidance">Survey Guidance</option>
+                            {EXPERT_STEP_PHASES.map((p) => (
+                              <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
                           </select>
                         </div>
                         <div>
@@ -2851,15 +2578,7 @@ export default function ApplicationDetailContent({
             ) : (
               <div className="space-y-6">
                 {(() => {
-                  const phaseOrder = [
-                    'Client Intake',
-                    'Application Preparation',
-                    'Application Submission',
-                    'Survey Preparation',
-                    'Survey Guidance',
-                    'Post-Application',
-                    'Post-Application Steps',
-                  ]
+                  const phaseOrder = EXPERT_STEP_PHASES.map((p) => p.value)
                   const byPhase = new Map<string, Step[]>()
                   for (const step of expertSteps) {
                     const phase = step.phase?.trim() || 'Other'

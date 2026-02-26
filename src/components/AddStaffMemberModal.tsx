@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { createStaffUserAccount } from '@/app/actions/users'
 import Modal from './Modal'
 import { Loader2 } from 'lucide-react'
@@ -65,13 +66,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         return
       }
 
-      // Get client record for the current user (company_owner_id now references clients.id).
-      // Include agency_id so new caregivers are assigned to the same agency when added by an agency admin.
-      const { data: client, error: clientError } = await supabase
-        .from('clients')
-        .select('id, agency_id')
-        .eq('company_owner_id', user.id)
-        .single()
+      const { data: client, error: clientError } = await q.getClientByCompanyOwnerIdWithAgency(supabase, user.id)
 
       if (clientError || !client) {
         setError('Client record not found. Please contact the administrator.')
@@ -79,14 +74,9 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         return
       }
 
-      // Get agency name for the invite email (Supabase template can use {{ .Data.agency_name }})
       let agencyName = ''
       if (client.agency_id) {
-        const { data: agency } = await supabase
-          .from('agencies')
-          .select('name')
-          .eq('id', client.agency_id)
-          .single()
+        const { data: agency } = await q.getAgencyNameById(supabase, client.agency_id)
         agencyName = agency?.name ?? ''
       }
 
@@ -101,8 +91,6 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         data.last_name,
         agencyName || undefined
       )
-
-      console.log('createStaffUserAccount result:', result)
 
       if (result.error || !result.data) {
         setError(result.error || 'Failed to create user account. Please try again.')
@@ -131,29 +119,20 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         return
       }
 
-      console.log('Creating staff member with userId:', userIdToUse, 'for client:', client.id)
-
-      // Create the staff member using client.id as company_owner_id and client.agency_id so the
-      // caregiver is assigned to the same agency when added by an agency admin.
-      const { data: staffMember, error: insertError } = await supabase
-        .from('staff_members')
-        .insert({
-          company_owner_id: client.id,
-          agency_id: client.agency_id ?? null,
-          user_id: userIdToUse, // Must not be null and must be a valid UUID
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          phone: data.phone || null,
-          role: data.role,
-          job_title: data.job_title || null,
-          status: data.status,
-          employee_id: data.employee_id || null,
-          start_date: data.start_date || null,
-        })
-        .select()
-        .single()
-        console.log("staffMember: +",staffMember)
+      const { data: staffMember, error: insertError } = await q.insertStaffMemberReturning(supabase, {
+        company_owner_id: client.id,
+        agency_id: client.agency_id ?? null,
+        user_id: userIdToUse,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        phone: data.phone || null,
+        role: data.role,
+        job_title: data.job_title || null,
+        status: data.status,
+        employee_id: data.employee_id || null,
+        start_date: data.start_date || null,
+      })
 
       if (insertError) {
         console.error('Error creating staff member record:', insertError)

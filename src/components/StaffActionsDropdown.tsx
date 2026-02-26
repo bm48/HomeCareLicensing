@@ -11,7 +11,6 @@ interface StaffActionsDropdownProps {
 }
 
 export default function StaffActionsDropdown({
-  staffId,
   onViewDetails,
   onEdit,
   onManageLicenses,

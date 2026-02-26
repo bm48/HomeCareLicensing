@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { X, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { useRouter } from 'next/navigation'
 import { createAgencyAdminAccount } from '@/app/actions/users'
+import { US_STATES } from '@/lib/constants'
 
 type AddNewClientModalMode = 'agency_admin' | 'care_recipient'
 
@@ -15,19 +17,6 @@ interface AddNewClientModalProps {
   /** When 'agency_admin', form targets clients table (company/contact fields). When 'care_recipient', targets patients. */
   mode?: AddNewClientModalMode
 }
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
-  'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
-  'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana',
-  'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
-  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
-  'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
-  'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
-  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
-  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
-  'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 const AGENCY_FORM_INITIAL = {
   first_name: '',
@@ -119,27 +108,25 @@ export default function AddNewClientModal({ isOpen, onClose, onSuccess, mode = '
         return
       }
 
-      const { error: insertError } = await supabase
-        .from('patients')
-        .insert({
-          owner_id: user.id,
-          full_name: formData.full_name,
-          date_of_birth: formData.date_of_birth,
-          street_address: formData.street_address,
-          city: formData.city,
-          state: formData.state,
-          zip_code: formData.zip_code,
-          phone_number: formData.phone_number,
-          email_address: formData.email_address,
-          emergency_contact_name: formData.emergency_contact_name,
-          emergency_phone: formData.emergency_phone,
-          primary_diagnosis: formData.primary_diagnosis || null,
-          current_medications: formData.current_medications || null,
-          allergies: formData.allergies || null,
-          gender: formData.gender || null,
-          class: formData.class || null,
-          status: 'active'
-        })
+      const { error: insertError } = await q.insertPatient(supabase, {
+        owner_id: user.id,
+        full_name: formData.full_name,
+        date_of_birth: formData.date_of_birth,
+        street_address: formData.street_address,
+        city: formData.city,
+        state: formData.state,
+        zip_code: formData.zip_code,
+        phone_number: formData.phone_number,
+        email_address: formData.email_address,
+        emergency_contact_name: formData.emergency_contact_name,
+        emergency_phone: formData.emergency_phone,
+        primary_diagnosis: formData.primary_diagnosis || null,
+        current_medications: formData.current_medications || null,
+        allergies: formData.allergies || null,
+        gender: formData.gender || null,
+        class: formData.class || null,
+        status: 'active',
+      })
 
       if (insertError) {
         setError(insertError.message)

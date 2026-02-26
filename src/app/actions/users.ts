@@ -3,27 +3,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import * as q from '@/lib/supabase/query'
 
 export async function toggleUserStatus(userId: string, isActive: boolean) {
   const supabase = await createClient()
 
   try {
-    // Update user status in user_profiles table
-    // Note: We might need to add an is_active or status field to user_profiles
-    // For now, we'll use a metadata field or create a separate status tracking
-    const { error } = await supabase
-      .from('user_profiles')
-      .update({ 
-        updated_at: new Date().toISOString()
-        // Add status field if it exists in your schema
-      })
-      .eq('id', userId)
+    const { error } = await q.updateUserProfileUpdatedAt(supabase, userId)
 
     if (error) {
       return { error: error.message, data: null }
     }
 
-    revalidatePath('/admin/users')
+    revalidatePath('/pages/admin/users')
     return { error: null, data: { success: true } }
   } catch (err: any) {
     return { error: err.message || 'Failed to update user status', data: null }
@@ -34,46 +26,31 @@ export async function setUserPassword(userId: string, newPassword: string) {
   const supabase = await createClient()
 
   try {
-    // Get user email from user_profiles
-    const { data: userProfile, error: fetchError } = await supabase
-      .from('user_profiles')
-      .select('email')
-      .eq('id', userId)
-      .single()
+    const { data: userProfile, error: fetchError } = await q.getUserProfileEmail(supabase, userId)
 
     if (fetchError || !userProfile) {
       return { error: 'User not found', data: null }
     }
 
-    // Update password using database function
-    // Note: Make sure to run the migration 015_update_user_password_function.sql in Supabase SQL Editor first
-    const { data, error: updateError } = await supabase.rpc('update_user_password', {
-      p_user_id: userId,
-      p_new_password: newPassword,
-    })
+    const { error: updateError } = await q.rpcUpdateUserPassword(supabase, userId, newPassword)
 
     if (updateError) {
-      // Check if function doesn't exist
       if (updateError.message.includes('could not find the function') || updateError.message.includes('does not exist')) {
-        return { 
-          error: 'Database function not found. Please run the migration file 015_update_user_password_function.sql in Supabase SQL Editor first.', 
-          data: null 
+        return {
+          error: 'Database function not found. Please run the migration file 015_update_user_password_function.sql in Supabase SQL Editor first.',
+          data: null,
         }
       }
       return { error: updateError.message, data: null }
     }
 
-    // Note: In production, you should send an email to the user with the new password
-    // You can integrate with an email service like SendGrid, Resend, or use Supabase Edge Functions
-    // For now, the password is updated but email sending needs to be implemented separately
-
-    revalidatePath('/admin/users')
-    return { 
-      error: null, 
-      data: { 
+    revalidatePath('/pages/admin/users')
+    return {
+      error: null,
+      data: {
         success: true,
-        message: `Password has been set for ${userProfile.email}. Email notification should be sent separately.`
-      } 
+        message: `Password has been set for ${userProfile.email}. Email notification should be sent separately.`,
+      },
     }
   } catch (err: any) {
     return { error: err.message || 'Failed to set password', data: null }
@@ -104,13 +81,9 @@ async function ensureRoleTableRow(
 ) {
   const { first_name: firstName, last_name: lastName } = parseFullName(fullName)
   if (role === 'company_owner') {
-    const { data: existing } = await supabaseAdmin
-      .from('clients')
-      .select('id')
-      .eq('company_owner_id', userId)
-      .maybeSingle()
+    const { data: existing } = await q.getClientByCompanyOwnerId(supabaseAdmin, userId)
     if (!existing) {
-      await supabaseAdmin.from('clients').insert({
+      await q.insertClient(supabaseAdmin, {
         company_owner_id: userId,
         contact_name: fullName || normalizedEmail,
         contact_email: normalizedEmail,
@@ -118,13 +91,9 @@ async function ensureRoleTableRow(
       })
     }
   } else if (role === 'staff_member') {
-    const { data: existing } = await supabaseAdmin
-      .from('staff_members')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle()
+    const { data: existing } = await q.getStaffMemberByUserId(supabaseAdmin, userId)
     if (!existing) {
-      await supabaseAdmin.from('staff_members').insert({
+      await q.insertStaffMember(supabaseAdmin, {
         user_id: userId,
         company_owner_id: null,
         first_name: firstName,
@@ -135,13 +104,9 @@ async function ensureRoleTableRow(
       })
     }
   } else if (role === 'expert') {
-    const { data: existing } = await supabaseAdmin
-      .from('licensing_experts')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle()
+    const { data: existing } = await q.getLicensingExpertIdByUserId(supabaseAdmin, userId)
     if (!existing) {
-      await supabaseAdmin.from('licensing_experts').insert({
+      await q.insertLicensingExpert(supabaseAdmin, {
         user_id: userId,
         first_name: firstName,
         last_name: lastName,
@@ -200,11 +165,7 @@ export async function createUserAccount(
         createError.message.includes('already exists') ||
         createError.message.includes('User already registered')
       ) {
-        const { data: existingProfile } = await supabaseAdmin
-          .from('user_profiles')
-          .select('id, role')
-          .eq('email', normalizedEmail)
-          .single()
+        const { data: existingProfile } = await q.getUserProfileByEmail(supabaseAdmin, normalizedEmail)
         userId = existingProfile?.id || null
         if (userId) {
           await ensureRoleTableRow(supabaseAdmin, userId, fullName.trim(), normalizedEmail, role)
@@ -216,7 +177,7 @@ export async function createUserAccount(
         if (magicLinkError) {
           return { error: `User already exists. Failed to send login link: ${magicLinkError.message}`, data: null }
         }
-        revalidatePath('/admin/users')
+        revalidatePath('/pages/admin/users')
         return {
           error: null,
           data: { success: true, userId, message: `User already exists. Login link sent to ${email}.` },
@@ -323,7 +284,7 @@ export async function createUserAccount(
     })
     if (magicLinkError) console.warn('Failed to send magic link:', magicLinkError.message)
 
-    revalidatePath('/admin/users')
+    revalidatePath('/pages/admin/users')
     return {
       error: null,
       data: { success: true, userId, message: `User created. Login link sent to ${email}.` },
@@ -423,7 +384,7 @@ export async function createAgencyAdminAccount(
         if (magicLinkError) {
           return { error: `User already exists. Failed to send login link: ${magicLinkError.message}`, data: null }
         }
-        revalidatePath('/admin/users')
+        revalidatePath('/pages/admin/users')
         return {
           error: null,
           data: { success: true, userId, message: `User already exists. Login link sent to ${contactEmail}.` },
@@ -465,7 +426,7 @@ export async function createAgencyAdminAccount(
     })
     if (magicLinkError) console.warn('Failed to send magic link:', magicLinkError.message)
 
-    revalidatePath('/admin/users')
+    revalidatePath('/pages/admin/users')
     return {
       error: null,
       data: { success: true, userId, message: `Agency admin created. Login link sent to ${contactEmail}.` },

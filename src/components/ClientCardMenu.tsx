@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { MoreVertical, Eye, MessageSquare, UserCog, FileText, Edit } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import EditClientModal from './EditClientModal'
 
 interface Client {
@@ -61,35 +62,11 @@ export default function ClientCardMenu({
   const handleViewDetails = () => {
     setIsOpen(false)
     try {
-      router.push(`/admin/clients/${clientId}`)
+      router.push(`/pages/admin/clients/${clientId}`)
     } catch (error) {
       console.error('Navigation error:', error)
-      window.location.href = `/admin/clients/${clientId}`
+      window.location.href = `/pages/admin/clients/${clientId}`
     }
-  }
-
-  const handleOpenMessages = () => {
-    setIsOpen(false)
-    try {
-      router.push(`/admin/applications?client=${clientId}`)
-    } catch (error) {
-      console.error('Navigation error:', error)
-      // Fallback to window.location if router fails
-      window.location.href = `/admin/messages?client=${clientId}`
-    }
-  }
-
-  const handleChangeExpert = () => {
-    // TODO: Implement change expert functionality
-    console.log('Change expert for client:', clientId)
-    setIsOpen(false)
-  }
-
-  const handleViewApplications = () => {
-    // TODO: Navigate to applications or filter by client
-    // router.push(`/admin?client=${clientId}`)
-    console.log('View applications for client:', clientId)
-    setIsOpen(false)
   }
 
   const handleEditClient = async () => {
@@ -99,11 +76,7 @@ export default function ClientCardMenu({
     // Always fetch fresh data from the database to ensure we have the latest information
     try {
       const supabase = createClient()
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', clientId)
-        .single()
+      const { data, error } = await q.getClientById(supabase, clientId)
 
       if (error) {
         console.error('Error fetching client:', error)

@@ -5,9 +5,11 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { revalidateLicensesPage } from '@/app/actions/licenses'
 import { Loader2, Upload, X, FileText } from 'lucide-react'
 import Modal from './Modal'
+import { US_STATES } from '@/lib/constants'
 
 const licenseSchema = z.object({
   license_name: z.string().min(1, 'License name is required').min(3, 'License name must be at least 3 characters'),
@@ -19,16 +21,6 @@ const licenseSchema = z.object({
 })
 
 export type CreateLicenseFormData = z.infer<typeof licenseSchema>
-
-const US_STATES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
-  'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
-  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi',
-  'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico',
-  'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania',
-  'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
-  'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
-]
 
 interface CreateLicenseModalProps {
   isOpen: boolean
@@ -94,20 +86,16 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
         return
       }
 
-      const { data: newLicense, error } = await supabase
-        .from('licenses')
-        .insert({
-          company_owner_id: authUser.id,
-          license_name: data.license_name,
-          license_number: data.license_number || null,
-          state: data.state,
-          status: 'active',
-          expiry_date: data.expiry_date,
-          activated_date: data.activated_date || null,
-          renewal_due_date: data.renewal_due_date || null,
-        })
-        .select()
-        .single()
+      const { data: newLicense, error } = await q.insertLicenseReturning(supabase, {
+        company_owner_id: authUser.id,
+        license_name: data.license_name,
+        license_number: data.license_number || null,
+        state: data.state,
+        status: 'active',
+        expiry_date: data.expiry_date,
+        activated_date: data.activated_date || null,
+        renewal_due_date: data.renewal_due_date || null,
+      })
 
       if (error) throw error
       if (!newLicense?.id) throw new Error('License was created but no ID returned')
@@ -136,9 +124,7 @@ export default function CreateLicenseModal({ isOpen, onClose, onSuccess }: Creat
         }
         if (data.expiry_date) docData.expiry_date = data.expiry_date
 
-        const { error: docError } = await supabase
-          .from('license_documents')
-          .insert(docData)
+        const { error: docError } = await q.insertLicenseDocument(supabase, docData)
         if (docError) {
           await supabase.storage.from('application-documents').remove([fileName])
           throw new Error(`Document record failed: ${docError.message}`)

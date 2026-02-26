@@ -6,12 +6,10 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, 
-  MessageSquare, 
   FileText, 
   DollarSign,
   UserCog,
   LogOut, 
-  Bell, 
   ChevronLeft,
   Menu,
   X,
@@ -65,34 +63,16 @@ export default function AdminLayout({
   }
 
   const menuItems = [
-    { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/admin/licenses', label: 'License', icon: ShieldCheck },
-    // { href: '/admin/messages', label: 'Messages', icon: MessageSquare },
-    { href: '/admin/license-requirements', label: 'License Requirements', icon: FileText },
-    { href: '/admin/billing', label: 'Billing & Invoicing', icon: DollarSign },
-    { href: '/admin/configuration', label: 'Configuration', icon: Settings },
-    { href: '/admin/agencies', label: 'Agency', icon: Building2 },
-    { href: '/admin/users', label: 'User Management', icon: UserCog },
+    { href: '/pages/admin', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/pages/admin/licenses', label: 'License', icon: ShieldCheck },
+    // { href: '/pages/admin/messages', label: 'Messages', icon: MessageSquare },
+    { href: '/pages/admin/license-requirements', label: 'License Requirements', icon: FileText },
+    { href: '/pages/admin/billing', label: 'Billing & Invoicing', icon: DollarSign },
+    { href: '/pages/admin/configuration', label: 'Configuration', icon: Settings },
+    { href: '/pages/admin/agencies', label: 'Agency', icon: Building2 },
+    { href: '/pages/admin/users', label: 'User Management', icon: UserCog },
   ]
 
-  const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
-    if (name) {
-      return name
-        .split(' ')
-        .map(n => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    }
-    if (email) {
-      return email[0].toUpperCase()
-    }
-    return 'A'
-  }
-
-  const getDisplayName = () => {
-    return profile?.full_name || user.email || 'Admin User'
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -135,8 +115,8 @@ export default function AdminLayout({
             <UserDropdown 
               user={user} 
               profile={profile} 
-              profileUrl="/admin/profile"
-              changePasswordUrl="/change-password"
+              profileUrl="/pages/admin/profile"
+              changePasswordUrl="/pages/auth/change-password"
             />
           </div>
         </div>

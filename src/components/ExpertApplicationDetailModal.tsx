@@ -20,6 +20,7 @@ import {
   Mail
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import Modal from './Modal'
 
 interface Application {
@@ -120,11 +121,7 @@ export default function ExpertApplicationDetailModal({
     setIsLoadingDocs(true)
     try {
       const supabase = createClient()
-      const { data, error } = await supabase
-        .from('application_documents')
-        .select('id, document_name, document_url, document_type, status, created_at, application_id')
-        .eq('application_id', application.id)
-        .order('created_at', { ascending: false })
+      const { data, error } = await q.getApplicationDocumentsByApplicationId(supabase, application.id)
 
       if (error) {
         console.error('Error fetching documents:', error)
@@ -149,11 +146,7 @@ export default function ExpertApplicationDetailModal({
       const supabase = createClient()
       
       // First, try to fetch application_steps (steps specific to this application)
-      const { data: applicationSteps, error: appStepsError } = await supabase
-        .from('application_steps')
-        .select('*')
-        .eq('application_id', application.id)
-        .order('step_order', { ascending: true })
+      const { data: applicationSteps, error: appStepsError } = await q.getApplicationStepsByApplicationId(supabase, application.id)
 
       if (appStepsError) {
         console.error('Error fetching application steps:', appStepsError)
@@ -178,11 +171,7 @@ export default function ExpertApplicationDetailModal({
       // We need to get the license_type_id and find the corresponding license_requirements
       if (application.license_type_id && application.state) {
         // Get license type name
-        const { data: licenseType, error: licenseTypeError } = await supabase
-          .from('license_types')
-          .select('name')
-          .eq('id', application.license_type_id)
-          .maybeSingle()
+        const { data: licenseType, error: licenseTypeError } = await q.getLicenseTypeById(supabase, application.license_type_id)
 
         if (licenseTypeError) {
           console.error('Error fetching license type:', licenseTypeError)
@@ -192,19 +181,13 @@ export default function ExpertApplicationDetailModal({
         }
 
         if (!licenseType || !licenseType.name) {
-          console.log('License type not found for application:', application.license_type_id)
           setSteps([])
           setIsLoadingSteps(false)
           return
         }
 
         // Find license_requirement_id for this state and license type
-        const { data: licenseRequirement, error: reqError } = await supabase
-          .from('license_requirements')
-          .select('id')
-          .eq('state', application.state)
-          .eq('license_type', licenseType.name)
-          .maybeSingle()
+        const { data: licenseRequirement, error: reqError } = await q.getLicenseRequirementByStateAndType(supabase, application.state, licenseType.name)
 
         if (reqError) {
           console.error('Error fetching license requirement:', reqError)
@@ -214,18 +197,13 @@ export default function ExpertApplicationDetailModal({
         }
 
         if (!licenseRequirement) {
-          console.log('License requirement not found for state:', application.state, 'license type:', licenseType.name)
           setSteps([])
           setIsLoadingSteps(false)
           return
         }
 
         // Fetch required steps from license_requirement_steps
-        const { data: requiredSteps, error: stepsError } = await supabase
-          .from('license_requirement_steps')
-          .select('*')
-          .eq('license_requirement_id', licenseRequirement.id)
-          .order('step_order', { ascending: true })
+        const { data: requiredSteps, error: stepsError } = await q.getStepsFromRequirement(supabase, licenseRequirement.id)
 
         if (stepsError) {
           console.error('Error fetching required steps:', stepsError)
@@ -300,24 +278,10 @@ export default function ExpertApplicationDetailModal({
       if (reviewAction === 'approve') {
         // Approve application - status becomes 'approved'
         // License creation will be handled by database trigger
-        const { error } = await supabase
-          .from('applications')
-          .update({
-            status: 'approved',
-            revision_reason: null
-          })
-          .eq('id', application.id)
-
+        const { error } = await q.updateApplicationStatus(supabase, application.id, { status: 'approved', revision_reason: null })
         if (error) throw error
       } else {
-        // Deny application - status becomes 'needs_revision'
-        const { error } = await supabase
-          .from('applications')
-          .update({
-            status: 'needs_revision',
-            revision_reason: revisionReason.trim()
-          })
-          .eq('id', application.id)
+        const { error } = await q.updateApplicationStatus(supabase, application.id, { status: 'needs_revision', revision_reason: revisionReason.trim() })
 
         if (error) throw error
       }

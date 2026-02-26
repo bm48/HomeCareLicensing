@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { MessageSquare, Search, Paperclip, Send, Check } from 'lucide-react'
 
 interface Conversation {
@@ -60,30 +61,20 @@ export default function ClientMessagesContent({
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId)
 
-  useEffect(() => {
-    console.log("userId", userId)
-  }, [userId])
-  // Load messages for selected conversation
   const loadMessages = async (conversationId: string) => {
     try {
       setLoading(true)
-      const { data: messagesData, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
+      const { data: messagesData, error } = await q.getMessagesByConversationId(supabase, conversationId)
 
       if (error) throw error
 
-      // Get sender information for each message
       const senderIds = Array.from(new Set(messagesData?.map(m => m.sender_id) || [])) as string[]
-      const { data: userProfiles } = senderIds.length > 0 ? await supabase
-        .from('user_profiles')
-        .select('id, full_name, role')
-        .in('id', senderIds) : { data: [] }
+      const { data: userProfiles } = senderIds.length > 0 ? await q.getUserProfilesByIds(supabase, senderIds) : { data: [] }
 
-      const profilesById: Record<string, any> = {}
-      userProfiles?.forEach(p => {
+      type ProfileRow = { id: string; full_name?: string | null; role?: string | null }
+      const profilesList = (userProfiles ?? []) as unknown as ProfileRow[]
+      const profilesById: Record<string, ProfileRow> = {}
+      profilesList.forEach(p => {
         profilesById[p.id] = p
       })
 
@@ -97,22 +88,12 @@ export default function ClientMessagesContent({
         }
       }))
 
-      // Mark messages as read
-      await supabase
-        .from('messages')
-        .update({ is_read: true })
-        .eq('conversation_id', conversationId)
-        .neq('sender_id', userId)
+      await q.markConversationMessagesAsReadExceptSender(supabase, conversationId, userId)
 
       setMessages(messagesWithSenders)
     } catch (error) {
       console.error('Error loading messages:', error)
-      // Fallback: just load messages without sender info
-      const { data: messagesData } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
+      const { data: messagesData } = await q.getMessagesByConversationId(supabase, conversationId)
       setMessages(messagesData || [])
     } finally {
       setLoading(false)
@@ -132,22 +113,15 @@ export default function ClientMessagesContent({
     try {
       setSending(true)
       
-      // Send message
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: selectedConversationId,
-          sender_id: userId,
-          content: messageContent.trim()
-        })
+      const { error: messageError } = await q.insertMessage(supabase, {
+        conversation_id: selectedConversationId,
+        sender_id: userId,
+        content: messageContent.trim()
+      })
 
       if (messageError) throw messageError
 
-      // Update conversation's last_message_at
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', selectedConversationId)
+      await q.updateConversationLastMessageAt(supabase, selectedConversationId)
 
       // Clear message - real-time subscription will add the new message
       setMessageContent('')
@@ -209,7 +183,6 @@ export default function ClientMessagesContent({
   }
 
   // Filter conversations by search
-  console.log("conversations", conversations)
   const filteredConversations = conversations.filter(conv => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
@@ -240,20 +213,18 @@ export default function ClientMessagesContent({
           // Get the new message
           const newMessage = payload.new as Message
           
-          // Get sender information for the new message
-          const { data: userProfile } = await supabase
-            .from('user_profiles')
-            .select('id, full_name, role')
-            .eq('id', newMessage.sender_id)
-            .single()
+          const { data: profiles } = await q.getUserProfilesByIds(supabase, [newMessage.sender_id])
+          type ProfileRow = { id: string; full_name?: string | null; role?: string | null }
+          const userProfile = ((profiles ?? []) as unknown as ProfileRow[])[0]
 
-          // Create message with sender info
           const messageWithSender: Message = {
             ...newMessage,
             sender: {
               id: newMessage.sender_id,
               email: '',
-              user_profiles: userProfile || undefined
+              user_profiles: userProfile
+                ? { full_name: userProfile.full_name ?? undefined, role: userProfile.role ?? undefined }
+                : undefined
             }
           }
 
@@ -270,12 +241,8 @@ export default function ClientMessagesContent({
             )
           })
 
-          // Mark as read if not sent by current user
           if (newMessage.sender_id !== userId && !newMessage.is_read) {
-            await supabase
-              .from('messages')
-              .update({ is_read: true })
-              .eq('id', newMessage.id)
+            await q.rpcMarkMessageAsReadByUser(supabase, newMessage.id, userId)
           }
 
           // Scroll to bottom

@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { Users, CheckCircle2, FileText, Plus, Search, Eye, Loader2 } from 'lucide-react'
 import AddNewClientModal from './AddNewClientModal'
+import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 
 interface SmallClient {
   id: string
@@ -39,7 +40,7 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
   const [clients, setClients] = useState(initialClients)
   const [navigatingClientId, setNavigatingClientId] = useState<string | null>(null)
 
-  // Sync state with props when data refreshes
+// Sync state with props when data refreshes
   useEffect(() => {
     setClients(initialClients)
   }, [initialClients])
@@ -91,13 +92,8 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
     )
 
     try {
-      const { createClient } = await import('@/lib/supabase/client')
       const supabase = createClient()
-      
-      const { error } = await supabase
-        .from('patients')
-        .update({ status: newStatus })
-        .eq('id', clientId)
+      const { error } = await q.updatePatientStatus(supabase, clientId, newStatus)
 
       if (error) {
         // Revert on error
@@ -221,7 +217,7 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredClients.length > 0 ? (
                 filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/dashboard/clients/${client.id}`)}>
+                  <tr key={client.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/pages/agency/clients/${client.id}`)}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
@@ -288,7 +284,7 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
                         type="button"
                         onClick={() => {
                           setNavigatingClientId(client.id)
-                          router.push(`/dashboard/clients/${client.id}`)
+                          router.push(`/pages/agency/clients/${client.id}`)
                         }}
                         disabled={navigatingClientId !== null}
                         className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium disabled:opacity-70 disabled:cursor-not-allowed"

@@ -8,6 +8,7 @@ import * as z from 'zod'
 import { User, Mail, Save, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { UserRole } from '@/types/auth'
 
 const profileSchema = z.object({
@@ -75,15 +76,11 @@ export default function ProfileForm({ user, profile }: ProfileFormProps) {
     try {
       const supabase = createClient()
 
-      // Update user profile
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({
-          full_name: data.fullName,
-          role: data.role,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
+      const { error: updateError } = await q.updateUserProfile(supabase, user.id, {
+        full_name: data.fullName,
+        role: data.role,
+        updated_at: new Date().toISOString(),
+      })
 
       if (updateError) {
         setError(updateError.message)
@@ -202,7 +199,7 @@ export default function ProfileForm({ user, profile }: ProfileFormProps) {
       {/* Action Buttons */}
       <div className="flex gap-4 pt-4">
         <Link
-          href="/dashboard"
+          href="/pages/agency"
           className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
         >
           <ArrowLeft className="w-5 h-5" />

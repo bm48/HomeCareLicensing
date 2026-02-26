@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Modal from './Modal'
 import { Heart, Users, MapPin, DollarSign, Clock, RefreshCw, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import { LicenseType } from '@/types/license'
 
 interface ReviewLicenseRequestModalProps {
@@ -39,7 +40,6 @@ export default function ReviewLicenseRequestModal({
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser()
-      console.log('user: ', user)
       if (!user) {
         setError('You must be logged in to submit a license request')
         setIsLoading(false)
@@ -49,39 +49,30 @@ export default function ReviewLicenseRequestModal({
       const today = new Date()
       const todayStr = today.toISOString().split('T')[0]
 
-      // Create the application request with status 'requested'
-      // The database trigger will automatically notify admin users
-      console.log('Creating application request for user:', user.id)
-      console.log('License type:', licenseType.name)
-      const { data: application, error: insertError } = await supabase
-        .from('applications')
-        .insert({
-          company_owner_id: user.id,
-          application_name: licenseType.name,
-          state: state,
-          license_type_id: licenseType.id,
-          status: 'requested',
-          progress_percentage: 0,
-          started_date: todayStr,
-          last_updated_date: todayStr,
-          submitted_date: todayStr,
-        })
-        .select()
-        .single()
+      const { data: application, error: insertError } = await q.insertApplication(supabase, {
+        company_owner_id: user.id,
+        application_name: licenseType.name,
+        state: state,
+        license_type_id: licenseType.id,
+        status: 'requested',
+        progress_percentage: 0,
+        started_date: todayStr,
+        last_updated_date: todayStr,
+        submitted_date: todayStr,
+      })
 
-        console.log('Application created:', application)
       if (insertError) {
         setError(insertError.message || 'Failed to create application. Please try again.')
         setIsLoading(false)
         return
       }
 
-      // Copy expert steps via RPC (avoids Server Action so no RSC "frame.join" serialization error)
-      const { error: rpcError } = await supabase.rpc('copy_expert_steps_to_application', {
-        p_application_id: application.id,
-        p_state: state,
-        p_license_type_name: licenseType.name,
-      })
+      const { error: rpcError } = await q.rpcCopyExpertStepsToApplication(
+        supabase,
+        application!.id,
+        state,
+        licenseType.name
+      )
       if (rpcError) {
         setError(rpcError.message || 'Failed to set up application steps. Please try again.')
         setIsLoading(false)
@@ -90,7 +81,7 @@ export default function ReviewLicenseRequestModal({
 
       onClose()
       // Navigate without router.refresh() to avoid RSC "frame.join" serialization error
-      router.push('/dashboard/licenses')
+      router.push('/pages/agency/licenses')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to submit license request. Please try again.'
       setError(message)

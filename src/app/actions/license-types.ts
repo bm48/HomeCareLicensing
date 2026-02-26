@@ -76,7 +76,7 @@ export async function createLicenseType(data: CreateLicenseTypeData) {
     console.warn('Failed to create license requirement:', reqError.message)
   }
 
-  revalidatePath('/admin/license-requirements')
+  revalidatePath('/pages/admin/license-requirements')
   return { error: null, data: licenseType }
 }
 
@@ -92,7 +92,7 @@ export async function updateLicenseTypeActive(id: string, isActive: boolean) {
     return { error: error.message }
   }
 
-  revalidatePath('/admin/license-requirements')
+  revalidatePath('/pages/admin/license-requirements')
   return { error: null }
 }
 
@@ -130,6 +130,6 @@ export async function deleteLicenseType(id: string) {
     .eq('state', licenseType.state)
     .eq('license_type', licenseType.name)
 
-  revalidatePath('/admin/license-requirements')
+  revalidatePath('/pages/admin/license-requirements')
   return { error: null }
 }

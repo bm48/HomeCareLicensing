@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Modal from './Modal'
 import { Upload, X, Loader2, FileText, Calendar } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 
 interface UploadLicenseDocumentModalProps {
   isOpen: boolean
@@ -105,9 +106,7 @@ export default function UploadLicenseDocumentModal({
       const { data: { publicUrl } } = supabase.storage
         .from('application-documents')
         .getPublicUrl(filePath)
-      // Create document record in database
-      // Note: If expiry_date column doesn't exist in license_documents table, 
-      // you'll need to add it via migration first
+        
       const documentData: any = {
         license_id: licenseId,
         document_name: documentName,
@@ -120,9 +119,7 @@ export default function UploadLicenseDocumentModal({
         documentData.expiry_date = expiryDate
       }
 
-      const { error: insertError } = await supabase
-        .from('license_documents')
-        .insert(documentData)
+      const { error: insertError } = await q.insertLicenseDocument(supabase, documentData)
       if (insertError) {
         // If insert fails, try to delete the uploaded file
         await supabase.storage
@@ -133,10 +130,7 @@ export default function UploadLicenseDocumentModal({
 
       // Update license expiry date if document has expiry date
       if (expiryDate) {
-        const { error: updateLicenseError } = await supabase
-          .from('licenses')
-          .update({ expiry_date: expiryDate })
-          .eq('id', licenseId)
+        const { error: updateLicenseError } = await q.updateLicenseById(supabase, licenseId, { expiry_date: expiryDate })
 
         if (updateLicenseError) {
           console.error('Error updating license expiry date:', updateLicenseError)

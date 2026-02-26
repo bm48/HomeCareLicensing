@@ -12,12 +12,11 @@ import {
   MapPin,
   User,
   Loader2,
-  Check,
-  X,
   Clock,
   Percent
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 import Modal from './Modal'
 
 interface Application {
@@ -83,7 +82,6 @@ export default function ExpertApplicationsContent({
     return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
   }
 
-  // Filter applications by search query
   const filteredApplications = applications.filter(app => {
     const query = searchQuery.toLowerCase()
     return (
@@ -94,7 +92,6 @@ export default function ExpertApplicationsContent({
     )
   })
 
-  // Group applications by status
   const underReviewApps = filteredApplications.filter(app => app.status === 'under_review')
   const needsRevisionApps = filteredApplications.filter(app => app.status === 'needs_revision')
   const approvedApps = filteredApplications.filter(app => app.status === 'approved')
@@ -121,31 +118,12 @@ export default function ExpertApplicationsContent({
       const supabase = createClient()
 
       if (reviewAction === 'approve') {
-        // Approve application - status becomes 'approved'
-        // License creation will be handled by database trigger
-        const { error } = await supabase
-          .from('applications')
-          .update({
-            status: 'approved',
-            revision_reason: null
-          })
-          .eq('id', selectedApplication.id)
-
+        const { error } = await q.updateApplicationStatus(supabase, selectedApplication.id, { status: 'approved', revision_reason: null })
         if (error) throw error
-
         router.refresh()
       } else {
-        // Deny application - status becomes 'needs_revision'
-        const { error } = await supabase
-          .from('applications')
-          .update({
-            status: 'needs_revision',
-            revision_reason: revisionReason.trim()
-          })
-          .eq('id', selectedApplication.id)
-
+        const { error } = await q.updateApplicationStatus(supabase, selectedApplication.id, { status: 'needs_revision', revision_reason: revisionReason.trim() })
         if (error) throw error
-
         router.refresh()
       }
 
@@ -242,7 +220,7 @@ export default function ExpertApplicationsContent({
           </>
         )}
         <a
-          href={`/dashboard/expert/applications/${application.id}`}
+          href={`/pages/expert/applications/${application.id}`}
           className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
         >
           <FileText className="w-4 h-4" />

@@ -171,7 +171,7 @@ export default function ExpertClientsContent({
                   <tr 
                     key={application.id} 
                     className="hover:bg-gray-50 transition-colors cursor-pointer"
-                    onClick={() => router.push(`/dashboard/expert/applications/${application.id}`)}
+                    onClick={() => router.push(`/pages/expert/applications/${application.id}`)}
                   >
                     <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-semibold text-gray-900">{application.application_name}</div>
@@ -232,7 +232,7 @@ export default function ExpertClientsContent({
                       <button
                         onClick={() => {
                           setLoadingApplicationId(application.id)
-                          router.push(`/dashboard/expert/applications/${application.id}`)
+                          router.push(`/pages/expert/applications/${application.id}`)
                         }}
                         disabled={loadingApplicationId === application.id}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"

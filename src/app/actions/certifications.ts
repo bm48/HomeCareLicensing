@@ -46,7 +46,7 @@ export async function createCertification(data: CreateCertificationData) {
       return { error: insertError.message, data: null }
     }
 
-    revalidatePath('/staff-dashboard/my-certifications')
+    revalidatePath('/pages/caregiver/my-certifications')
     return { error: null, data: certification }
   } catch (err: any) {
     return { error: err.message || 'Failed to create certification', data: null }
@@ -145,8 +145,8 @@ export async function updateCertification(certificationId: string, data: UpdateC
       return { error: updateError.message, data: null }
     }
 
-    revalidatePath('/staff-dashboard/my-certifications')
-    revalidatePath(`/staff-dashboard/my-certifications/${certificationId}`)
+    revalidatePath('/pages/caregiver/my-certifications')
+    revalidatePath(`/pages/caregiver/my-certifications/${certificationId}`)
     return { error: null, data: certification }
   } catch (err: any) {
     return { error: err.message || 'Failed to update certification', data: null }

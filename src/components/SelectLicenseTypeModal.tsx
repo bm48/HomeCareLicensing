@@ -5,6 +5,7 @@ import Modal from './Modal'
 import { Heart, Users, ArrowRight, DollarSign, Clock, RefreshCw, Loader2 } from 'lucide-react'
 import { LicenseType } from '@/types/license'
 import { createClient } from '@/lib/supabase/client'
+import * as q from '@/lib/supabase/query'
 
 interface SelectLicenseTypeModalProps {
   isOpen: boolean
@@ -36,12 +37,7 @@ export default function SelectLicenseTypeModal({
     try {
       const supabase = createClient()
       
-      const { data, error: fetchError } = await supabase
-        .from('license_types')
-        .select('*')
-        .eq('state', state)
-        .eq('is_active', true)
-        .order('name', { ascending: true })
+      const { data, error: fetchError } = await q.getLicenseTypes(supabase, { state, isActive: true })
 
       if (fetchError) {
         throw fetchError
