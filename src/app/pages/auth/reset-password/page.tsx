@@ -57,7 +57,7 @@ function ResetPasswordPageContent() {
     try {
       const supabase = createClient()
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(data.email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/pages/auth/change-password`,
       })
 
       if (resetError) {
