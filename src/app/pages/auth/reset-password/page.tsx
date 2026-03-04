@@ -8,6 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Mail, Lock, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { createImplicitClient } from '@/lib/supabase/client-implicit'
+import { checkEmailExistsForReset } from '@/app/actions/auth'
 
 const resetSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -55,7 +57,20 @@ function ResetPasswordPageContent() {
     setError(null)
 
     try {
-      const supabase = createClient()
+      const { exists, error: checkError } = await checkEmailExistsForReset(data.email)
+      if (checkError) {
+        setError(checkError)
+        setIsLoading(false)
+        return
+      }
+      if (!exists) {
+        setError("Email doesn't exist, please contact with admin")
+        setIsLoading(false)
+        return
+      }
+
+      // Use implicit flow so the reset link works when opened in a different browser/device
+      const supabase = createImplicitClient()
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(data.email, {
         redirectTo: `${window.location.origin}/pages/auth/change-password`,
       })
