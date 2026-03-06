@@ -220,24 +220,22 @@ export default function AddAgencyModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Tax ID / EIN <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Tax ID / EIN </label>
                 <input
                   type="text"
                   value={form.taxId}
                   onChange={(e) => setField('taxId', e.target.value)}
                   placeholder="12-3456789"
-                  required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Primary License Number <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Primary License Number</label>
                 <input
                   type="text"
                   value={form.primaryLicenseNumber}
                   onChange={(e) => setField('primaryLicenseNumber', e.target.value)}
                   placeholder="HCA-2022-001"
-                  required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -300,46 +298,42 @@ export default function AddAgencyModal({
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Physical Address</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Street Address <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Street Address</label>
                 <input
                   type="text"
                   value={form.physicalStreetAddress}
                   onChange={(e) => setField('physicalStreetAddress', e.target.value)}
                   placeholder="123 Healthcare Blvd"
-                  required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">City</label>
                 <input
                   type="text"
                   value={form.physicalCity}
                   onChange={(e) => setField('physicalCity', e.target.value)}
                   placeholder="Austin"
-                  required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">State</label>
                 <input
                   type="text"
                   value={form.physicalState}
                   onChange={(e) => setField('physicalState', e.target.value)}
                   placeholder="Texas"
-                  required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">ZIP Code <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">ZIP Code</label>
                 <input
                   type="text"
                   value={form.physicalZipCode}
                   onChange={(e) => setField('physicalZipCode', e.target.value)}
                   placeholder="78701"
-                  required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -375,46 +369,42 @@ export default function AddAgencyModal({
             {!form.sameAsPhysical && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing Street Address <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing Street Address</label>
                   <input
                     type="text"
                     value={form.mailingStreetAddress}
                     onChange={(e) => setField('mailingStreetAddress', e.target.value)}
                     placeholder="456 Mailing Ave"
-                    required={!form.sameAsPhysical}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing City <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing City</label>
                   <input
                     type="text"
                     value={form.mailingCity}
                     onChange={(e) => setField('mailingCity', e.target.value)}
                     placeholder="Austin"
-                    required={!form.sameAsPhysical}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing State <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing State</label>
                   <input
                     type="text"
                     value={form.mailingState}
                     onChange={(e) => setField('mailingState', e.target.value)}
                     placeholder="Texas"
-                    required={!form.sameAsPhysical}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing ZIP Code <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mailing ZIP Code</label>
                   <input
                     type="text"
                     value={form.mailingZipCode}
                     onChange={(e) => setField('mailingZipCode', e.target.value)}
                     placeholder="78702"
-                    required={!form.sameAsPhysical}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
