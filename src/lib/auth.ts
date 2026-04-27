@@ -1,6 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { UserRole } from '@/types/auth'
 
+function isDynamicServerUsageError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'digest' in error &&
+    (error as { digest?: string }).digest === 'DYNAMIC_SERVER_USAGE'
+  )
+}
+
 export async function getSession() {
   try {
     const supabase = await createClient()
@@ -25,6 +34,11 @@ export async function getSession() {
       profile,
     }
   } catch (error) {
+    // Let Next.js handle dynamic-render bailouts for routes using cookies/headers.
+    if (isDynamicServerUsageError(error)) {
+      throw error
+    }
+
     console.error('getSession failed:', error)
     return null
   }
