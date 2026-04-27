@@ -58,7 +58,8 @@ export default function CasesByStateChart({ stateCounts }: CasesByStateChartProp
                 onMouseEnter={(e) => handleMouseEnter(state, e)}
                 onMouseLeave={handleMouseLeave}
               >
-                <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-sm font-semibold text-gray-900 whitespace-nowrap">
+                {/* Count at top *inside* the bar so it is never clipped when the bar is full height */}
+                <span className="pointer-events-none absolute left-1/2 top-1 z-10 -translate-x-1/2 text-xs font-bold leading-none text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]">
                   {count}
                 </span>
               </div>
