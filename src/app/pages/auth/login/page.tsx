@@ -46,6 +46,7 @@ function LoginPageContent() {
     const message = searchParams.get('message')
     const errorParam = searchParams.get('error')
     const emailParam = searchParams.get('email')
+    const passwordParam = searchParams.get('password')
     const passwordChanged = searchParams.get('passwordChanged')
     
     // Pre-fill email if provided
@@ -54,6 +55,14 @@ function LoginPageContent() {
       // Clear email from URL after setting
       const url = new URL(window.location.href)
       url.searchParams.delete('email')
+      window.history.replaceState({}, '', url)
+    }
+
+    // Pre-fill password if provided by callback flow (e.g. admin-created users via magic link).
+    if (passwordParam) {
+      setValue('password', passwordParam)
+      const url = new URL(window.location.href)
+      url.searchParams.delete('password')
       window.history.replaceState({}, '', url)
     }
     

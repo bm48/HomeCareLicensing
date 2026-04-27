@@ -17,6 +17,9 @@ export async function GET(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser()
       
       const userEmail = user?.email || ''
+      const userMetadata = (user?.user_metadata ?? {}) as Record<string, unknown>
+      const temporaryPassword =
+        typeof userMetadata.temporary_password === 'string' ? userMetadata.temporary_password : ''
       
       // Create redirect URL to login page first
       // Add 'from_callback' parameter to prevent middleware from redirecting
@@ -25,6 +28,9 @@ export async function GET(request: NextRequest) {
       loginUrl.searchParams.set('from_callback', 'true')
       if (userEmail) {
         loginUrl.searchParams.set('email', userEmail)
+      }
+      if (temporaryPassword) {
+        loginUrl.searchParams.set('password', temporaryPassword)
       }
       
       // Sign out and get the response (which will have cleared cookies)

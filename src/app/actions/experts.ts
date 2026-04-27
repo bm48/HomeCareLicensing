@@ -42,6 +42,7 @@ export async function createExpert(data: CreateExpertData) {
       user_metadata: {
         full_name: fullName,
         role: 'expert',
+        temporary_password: data.password,
       },
     })
 
