@@ -130,8 +130,9 @@ function parseFullName(fullName: string): { first_name: string; last_name: strin
   }
 }
 
-function buildMagicLinkRedirectUrl(siteUrl: string, email: string, password?: string) {
-  const redirectUrl = new URL('/auth/callback', siteUrl)
+function buildMagicLinkRedirectUrl(siteUrl: string | undefined, email: string, password?: string) {
+  const baseUrl = siteUrl?.trim() ? siteUrl : 'http://localhost:3000'
+  const redirectUrl = new URL('/auth/callback', baseUrl)
   redirectUrl.searchParams.set('type', 'magiclink')
   redirectUrl.searchParams.set('magic_email', email)
   if (password) {
