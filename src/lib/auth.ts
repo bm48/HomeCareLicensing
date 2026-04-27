@@ -2,26 +2,31 @@ import { createClient } from '@/lib/supabase/server'
 import { UserRole } from '@/types/auth'
 
 export async function getSession() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
 
-  if (error || !user) {
+    if (error || !user) {
+      return null
+    }
+
+    // Get user profile with role
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    return {
+      user,
+      profile,
+    }
+  } catch (error) {
+    console.error('getSession failed:', error)
     return null
-  }
-
-  // Get user profile with role
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  return {
-    user,
-    profile,
   }
 }
 
