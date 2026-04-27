@@ -61,6 +61,10 @@ function LoginPageContent() {
     // Pre-fill password if provided by callback flow (e.g. admin-created users via magic link).
     if (passwordParam) {
       setValue('password', passwordParam)
+      // Ensure stale signup cache can't overwrite the explicit magic-link password.
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('signup_password')
+      }
       const url = new URL(window.location.href)
       url.searchParams.delete('password')
       window.history.replaceState({}, '', url)
@@ -93,7 +97,7 @@ function LoginPageContent() {
     }
     
     // Pre-fill password from sessionStorage if available (from signup)
-    if (typeof window !== 'undefined' && !passwordChanged) {
+    if (typeof window !== 'undefined' && !passwordChanged && !passwordParam) {
       const signupPassword = sessionStorage.getItem('signup_password')
       if (signupPassword) {
         setValue('password', signupPassword)

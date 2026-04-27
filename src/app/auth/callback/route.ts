@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   const type = requestUrl.searchParams.get('type') // 'signup', 'recovery', 'magiclink', etc.
   const magicEmail = requestUrl.searchParams.get('magic_email') || ''
   const magicPassword = requestUrl.searchParams.get('magic_password') || ''
+  const passwordFromQuery = requestUrl.searchParams.get('password') || ''
 
   if (code) {
     const supabase = await createClient()
@@ -19,10 +20,9 @@ export async function GET(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser()
       
       const userEmail = magicEmail || user?.email || ''
-      const userMetadata = (user?.user_metadata ?? {}) as Record<string, unknown>
-      const metadataPassword =
-        typeof userMetadata.temporary_password === 'string' ? userMetadata.temporary_password : ''
-      const temporaryPassword = magicPassword || metadataPassword
+      // Only trust password explicitly carried through the link redirect flow.
+      // Do not fallback to user_metadata.temporary_password because that value can be stale.
+      const temporaryPassword = magicPassword || passwordFromQuery
       
       // Create redirect URL to login page first
       // Add 'from_callback' parameter to prevent middleware from redirecting
