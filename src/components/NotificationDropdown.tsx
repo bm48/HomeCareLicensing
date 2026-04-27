@@ -2,9 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Bell, MessageSquare, Clock, FileText, Trash2 } from 'lucide-react'
+import { flushSync } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import LoadingSpinner from './LoadingSpinner'
 
 interface ApplicationNotification {
   application_id: string
@@ -21,6 +23,25 @@ interface AdminNotificationItem {
   created_at: string
 }
 
+/** Matches title built in DB: notify_agency_staff_schedule_assignment_request */
+const SCHEDULE_ASSIGNMENT_REQUEST_SNIPPET = 'requested assignment to an open visit'
+
+/** Matches title built in DB: notify_agency_staff_schedule_assignment_request_cancelled */
+const SCHEDULE_ASSIGNMENT_CANCEL_SNIPPET = 'withdrew their assignment request for an open visit'
+
+/** Matches titles from 056_notify_caregiver_assignment_approve_decline.sql */
+const VISIT_ASSIGNMENT_CAREGIVER_PREFIX = 'Visit assignment '
+
+function roleSeesInAppNotificationList(role: string | null): boolean {
+  return (
+    role === 'admin' ||
+    role === 'expert' ||
+    role === 'company_owner' ||
+    role === 'care_coordinator' ||
+    role === 'staff_member'
+  )
+}
+
 interface NotificationDropdownProps {
   userId: string
   initialUnreadCount?: number
@@ -35,16 +56,54 @@ export default function NotificationDropdown({
   const [adminNotifications, setAdminNotifications] = useState<AdminNotificationItem[]>([])
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount)
   const [isLoading, setIsLoading] = useState(false)
+  const [isNavigating, setIsNavigating] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const supabase = createClient()
-  
-  // Cache and debounce refetch
-  const lastFetchRef = useRef<number>(0)
+
+  const pendingRouteRef = useRef<string | null>(null)
+  const navTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const CACHE_TTL = 30000 // 30 seconds cache
   const DEBOUNCE_MS = 500 // 500ms debounce for faster badge updates
+
+  const currentRouteKey = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+
+  useEffect(() => {
+    if (!isNavigating || !pendingRouteRef.current) return
+    // Keep spinner until the target route (path + query) is actually reached.
+    if (currentRouteKey !== pendingRouteRef.current) return
+
+    setIsNavigating(false)
+    pendingRouteRef.current = null
+    if (navTimeoutRef.current) {
+      clearTimeout(navTimeoutRef.current)
+      navTimeoutRef.current = null
+    }
+  }, [currentRouteKey, isNavigating])
+
+  const navigateWithLoading = useCallback(
+    (href: string) => {
+      pendingRouteRef.current = href
+      // Force paint of full-page loading overlay before route navigation begins.
+      flushSync(() => {
+        setIsNavigating(true)
+      })
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current)
+      // Fallback clear in case navigation is interrupted.
+      navTimeoutRef.current = setTimeout(() => {
+        setIsNavigating(false)
+        pendingRouteRef.current = null
+        navTimeoutRef.current = null
+      }, 10000)
+      requestAnimationFrame(() => {
+        router.push(href)
+      })
+    },
+    [router]
+  )
 
   // Get user role on mount
   useEffect(() => {
@@ -61,15 +120,11 @@ export default function NotificationDropdown({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole, userId])
 
-  // Fetch applications when dropdown opens (with cache)
+  // Always refetch when the dropdown opens. A 30s cache was skipping this when the list
+  // already had rows, so the badge (updated via realtime + refreshBadgeCount) could show
+  // new unread items while the panel still showed stale notifications (e.g. care coordinators).
   useEffect(() => {
     if (isOpen && userId && userRole) {
-      const now = Date.now()
-      // Use cache if recent and we have content (applications or admin notifications)
-      const hasContent = applications.length > 0 || ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && adminNotifications.length > 0)
-      if (now - lastFetchRef.current < CACHE_TTL && hasContent) {
-        return
-      }
       fetchApplicationsWithUnread()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,7 +163,7 @@ export default function NotificationDropdown({
 
   // Helper: fetch unread notification items for admin/expert/owner (used in all paths so dropdown is never empty)
   const fetchUnreadNotificationItems = async (): Promise<AdminNotificationItem[]> => {
-    if (!userId || (userRole !== 'admin' && userRole !== 'expert' && userRole !== 'company_owner')) return []
+    if (!userId || !roleSeesInAppNotificationList(userRole)) return []
     const { data: notificationRows } = await q.getUnreadNotificationItems(supabase, userId)
     const allItems = (notificationRows || []).map((n: { id: string; title: string; type: string; created_at: string }) => ({
       id: n.id,
@@ -138,17 +193,14 @@ export default function NotificationDropdown({
       } else if (userRole === 'expert') {
         const { data: apps } = await q.getApplicationIdsByAssignedExpertId(supabase, userId)
         applicationIds = apps?.map((a: { id: string }) => a.id) || []
+      } else if (userRole === 'care_coordinator' || userRole === 'staff_member') {
+        applicationIds = []
       } else {
-        // Staff members don't have access to conversations
-        setApplications([])
-        setUnreadCount(0)
-        setIsLoading(false)
-        return
+        applicationIds = []
       }
 
-      // For admin/expert/owner, fetch notifications once so every path can show them (avoids empty dropdown on any error)
       let notificationItems: AdminNotificationItem[] = []
-      if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
+      if (roleSeesInAppNotificationList(userRole) && userId) {
         notificationItems = await fetchUnreadNotificationItems()
       }
 
@@ -157,7 +209,6 @@ export default function NotificationDropdown({
         setAdminNotifications(notificationItems)
         setUnreadCount(notificationItems.length)
         setIsLoading(false)
-        lastFetchRef.current = Date.now()
         return
       }
 
@@ -168,7 +219,6 @@ export default function NotificationDropdown({
         setAdminNotifications(notificationItems)
         setUnreadCount(notificationItems.length)
         setIsLoading(false)
-        lastFetchRef.current = Date.now()
         return
       }
 
@@ -177,7 +227,6 @@ export default function NotificationDropdown({
         setAdminNotifications(notificationItems)
         setUnreadCount(notificationItems.length)
         setIsLoading(false)
-        lastFetchRef.current = Date.now()
         return
       }
 
@@ -193,7 +242,7 @@ export default function NotificationDropdown({
         setIsLoading(false)
         return
       }
-      
+
       const { data: unreadCounts, error: countError } = await q.rpcCountUnreadMessagesForUser(supabase, conversationIds, userId)
 
       if (countError) {
@@ -256,7 +305,6 @@ export default function NotificationDropdown({
       setAdminNotifications(notificationItems)
       totalUnread += notificationItems.length
       setUnreadCount(totalUnread)
-      lastFetchRef.current = Date.now()
     } catch (err) {
       console.error('Error fetching applications with unread:', err)
       setApplications([])
@@ -294,6 +342,10 @@ export default function NotificationDropdown({
         }
         const { data: convData } = await q.getConversationsWithApplications(supabase, applicationIds)
         conversationIds = convData?.map((c: { id: string }) => c.id) || []
+      } else if (userRole === 'care_coordinator' || userRole === 'staff_member') {
+        const { count: notificationsCount } = await q.getUnreadNotificationsCount(supabase, userId)
+        setUnreadCount(notificationsCount ?? 0)
+        return
       } else {
         setUnreadCount(0)
         return
@@ -310,13 +362,13 @@ export default function NotificationDropdown({
 
       let totalCount = countError ? 0 : (count || 0)
 
-      if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
+      if (roleSeesInAppNotificationList(userRole) && userId) {
         const { data: notificationRows } = await q.getUnreadNotificationsByUserId(supabase, userId)
         const nonMessageCount = (notificationRows || []).filter(n => !(n.type === 'general' && n.title === 'New Message')).length
         totalCount += nonMessageCount
       }
 
-      if (countError && userRole !== 'admin' && userRole !== 'expert' && userRole !== 'company_owner') {
+      if (countError && !roleSeesInAppNotificationList(userRole)) {
         console.error('Error counting unread messages:', {
           error: countError,
           message: countError.message,
@@ -347,17 +399,12 @@ export default function NotificationDropdown({
       
       // Always refresh badge count when message arrives (even if dropdown is open)
       await refreshBadgeCount()
-      
-      // If dropdown is open, also refresh the full list if cache expired
-      // Add a small delay to ensure database transaction is committed before fetching
+
+      // If the panel is open, reload list content too (same stale-cache issue as on open).
       if (isOpen) {
-        const now = Date.now()
-        if (now - lastFetchRef.current > CACHE_TTL) {
-          // Wait a bit longer to ensure the new message is committed to the database
-          setTimeout(() => {
-            fetchApplicationsWithUnread()
-          }, 500)
-        }
+        setTimeout(() => {
+          fetchApplicationsWithUnread()
+        }, 500)
       }
     }, DEBOUNCE_MS)
   }, [isOpen, refreshBadgeCount, fetchApplicationsWithUnread])
@@ -431,7 +478,7 @@ export default function NotificationDropdown({
       })
 
     // For admin, expert, owner: subscribe to notifications table so badge updates when new notification arrives
-    if ((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && userId) {
+    if (roleSeesInAppNotificationList(userRole) && userId) {
       const notifChannelName = `notification-${userRole}-${userId}`
       const notifChannel = supabase
         .channel(notifChannelName)
@@ -456,6 +503,9 @@ export default function NotificationDropdown({
         if (fetchTimeoutRef.current) {
           clearTimeout(fetchTimeoutRef.current)
         }
+        if (navTimeoutRef.current) {
+          clearTimeout(navTimeoutRef.current)
+        }
       }
     }
 
@@ -463,6 +513,9 @@ export default function NotificationDropdown({
       supabase.removeChannel(channel)
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current)
+      }
+      if (navTimeoutRef.current) {
+        clearTimeout(navTimeoutRef.current)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -473,29 +526,44 @@ export default function NotificationDropdown({
     
     // Navigate based on user role with fromNotification flag
     if (userRole === 'admin') {
-      router.push(`/pages/admin/licenses/applications/${applicationId}?fromNotification=true`)
+      navigateWithLoading(`/pages/admin/licenses/applications/${applicationId}?fromNotification=true`)
     } else if (userRole === 'company_owner') {
-      router.push(`/pages/agency/applications/${applicationId}?fromNotification=true`)
+      navigateWithLoading(`/pages/agency/applications/${applicationId}?fromNotification=true`)
     } else if (userRole === 'expert') {
-      router.push(`/pages/expert/applications/${applicationId}?fromNotification=true`)
+      navigateWithLoading(`/pages/expert/applications/${applicationId}?fromNotification=true`)
     }
   }
 
-  const handleAdminNotificationClick = async (notificationId: string) => {
+  const handleAdminNotificationClick = async (notif: AdminNotificationItem) => {
     try {
-      await q.markNotificationAsRead(supabase, notificationId)
-      setAdminNotifications(prev => prev.filter(n => n.id !== notificationId))
+      await q.markNotificationAsRead(supabase, notif.id)
+      setAdminNotifications(prev => prev.filter(n => n.id !== notif.id))
       setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (err) {
       console.error('Error marking notification as read:', err)
     }
     setIsOpen(false)
+    if (
+      notif.title.includes(SCHEDULE_ASSIGNMENT_REQUEST_SNIPPET) ||
+      notif.title.includes(SCHEDULE_ASSIGNMENT_CANCEL_SNIPPET)
+    ) {
+      navigateWithLoading('/pages/agency/care-visits?tab=requests')
+      return
+    }
+    if (userRole === 'staff_member' && notif.title.startsWith(VISIT_ASSIGNMENT_CAREGIVER_PREFIX)) {
+      navigateWithLoading('/pages/caregiver/my-care-visits')
+      return
+    }
     if (userRole === 'expert') {
-      router.push('/pages/expert/applications')
+      navigateWithLoading('/pages/expert/applications')
     } else if (userRole === 'company_owner') {
-      router.push('/pages/agency/applications')
+      navigateWithLoading('/pages/agency/applications')
+    } else if (userRole === 'care_coordinator') {
+      navigateWithLoading('/pages/agency/care-visits')
+    } else if (userRole === 'staff_member') {
+      navigateWithLoading('/pages/caregiver')
     } else {
-      router.push('/pages/admin/licenses')
+      navigateWithLoading('/pages/admin/licenses')
     }
   }
 
@@ -530,6 +598,8 @@ export default function NotificationDropdown({
 
   return (
     <div className="relative" ref={dropdownRef}>
+      {isNavigating ? <LoadingSpinner overlayZClass="z-[200]" /> : null}
+
       {/* Notification Bell Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -549,7 +619,7 @@ export default function NotificationDropdown({
         <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[400px] flex flex-col overflow-hidden">
           {/* Header */}
           <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-            <h3 className="font-semibold text-gray-900">{(userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') ? 'Notifications' : 'Messages'}</h3>
+            <h3 className="font-semibold text-gray-900">{roleSeesInAppNotificationList(userRole) ? 'Notifications' : 'Messages'}</h3>
             {unreadCount > 0 && (
               <span className="text-sm text-gray-600">
                 {unreadCount} unread
@@ -560,13 +630,13 @@ export default function NotificationDropdown({
           {/* Scrollable body: admin notifications + applications list */}
           <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Admin: New Application Request; Expert: Application Assigned; Owner: Document Approved */}
-          {((userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && adminNotifications.length > 0) && (
+          {roleSeesInAppNotificationList(userRole) && adminNotifications.length > 0 && (
             <div className="border-b border-gray-200">
               {adminNotifications.map((notif) => (
                 <div
                   key={notif.id}
                   onClick={() => {
-                    handleAdminNotificationClick(notif.id)
+                    handleAdminNotificationClick(notif)
                   }}
                   className="p-4 hover:bg-gray-50 transition-colors cursor-pointer bg-amber-50/50 flex items-start gap-2"
                 >
@@ -600,7 +670,7 @@ export default function NotificationDropdown({
               </div>
             ) : applications.length > 0 ? (
               <div className="divide-y divide-gray-100">
-                {(userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') && adminNotifications.length > 0 && (
+                {roleSeesInAppNotificationList(userRole) && adminNotifications.length > 0 && (
                   <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">Unread messages</div>
                 )}
                 {applications.map((app) => (
@@ -638,14 +708,14 @@ export default function NotificationDropdown({
                   </div>
                 ))}
               </div>
-            ) : adminNotifications.length > 0 && (userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') ? (
+            ) : adminNotifications.length > 0 && roleSeesInAppNotificationList(userRole) ? (
               <div className="p-6 text-center text-gray-500">
                 <p className="text-sm">No unread messages</p>
               </div>
             ) : (
               <div className="p-8 text-center text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p className="text-sm">{(userRole === 'admin' || userRole === 'expert' || userRole === 'company_owner') ? 'No notifications' : 'No unread messages'}</p>
+                <p className="text-sm">{roleSeesInAppNotificationList(userRole) ? 'No notifications' : 'No unread messages'}</p>
               </div>
             )}
           </div>

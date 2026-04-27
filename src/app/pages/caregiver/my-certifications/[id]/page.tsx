@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import * as q from '@/lib/supabase/query'
 import StaffLayout from '@/components/StaffLayout'
 import Link from 'next/link'
-import { getCertification } from '@/app/actions/certifications'
+import { getUnifiedCaregiverCertificationDetail } from '@/app/actions/staff-member-certifications'
 import { 
   ArrowLeft,
   Award,
@@ -41,12 +41,12 @@ export default async function CertificationDetailPage({
 
   const { count: unreadNotifications } = await q.getUnreadNotificationsCount(supabase, session.user.id)
 
-  const result = await getCertification(id)
-  let certification = result.data
+  const unified = await getUnifiedCaregiverCertificationDetail(id)
+  let certification = unified.data
   let isApplication = false
   let application = null
 
-  if (result.error || !result.data) {
+  if (!certification) {
     const { data: staffMember } = await q.getStaffMemberByUserId(supabase, session.user.id)
 
     if (staffMember) {
@@ -78,6 +78,10 @@ export default async function CertificationDetailPage({
     } else {
       redirect('/pages/caregiver/my-certifications?error=Certification not found')
     }
+  }
+
+  if (!certification) {
+    redirect('/pages/caregiver/my-certifications?error=Certification not found')
   }
 
   const formatDate = (date: string | null) => {
@@ -132,25 +136,21 @@ export default async function CertificationDetailPage({
       profile={profile} 
       unreadNotifications={unreadNotifications || 0}
     >
-      <div className="space-y-6 mt-20">
+      <div className="space-y-5 mt-20">
         {/* Back Button */}
         <Link
           href={isApplication ? "/pages/caregiver" : "/pages/caregiver/my-certifications"}
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           {isApplication ? "Back to Dashboard" : "Back to Certifications"}
         </Link>
 
-        {/* Header */}
+        {/* Header — match My Care Visits page title scale */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-              {certification.type}
-            </h1>
-            <p className="text-gray-600 text-base md:text-lg">
-              Certification Details
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900">{certification.type}</h1>
+            <p className="text-sm text-gray-600">Certification Details</p>
           </div>
           {getStatusBadge(certification.status, certification.expiration_date)}
         </div>

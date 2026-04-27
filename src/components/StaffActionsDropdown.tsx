@@ -1,18 +1,23 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { MoreVertical, Eye, Edit, FileText } from 'lucide-react'
+import { MoreVertical, Eye, Pencil, Home, UserPen, IdCard, Files } from 'lucide-react'
 
 interface StaffActionsDropdownProps {
-  staffId: string
-  onViewDetails: () => void
-  onEdit: () => void
+  onViewProfile: () => void
+  onEditInformation: () => void
+  onEditSkills: () => void
+  onEditHomeAddress: () => void
+  onManageDocuments: () => void
   onManageLicenses: () => void
 }
 
 export default function StaffActionsDropdown({
-  onViewDetails,
-  onEdit,
+  onViewProfile,
+  onEditInformation,
+  onEditSkills,
+  onEditHomeAddress,
+  onManageDocuments,
   onManageLicenses,
 }: StaffActionsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -103,25 +108,46 @@ export default function StaffActionsDropdown({
           }}
         >
           <button
-            onClick={() => handleAction(onViewDetails)}
+            onClick={() => handleAction(onViewProfile)}
             className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
           >
             <Eye className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">View details</span>
+            <span className="text-sm font-medium text-gray-700">View Profile</span>
           </button>
           <button
-            onClick={() => handleAction(onEdit)}
+            onClick={() => handleAction(onEditInformation)}
             className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
           >
-            <Edit className="w-4 h-4 text-gray-500" />
+            <UserPen className="w-4 h-4 text-gray-500" />
             <span className="text-sm font-medium text-gray-700">Edit information</span>
+          </button>
+          <button
+            onClick={() => handleAction(onEditSkills)}
+            className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+          >
+            <Pencil className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Edit Skills</span>
+          </button>
+          <button
+            onClick={() => handleAction(onEditHomeAddress)}
+            className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+          >
+            <Home className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Edit Home Address</span>
+          </button>
+          <button
+            onClick={() => handleAction(onManageDocuments)}
+            className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+          >
+            <Files className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Manage Documents</span>
           </button>
           <button
             onClick={() => handleAction(onManageLicenses)}
             className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
           >
-            <FileText className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Manage Licenses</span>
+            <IdCard className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Manage Certifications</span>
           </button>
         </div>
       )}

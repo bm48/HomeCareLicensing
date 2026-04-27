@@ -8,6 +8,7 @@ import * as z from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
 import { createStaffUserAccount } from '@/app/actions/users'
+import { resolveEffectiveCompanyOwnerUserId } from '@/lib/agency-scope'
 import Modal from './Modal'
 import { Loader2 } from 'lucide-react'
 
@@ -66,7 +67,15 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         return
       }
 
-      const { data: client, error: clientError } = await q.getClientByCompanyOwnerIdWithAgency(supabase, user.id)
+      const { data: profile } = await q.getUserProfileFull(supabase, user.id)
+      const effectiveOwnerId = await resolveEffectiveCompanyOwnerUserId(supabase, profile, user.id)
+      if (!effectiveOwnerId) {
+        setError('Could not determine your organization scope. Please contact the administrator.')
+        setIsLoading(false)
+        return
+      }
+
+      const { data: client, error: clientError } = await q.getClientByCompanyOwnerIdWithAgency(supabase, effectiveOwnerId)
 
       if (clientError || !client) {
         setError('Client record not found. Please contact the administrator.')
@@ -80,13 +89,9 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         agencyName = agency?.name ?? ''
       }
 
-      // Generate password from last name: Lastname!123 (e.g. "Doe" -> "doe123!")
-      const password = `${data.last_name.toLowerCase().trim()}123!`
-
-      // Create user account with password and send login link (agencyName/temporary_password go to user_metadata for email template)
+      // Create user account and send login link; server generates a random bootstrap password.
       const result = await createStaffUserAccount(
         data.email,
-        password,
         data.first_name,
         data.last_name,
         agencyName || undefined
@@ -148,7 +153,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
       }
 
       // Show success message
-      setSuccessMessage(`Staff member created successfully! Login link sent to ${data.email}. Password: ${password}`)
+      setSuccessMessage(`Staff member created successfully! Login link sent to ${data.email}.`)
 
       // Reset form and close modal after a short delay
       setTimeout(() => {
@@ -350,7 +355,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
         </div>
 
         {/* Start Date */}
-        <div>
+        {/* <div>
           <label htmlFor="start_date" className="block text-sm font-semibold text-gray-700 mb-2">
             Start Date
           </label>
@@ -364,7 +369,7 @@ export default function AddStaffMemberModal({ isOpen, onClose, onSuccess, staffR
           {errors.start_date && (
             <p className="mt-1 text-sm text-red-600">{errors.start_date.message}</p>
           )}
-        </div>
+        </div> */}
 
         {/* Form Actions */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">

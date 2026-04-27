@@ -1,18 +1,40 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 interface ModalProps {
   isOpen: boolean
   onClose: () => void
-  title: string
+  title: ReactNode
+  /** Shown under the title in muted text (e.g. visit modals). */
+  subtitle?: string
+  /** Rendered below the subtitle — e.g. pill tab switcher in the sticky header. */
+  headerAccessory?: ReactNode
   children: React.ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  /** e.g. z-[100] when stacking a second modal above another. */
+  overlayClassName?: string
+  /** Set false for a stacked inner modal so the outer modal keeps body scroll locked. */
+  lockBodyScroll?: boolean
+  /** Set false so only the top stacked modal reacts to Escape. */
+  closeOnEscape?: boolean
 }
 
-export default function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
+export default function Modal({
+  isOpen,
+  onClose,
+  title,
+  subtitle,
+  headerAccessory,
+  children,
+  size = 'md',
+  overlayClassName,
+  lockBodyScroll = true,
+  closeOnEscape = true,
+}: ModalProps) {
   useEffect(() => {
+    if (!lockBodyScroll) return
     if (isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
@@ -21,7 +43,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [isOpen])
+  }, [isOpen, lockBodyScroll])
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -29,13 +51,13 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
         onClose()
       }
     }
-    if (isOpen) {
+    if (isOpen && closeOnEscape) {
       window.addEventListener('keydown', handleEscape)
     }
     return () => {
       window.removeEventListener('keydown', handleEscape)
     }
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, closeOnEscape])
 
   if (!isOpen) return null
 
@@ -48,22 +70,31 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className={`fixed inset-0 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm ${overlayClassName ?? 'z-50'}`}
       onClick={onClose}
     >
       <div
-        className={`bg-white rounded-xl shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto`}
+        className={`bg-white rounded-xl shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto overflow-x-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label="Close modal"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 rounded-t-xl">
+          <div className="px-6 pt-5 pb-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+                {subtitle ? <p className="text-sm text-gray-500 mt-1">{subtitle}</p> : null}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 -mr-1 -mt-0.5 hover:bg-gray-100 rounded-lg transition-colors shrink-0 text-gray-400 hover:text-gray-600"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5 stroke-[1.25]" />
+              </button>
+            </div>
+            {headerAccessory ? <div className="mt-4">{headerAccessory}</div> : null}
+          </div>
         </div>
         <div className="p-6">{children}</div>
       </div>

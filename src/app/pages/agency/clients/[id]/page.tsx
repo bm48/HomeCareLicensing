@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import * as q from '@/lib/supabase/query'
 import DashboardLayout from '@/components/DashboardLayout'
 import ClientDetailContent from '@/components/ClientDetailContent'
+import { getCachedAgencyClientDetailBundle } from '@/lib/server-cache/agency-client-detail-bundle'
 
 export default async function ClientDetailPage({
   params
@@ -24,13 +25,11 @@ export default async function ClientDetailPage({
   if (profile?.role === 'expert') redirect('/pages/expert/clients')
 
   const { count: unreadNotifications } = await q.getUnreadNotificationsCount(supabase, session.user.id)
-  const { data: client } = await q.getPatientByIdAndOwnerId(supabase, id, session.user.id)
 
-  if (!client) {
+  const bundle = await getCachedAgencyClientDetailBundle(id, session.user.id)
+  if (!bundle) {
     redirect('/pages/agency/clients')
   }
-
-  const { data: allClients } = await q.getPatientsByOwnerIdMinimal(supabase, session.user.id)
 
   return (
     <DashboardLayout
@@ -39,8 +38,18 @@ export default async function ClientDetailPage({
       unreadNotifications={unreadNotifications ?? 0}
     >
       <ClientDetailContent 
-        client={client} 
-        allClients={allClients || []}
+        client={bundle.client} 
+        allClients={bundle.allClients || []}
+        representatives={bundle.representativesList}
+        caregiverRequirements={bundle.caregiverRequirements}
+        incidents={bundle.incidentsList}
+        adls={bundle.adlsList}
+        adlSchedules={bundle.adlSchedulesList}
+        staff={bundle.staffList}
+        contractedHours={bundle.contractedHoursList}
+        skilledCarePlanTasks={bundle.skilledCarePlanTasks}
+        skilledSchedules={bundle.skilledSchedulesList}
+        serviceContracts={bundle.serviceContracts}
       />
     </DashboardLayout>
   )

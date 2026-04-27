@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Users, 
@@ -10,16 +10,20 @@ import {
   Plus,
   Mail,
   Phone,
-  Clock as ClockIcon,
   Medal,
+  Loader2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import * as q from '@/lib/supabase/query'
 import AddStaffMemberModal from './AddStaffMemberModal'
 import StaffActionsDropdown from './StaffActionsDropdown'
 import ViewStaffDetailsModal from './ViewStaffDetailsModal'
+import EditCaregiverSkillsModal from './EditCaregiverSkillsModal'
+import EditCaregiverHomeAddressModal from './EditCaregiverHomeAddressModal'
 import EditStaffModal from './EditStaffModal'
 import ManageLicensesModal from './ManageLicensesModal'
+import ManageCaregiverDocumentsModal from './ManageCaregiverDocumentsModal'
+import type { PatientDocument } from '@/lib/supabase/query/patients'
 
 interface StaffMember {
   id: string
@@ -32,13 +36,22 @@ interface StaffMember {
   status: string
   employee_id?: string | null
   start_date?: string | null
+  agency_id?: string | null
+  /** Current hourly pay from `caregiver_pay_rates` (open-ended row), when set. */
+  currentPayRate?: number | null
+  address?: string | null
+  state?: string | null
+  zip_code?: string | null
+  skills?: string[] | null
   created_at?: string
   expiringLicensesCount?: number
+  documents?: PatientDocument[] | null
+  pay_rate?: string | number | null
 }
 
 interface StaffLicense {
   id: string
-  staff_member_id: string
+  caregiver_member_id: string
   license_type: string
   license_number: string
   state?: string | null
@@ -69,20 +82,79 @@ export default function StaffManagementClient({
   const router = useRouter()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
-  const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isViewProfileOpen, setIsViewProfileOpen] = useState(false)
+  const [isEditSkillsOpen, setIsEditSkillsOpen] = useState(false)
+  const [isEditHomeAddressOpen, setIsEditHomeAddressOpen] = useState(false)
+  const [isEditInformationOpen, setIsEditInformationOpen] = useState(false)
   const [isManageLicensesOpen, setIsManageLicensesOpen] = useState(false)
+  const [isManageDocumentsOpen, setIsManageDocumentsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedRole, setSelectedRole] = useState('all')
   const [selectedStatus, setSelectedStatus] = useState('all')
+  /** Local copy so status toggles update UI immediately; resets when server props change. */
+  const [localStaffList, setLocalStaffList] = useState<(StaffMember & { expiringLicensesCount?: number })[]>(
+    staffWithExpiringLicenses
+  )
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
+  const [statusErrorByStaffId, setStatusErrorByStaffId] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setLocalStaffList(staffWithExpiringLicenses)
+  }, [staffWithExpiringLicenses])
 
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName[0]}${lastName[0]}`.toUpperCase()
   }
 
+  /** Shown under caregiver name (mock: "ID: gsfda-453"). Prefer employee_id; else compact uuid. */
+  const formatStaffDisplayId = (staff: StaffMember) => {
+    const eid = staff.employee_id?.trim()
+    if (eid) return eid
+    const compact = staff.id.replace(/-/g, '')
+    if (compact.length >= 8) return `${compact.slice(0, 5)}-${compact.slice(5, 8)}`
+    return staff.id.slice(0, 8)
+  }
+
+  const handleStatusToggle = async (staff: StaffMember, makeActive: boolean) => {
+    const nextStatus = makeActive ? 'active' : 'inactive'
+    const current = staff.status.toLowerCase()
+    if (current === nextStatus) return
+    setStatusUpdatingId(staff.id)
+    setStatusErrorByStaffId((prev) => {
+      const next = { ...prev }
+      delete next[staff.id]
+      return next
+    })
+    try {
+      const supabase = createClient()
+      const { error } = await q.updateStaffMember(supabase, staff.id, { status: nextStatus })
+      if (error) {
+        setStatusErrorByStaffId((prev) => ({
+          ...prev,
+          [staff.id]: error.message ?? 'Could not update status.',
+        }))
+        return
+      }
+      setLocalStaffList((prev) =>
+        prev.map((s) => (s.id === staff.id ? { ...s, status: nextStatus } : s))
+      )
+      setSelectedStaff((cur) =>
+        cur?.id === staff.id ? { ...cur, status: nextStatus } : cur
+      )
+      router.refresh()
+    } catch (e) {
+      setStatusErrorByStaffId((prev) => ({
+        ...prev,
+        [staff.id]: e instanceof Error ? e.message : 'Could not update status.',
+      }))
+    } finally {
+      setStatusUpdatingId(null)
+    }
+  }
+
   // Filter staff members based on search query and filters
-  const filteredStaffMembers = staffWithExpiringLicenses.filter((staff) => {
+  const filteredStaffMembers = localStaffList.filter((staff) => {
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
@@ -92,7 +164,8 @@ export default function StaffManagementClient({
         staff.email.toLowerCase().includes(query) ||
         staff.role.toLowerCase().includes(query) ||
         (staff.job_title && staff.job_title.toLowerCase().includes(query)) ||
-        (staff.employee_id && staff.employee_id.toLowerCase().includes(query))
+        (staff.employee_id && staff.employee_id.toLowerCase().includes(query)) ||
+        (staff.address && staff.address.toLowerCase().includes(query))
       
       if (!matchesSearch) return false
     }
@@ -110,14 +183,24 @@ export default function StaffManagementClient({
     return true
   })
 
-  const handleViewDetails = (staff: StaffMember) => {
+  const handleViewProfile = (staff: StaffMember) => {
     setSelectedStaff(staff)
-    setIsViewDetailsOpen(true)
+    setIsViewProfileOpen(true)
   }
 
-  const handleEdit = (staff: StaffMember) => {
+  const handleEditInformation = (staff: StaffMember) => {
     setSelectedStaff(staff)
-    setIsEditModalOpen(true)
+    setIsEditInformationOpen(true)
+  }
+
+  const handleEditSkills = (staff: StaffMember) => {
+    setSelectedStaff(staff)
+    setIsEditSkillsOpen(true)
+  }
+
+  const handleEditHomeAddress = (staff: StaffMember) => {
+    setSelectedStaff(staff)
+    setIsEditHomeAddressOpen(true)
   }
 
   const handleManageLicenses = (staff: StaffMember) => {
@@ -125,40 +208,14 @@ export default function StaffManagementClient({
     setIsManageLicensesOpen(true)
   }
 
-  const handleToggleStatus = async (staff: StaffMember, e: React.ChangeEvent<HTMLInputElement>) => {
-    e.stopPropagation() // Prevent row click from triggering
-
-    const newStatus = e.target.checked ? 'active' : 'inactive'
-    const action = newStatus === 'active' ? 'activate' : 'deactivate'
-
-    if (!confirm(`Are you sure you want to ${action} ${staff.first_name} ${staff.last_name}?`)) {
-      // Revert the toggle if user cancels
-      e.target.checked = !e.target.checked
-      return
-    }
-
-    try {
-      const supabase = createClient()
-      const { error } = await q.updateStaffMember(supabase, staff.id, { status: newStatus })
-
-      if (error) {
-        // Revert the toggle on error
-        e.target.checked = !e.target.checked
-        alert(`Failed to ${action} caregiver: ` + error.message)
-        return
-      }
-
-      router.refresh()
-    } catch (err: any) {
-      // Revert the toggle on error
-      e.target.checked = !e.target.checked
-      alert(`Failed to ${action} caregiver: ` + err.message)
-    }
+  const handleManageDocuments = (staff: StaffMember) => {
+    setSelectedStaff(staff)
+    setIsManageDocumentsOpen(true)
   }
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-6 ">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -225,7 +282,7 @@ export default function StaffManagementClient({
             <select 
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
-              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              className="px-4 py-3 border border-gray-300 cursor-pointer rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">All Roles</option>
               {
@@ -237,7 +294,7 @@ export default function StaffManagementClient({
             <select 
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              className="px-4 py-3 border border-gray-300 rounded-xl cursor-pointer focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
@@ -247,114 +304,214 @@ export default function StaffManagementClient({
           </div>
         </div>
 
-        {/* Staff List Table */}
+        {/* Caregivers table (layout matches design mock: caregiver + ID, role lines, status toggle, email/phone, licenses) */}
         {filteredStaffMembers.length > 0 ? (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Caregiver</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Role</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Phone</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Licenses</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Expiring Licenses</th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50/80">
+                    <th
+                      scope="col"
+                      className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap"
+                    >
+                      Caregiver
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap"
+                    >
+                      Role
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap min-w-[200px]"
+                    >
+                      Email
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap"
+                    >
+                      Phone
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap"
+                    >
+                      Certifications
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap"
+                    >
+                      Expiring Certifications
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 text-right whitespace-nowrap w-[72px]"
+                    >
+                      Actions
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {filteredStaffMembers.map((staff) => {
                     const licenses = licensesByStaff[staff.id] || []
-                    const activeLicenses = licenses.filter(l => l.status === 'active')
-                    const expiringCount = licenses.filter(l => {
-                      if (l.days_until_expiry) {
-                        return l.days_until_expiry <= 30 && l.days_until_expiry > 0
-                      }
-                      return false
-                    }).length
+                    const licenseCount = licenses.length
+                    const expiring = staff.expiringLicensesCount ?? 0
+                    const statusLower = staff.status.toLowerCase()
+                    const isInactiveRow = statusLower === 'inactive'
+                    const isActiveRow = statusLower === 'active'
+                    const rolePrimary = staff.job_title?.trim() || staff.role
+                    const roleSecondary =
+                      staff.job_title?.trim() && staff.role !== rolePrimary ? staff.role : null
 
                     return (
-                      <tr 
-                        key={staff.id} 
-                        className="hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => handleViewDetails(staff)}
+                      <tr
+                        key={staff.id}
+                        className={`cursor-pointer border-b border-gray-100 last:border-b-0 hover:bg-gray-50/60 transition-colors ${
+                          isInactiveRow ? 'opacity-90' : ''
+                        }`}
+                        onClick={() => handleViewProfile(staff)}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        <td className="px-5 py-4 align-middle">
+                          <div className="flex items-center gap-3 min-w-0 max-w-[280px]">
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${
+                                isInactiveRow ? 'bg-gray-400' : 'bg-blue-500'
+                              }`}
+                            >
                               {getInitials(staff.first_name, staff.last_name)}
                             </div>
-                            <div>
-                              <div className="text-sm font-semibold text-gray-900">
+                            <div className="min-w-0">
+                              <div
+                                className={`font-semibold text-sm truncate ${
+                                  isActiveRow ? 'text-gray-900' : isInactiveRow ? 'text-gray-400' : 'text-gray-700'
+                                }`}
+                              >
                                 {staff.first_name} {staff.last_name}
                               </div>
-                              {staff.employee_id && (
-                                <div className="text-xs text-gray-500">ID: {staff.employee_id}</div>
-                              )}
+                              <div className="text-xs text-gray-500 truncate mt-0.5">
+                                ID: {formatStaffDisplayId(staff)}
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{staff.role}</div>
-                          {staff.job_title && (
-                            <div className="text-xs text-gray-500">{staff.job_title}</div>
-                          )}
+                        <td className="px-5 py-4 align-middle min-w-0 max-w-[240px]">
+                          <div className="text-sm font-medium text-gray-900 truncate" title={rolePrimary}>
+                            {rolePrimary}
+                          </div>
+                          {roleSecondary ? (
+                            <div className="text-xs text-gray-500 truncate mt-0.5" title={roleSecondary}>
+                              {roleSecondary}
+                            </div>
+                          ) : null}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                          <label className="relative inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={staff.status === 'active'}
-                              onChange={(e) => handleToggleStatus(staff, e)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            <span className="ml-3 text-sm font-medium text-gray-700">
-                              {staff.status === 'active' ? 'Active' : 'Inactive'}
+                        <td className="px-5 py-4 align-middle whitespace-nowrap">
+                          {(() => {
+                            const s = staff.status.toLowerCase()
+                            const isActive = s === 'active'
+                            const isPending = s === 'pending'
+                            const busy = statusUpdatingId === staff.id
+                            const err = statusErrorByStaffId[staff.id]
+                            const statusLabel = isPending ? 'Pending' : isActive ? 'Active' : 'Inactive'
+                            return (
+                              <div className="flex flex-col gap-1 min-w-[7rem]">
+                                <div className="flex items-center gap-2.5">
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={isActive}
+                                    aria-label={`${staff.first_name} ${staff.last_name}: ${statusLabel}`}
+                                    disabled={busy}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      void handleStatusToggle(staff, !isActive)
+                                    }}
+                                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:opacity-60 ${
+                                      isActive ? 'bg-blue-600' : 'bg-gray-300'
+                                    }`}
+                                  >
+                                    {busy ? (
+                                      <span className="absolute inset-0 flex items-center justify-center bg-white/40 rounded-full">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-700" aria-hidden />
+                                      </span>
+                                    ) : null}
+                                    <span
+                                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                                        isActive ? 'translate-x-6' : 'translate-x-1'
+                                      }`}
+                                    />
+                                  </button>
+                                  <span
+                                    className={`text-sm font-semibold ${
+                                      isActive ? 'text-blue-600' : isPending ? 'text-amber-700' : 'text-gray-500'
+                                    }`}
+                                  >
+                                    {statusLabel}
+                                  </span>
+                                </div>
+                                {isPending ? (
+                                  <span className="text-[10px] text-amber-800 leading-tight">
+                                    Turn on to activate
+                                  </span>
+                                ) : null}
+                                {err ? (
+                                  <span className="text-[10px] text-red-600 max-w-[180px]" title={err}>
+                                    {err}
+                                  </span>
+                                ) : null}
+                              </div>
+                            )
+                          })()}
+                        </td>
+                        <td className="px-5 py-4 align-middle min-w-0">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Mail className="w-4 h-4 text-gray-400 shrink-0 stroke-[1.5]" />
+                            <span className="truncate text-sm" title={staff.email || undefined}>
+                              {staff.email || '—'}
                             </span>
-                          </label>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Mail className="w-4 h-4 text-gray-400" />
-                            {staff.email || <span className="text-gray-400">-</span>}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Phone className="w-4 h-4 text-gray-400" />
-                            {staff.phone || <span className="text-gray-400">-</span>}
+                        <td className="px-5 py-4 align-middle whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Phone className="w-4 h-4 text-gray-400 shrink-0 stroke-[1.5]" />
+                            <span className="text-sm">{staff.phone?.trim() ? staff.phone : '—'}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Medal className="w-4 h-4 text-gray-400" />
-                            <span>{licenses.length} {licenses.length === 1 ? 'License' : 'Licenses'}</span>
-                          </div>
-                          {activeLicenses.length > 0 && (
-                            <div className="text-xs text-gray-500 mt-1">{activeLicenses.length} active</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {expiringCount > 0 ? (
-                            <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-xs font-semibold flex items-center gap-1 w-fit">
-                              <ClockIcon className="w-3 h-3" />
-                              {expiringCount}
+                        <td className="px-5 py-4 align-middle">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Medal className="w-4 h-4 text-gray-400 shrink-0 stroke-[1.5]" />
+                            <span className="text-sm">
+                              {licenseCount} {licenseCount === 1 ? 'Certification' : 'Certifications'}
                             </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 align-middle text-sm text-gray-600">
+                          {expiring > 0 ? (
+                            <span className="font-medium text-amber-800 tabular-nums">{expiring}</span>
                           ) : (
-                            <span className="text-sm text-gray-400">-</span>
+                            <span className="text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
-                          <StaffActionsDropdown
-                            staffId={staff.id}
-                            onViewDetails={() => handleViewDetails(staff)}
-                            onEdit={() => handleEdit(staff)}
-                            onManageLicenses={() => handleManageLicenses(staff)}
-                          />
+                        <td className="px-5 py-4 align-middle text-right">
+                          <div className="inline-flex justify-end" onClick={(e) => e.stopPropagation()}>
+                            <StaffActionsDropdown
+                              onViewProfile={() => handleViewProfile(staff)}
+                              onEditInformation={() => handleEditInformation(staff)}
+                              onEditSkills={() => handleEditSkills(staff)}
+                              onEditHomeAddress={() => handleEditHomeAddress(staff)}
+                              onManageDocuments={() => handleManageDocuments(staff)}
+                              onManageLicenses={() => handleManageLicenses(staff)}
+                            />
+                          </div>
                         </td>
                       </tr>
                     )
@@ -382,7 +539,7 @@ export default function StaffManagementClient({
         ) : filteredStaffMembers.length === 0 ? (
           <div className="bg-white rounded-xl shadow-md border border-gray-100 p-12 text-center">
             <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No careigvers found</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No caregivers found</h3>
             <p className="text-gray-600 mb-6">Try adjusting your search or filter criteria</p>
             <button
               onClick={() => {
@@ -411,26 +568,69 @@ export default function StaffManagementClient({
       {selectedStaff && (
         <>
           <ViewStaffDetailsModal
-            isOpen={isViewDetailsOpen}
+            isOpen={isViewProfileOpen}
             onClose={() => {
-              setIsViewDetailsOpen(false)
+              setIsViewProfileOpen(false)
               setSelectedStaff(null)
             }}
-            staff={selectedStaff}
+            staff={
+              (localStaffList.find((s) => s.id === selectedStaff.id) as StaffMember) ?? selectedStaff
+            }
             licenses={licensesByStaff[selectedStaff.id] || []}
           />
 
           <EditStaffModal
-            isOpen={isEditModalOpen}
-            onClose={() => {
-              setIsEditModalOpen(false)
-              setSelectedStaff(null)
-            }}
-            staff={selectedStaff}
+            isOpen={isEditInformationOpen}
+            onClose={() => setIsEditInformationOpen(false)}
+            staff={
+              (localStaffList.find((s) => s.id === selectedStaff.id) as StaffMember) ?? selectedStaff
+            }
+            staffRoleNames={staffRoleNames}
             onSuccess={() => {
-              setIsEditModalOpen(false)
+              setIsEditInformationOpen(false)
+              setSelectedStaff(null)
+              router.refresh()
+            }}
+          />
+
+          <EditCaregiverSkillsModal
+            isOpen={isEditSkillsOpen}
+            onClose={() => {
+              setIsEditSkillsOpen(false)
+            }}
+            caregiver={selectedStaff}
+            onSuccess={() => {
+              setIsEditSkillsOpen(false)
+              setSelectedStaff(null)
+              router.refresh()
+            }}
+          />
+
+          <EditCaregiverHomeAddressModal
+            isOpen={isEditHomeAddressOpen}
+            onClose={() => {
+              setIsEditHomeAddressOpen(false)
+            }}
+            caregiver={selectedStaff}
+            onSuccess={() => {
+              setIsEditHomeAddressOpen(false)
+              setSelectedStaff(null)
+              router.refresh()
+            }}
+          />
+
+          <ManageCaregiverDocumentsModal
+            isOpen={isManageDocumentsOpen}
+            onClose={() => {
+              setIsManageDocumentsOpen(false)
               setSelectedStaff(null)
             }}
+            staffId={selectedStaff.id}
+            staffName={`${selectedStaff.first_name} ${selectedStaff.last_name}`.trim()}
+            initialDocuments={
+              (localStaffList.find((s) => s.id === selectedStaff.id) as StaffMember | undefined)
+                ?.documents ?? selectedStaff.documents
+            }
           />
 
           <ManageLicensesModal
@@ -440,11 +640,18 @@ export default function StaffManagementClient({
               setSelectedStaff(null)
             }}
             staffId={selectedStaff.id}
-            staffName={`${selectedStaff.first_name} ${selectedStaff.last_name}`}
-            existingLicenses={licensesByStaff[selectedStaff.id] || []}
+            staffName={`${selectedStaff.first_name} ${selectedStaff.last_name}`.trim()}
+            existingLicenses={(licensesByStaff[selectedStaff.id] || []).map((l) => ({
+              id: l.id,
+              license_type: l.license_type,
+              license_number: l.license_number,
+              state: l.state,
+              status: l.status,
+              expiry_date: l.expiry_date,
+              days_until_expiry: l.days_until_expiry,
+            }))}
             onSuccess={() => {
-              setIsManageLicensesOpen(false)
-              setSelectedStaff(null)
+              router.refresh()
             }}
           />
         </>

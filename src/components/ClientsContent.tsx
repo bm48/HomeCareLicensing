@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Users, CheckCircle2, FileText, Plus, Search, Eye, Loader2 } from 'lucide-react'
 import AddNewClientModal from './AddNewClientModal'
@@ -26,6 +26,15 @@ interface SmallClient {
   representative_2_phone: string | null
   status: 'active' | 'inactive'
   created_at: string
+  patients_representatives: Representative[]
+}
+
+interface Representative {
+  id: string
+  name: string
+  relationship: string | null
+  phone_number: string | null
+  email_address: string | null
 }
 
 interface ClientsContentProps {
@@ -40,10 +49,11 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
   const [clients, setClients] = useState(initialClients)
   const [navigatingClientId, setNavigatingClientId] = useState<string | null>(null)
 
-// Sync state with props when data refreshes
-  useEffect(() => {
-    setClients(initialClients)
-  }, [initialClients])
+  const handleOpenClientDetails = (clientId: string) => {
+    if (navigatingClientId) return
+    setNavigatingClientId(clientId)
+    router.push(`/pages/agency/clients/${clientId}`)
+  }
 
   // Calculate statistics
   const totalClients = clients.length
@@ -116,7 +126,14 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {navigatingClientId && (
+        <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-[1px] flex items-center justify-center">
+          <div className="rounded-full border border-blue-100 bg-white p-3 shadow-md text-blue-700">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -190,7 +207,7 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option>All Status</option>
             <option value="active">Active</option>
@@ -217,7 +234,11 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredClients.length > 0 ? (
                 filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/pages/agency/clients/${client.id}`)}>
+                  <tr
+                    key={client.id}
+                    className={`hover:bg-gray-50 cursor-pointer ${navigatingClientId ? 'opacity-70 pointer-events-none' : ''}`}
+                    onClick={() => handleOpenClientDetails(client.id)}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
@@ -242,11 +263,11 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {client.representative_1_name ? (
+                      {client.patients_representatives.length > 0 ? (
                         <div>
-                          <div>{client.representative_1_name}</div>
+                          <div>{client.patients_representatives[0].name}</div>
                           <div className="text-xs text-gray-500">
-                            {client.representative_1_relationship} {client.representative_1_phone && `(${client.representative_1_phone})`}
+                            {client.patients_representatives[0].relationship} {client.patients_representatives[0].phone_number && `(${client.patients_representatives[0].phone_number})`}
                           </div>
                         </div>
                       ) : (
@@ -254,11 +275,11 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {client.representative_2_name ? (
+                      {client.patients_representatives.length > 1 ? (
                         <div>
-                          <div>{client.representative_2_name}</div>
+                          <div>{client.patients_representatives[1].name}</div>
                           <div className="text-xs text-gray-500">
-                            {client.representative_2_relationship} {client.representative_2_phone && `(${client.representative_2_phone})`}
+                            {client.patients_representatives[1].relationship} {client.patients_representatives[1].phone_number && `(${client.patients_representatives[1].phone_number})`}
                           </div>
                         </div>
                       ) : (
@@ -282,10 +303,7 @@ export default function ClientsContent({ clients: initialClients }: ClientsConte
                     <td className="px-6 py-4 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNavigatingClientId(client.id)
-                          router.push(`/pages/agency/clients/${client.id}`)
-                        }}
+                        onClick={() => handleOpenClientDetails(client.id)}
                         disabled={navigatingClientId !== null}
                         className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium disabled:opacity-70 disabled:cursor-not-allowed"
                       >

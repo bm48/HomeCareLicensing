@@ -13,12 +13,16 @@ import {
   Menu,
   X,
   BarChart3,
-  UserCircle
+  UserCircle,
+  CalendarDays,
+  DollarSign
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
-import LoadingSpinner from './LoadingSpinner'
 import UserDropdown from './UserDropdown'
+import LinkNavigationOverlay from './LinkNavigationOverlay'
 import NotificationDropdown from './NotificationDropdown'
+import { createClient } from '@/lib/supabase/client'
+import { getCareVisitsPendingBadgeCountAction } from '@/app/actions/care-visits-badge'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -31,6 +35,9 @@ interface DashboardLayoutProps {
     role?: string | null
   } | null
   unreadNotifications?: number
+  careVisitsPendingCount?: number
+  /** Completed visits awaiting hours approval (billing_state = pending). */
+  timeBillingPendingCount?: number
   application?: {
     id: string
     state: string
@@ -45,38 +52,80 @@ export default function DashboardLayout({
   user, 
   profile,
   unreadNotifications = 0,
+  careVisitsPendingCount,
+  timeBillingPendingCount,
   application = null
 }: DashboardLayoutProps) {
   const pathname = usePathname()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [currentPath, setCurrentPath] = useState(pathname)
+  const [resolvedCareVisitsPendingCount, setResolvedCareVisitsPendingCount] = useState(careVisitsPendingCount ?? 0)
+  const [resolvedTimeBillingPendingCount, setResolvedTimeBillingPendingCount] = useState(timeBillingPendingCount ?? 0)
   const isApplicationDetailPage = pathname?.startsWith('/pages/agency/applications/') && pathname !== '/pages/agency/applications'
 
-  // Track pathname changes to show/hide loading
   useEffect(() => {
-    if (pathname !== currentPath) {
-      setCurrentPath(pathname)
-      setIsLoading(false)
+    if (typeof careVisitsPendingCount === 'number') {
+      setResolvedCareVisitsPendingCount(careVisitsPendingCount)
+      return
     }
-  }, [pathname, currentPath])
+    if (profile?.role !== 'care_coordinator') return
 
-  // Handle link clicks to show loading
-  const handleLinkClick = (href: string) => {
-    if (href !== pathname) {
-      setIsLoading(true)
+    let isMounted = true
+    ;(async () => {
+      try {
+        const count = await getCareVisitsPendingBadgeCountAction()
+        if (!isMounted) return
+        setResolvedCareVisitsPendingCount(count)
+      } catch {
+        if (!isMounted) return
+      }
+    })()
+
+    return () => {
+      isMounted = false
     }
-  }
+  }, [careVisitsPendingCount, profile?.role, pathname])
 
-  const menuItems = [
-    { href: '/pages/agency', label: 'Home', icon: Home },
-    { href: '/pages/agency/licenses', label: 'Licenses', icon: Medal },
-    { href: '/pages/agency/clients', label: 'Clients', icon: UserCircle },
-    { href: '/pages/agency/caregiver', label: 'Caregivers', icon: Users },
-    { href: '/pages/agency/reports', label: 'Reports', icon: BarChart3 },
-    // { href: '/pages/agency/messages', label: 'Messages', icon: MessageSquare },
-  ]
+  useEffect(() => {
+    if (typeof timeBillingPendingCount === 'number') {
+      setResolvedTimeBillingPendingCount(timeBillingPendingCount)
+      return
+    }
+    if (profile?.role !== 'care_coordinator') return
+
+    let isMounted = true
+    const supabase = createClient()
+    ;(async () => {
+      const { count, error } = await supabase
+        .from('scheduled_visits')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .eq('billing_state', 'pending')
+      if (!isMounted || error) return
+      setResolvedTimeBillingPendingCount(count ?? 0)
+    })()
+
+    return () => {
+      isMounted = false
+    }
+  }, [timeBillingPendingCount, profile?.role, pathname])
+
+  const menuItems = profile?.role === 'care_coordinator'
+    ? [
+        { href: '/pages/agency/clients', label: 'Clients', icon: UserCircle },
+        { href: '/pages/agency/caregiver', label: 'Caregivers', icon: Users },
+        { href: '/pages/agency/care-visits', label: 'Care Visits', icon: CalendarDays },
+        { href: '/pages/agency/time-billing', label: 'Time & Billing', icon: DollarSign },
+        { href: '/pages/agency/reports', label: 'Reports', icon: BarChart3 },
+      ]
+    : [
+        { href: '/pages/agency', label: 'Home', icon: Home },
+        { href: '/pages/agency/licenses', label: 'Licenses', icon: Medal },
+        { href: '/pages/agency/clients', label: 'Clients', icon: UserCircle },
+        { href: '/pages/agency/caregiver', label: 'Caregivers', icon: Users },
+        { href: '/pages/agency/reports', label: 'Reports', icon: BarChart3 },
+        // { href: '/pages/agency/messages', label: 'Messages', icon: MessageSquare },
+      ]
 
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
     if (name) {
@@ -96,7 +145,6 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {isLoading && <LoadingSpinner />}
       {/* Top Header - Fixed */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
         <div className="flex items-center justify-between px-4 sm:px-6 py-4">
@@ -183,15 +231,41 @@ export default function DashboardLayout({
                     <Link
                       key={item.href}
                       href={item.href}
-                      onClick={() => handleLinkClick(item.href)}
                       className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
                         isActive
                           ? 'bg-blue-50 text-blue-700 font-semibold'
                           : 'text-gray-700 hover:bg-gray-100'
                       }`}
                     >
-                      <Icon className="w-5 h-5 flex-shrink-0" />
-                      {!sidebarCollapsed && <span>{item.label}</span>}
+                      <LinkNavigationOverlay />
+                      <div className="relative flex-shrink-0">
+                        <Icon className="w-5 h-5" />
+                        {sidebarCollapsed && item.href === '/pages/agency/care-visits' && resolvedCareVisitsPendingCount > 0 ? (
+                          <span className="absolute -top-2 -right-2 rounded-full bg-amber-100 text-amber-800 text-[10px] font-semibold px-1.5 py-0.5 min-w-[1rem] text-center leading-none">
+                            {resolvedCareVisitsPendingCount}
+                          </span>
+                        ) : null}
+                        {sidebarCollapsed && item.href === '/pages/agency/time-billing' && resolvedTimeBillingPendingCount > 0 ? (
+                          <span className="absolute -top-2 -right-2 rounded-full bg-amber-100 text-amber-800 text-[10px] font-semibold px-1.5 py-0.5 min-w-[1rem] text-center leading-none">
+                            {resolvedTimeBillingPendingCount}
+                          </span>
+                        ) : null}
+                      </div>
+                      {!sidebarCollapsed ? (
+                        <div className="flex items-center justify-between min-w-0 w-full">
+                          <span>{item.label}</span>
+                          {item.href === '/pages/agency/care-visits' && resolvedCareVisitsPendingCount > 0 ? (
+                            <span className="rounded-full bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 min-w-[1.25rem] text-center">
+                              {resolvedCareVisitsPendingCount}
+                            </span>
+                          ) : null}
+                          {item.href === '/pages/agency/time-billing' && resolvedTimeBillingPendingCount > 0 ? (
+                            <span className="rounded-full bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 min-w-[1.25rem] text-center">
+                              {resolvedTimeBillingPendingCount}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </Link>
                   )
                 })}
@@ -264,9 +338,11 @@ export default function DashboardLayout({
         </aside>
 
         {/* Main Content */}
-        <main className={`flex-1 min-w-0 p-4 sm:p-6 w-full max-w-full transition-all duration-300 overflow-x-hidden ${
-          sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
-        }`}>
+        <main
+          className={`flex-1 min-w-0 p-4 sm:p-6 w-full max-w-full transition-all duration-300 overflow-x-hidden text-gray-900 ${
+            sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
+          }`}
+        >
           {children}
         </main>
       </div>
