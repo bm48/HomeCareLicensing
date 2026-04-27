@@ -130,14 +130,10 @@ function parseFullName(fullName: string): { first_name: string; last_name: strin
   }
 }
 
-function buildMagicLinkRedirectUrl(siteUrl: string | undefined, email: string, password?: string) {
+function buildMagicLinkRedirectUrl(siteUrl: string | undefined) {
   const baseUrl = siteUrl?.trim() ? siteUrl : 'http://localhost:3000'
   const redirectUrl = new URL('/auth/callback', baseUrl)
   redirectUrl.searchParams.set('type', 'magiclink')
-  redirectUrl.searchParams.set('magic_email', email)
-  if (password) {
-    redirectUrl.searchParams.set('magic_password', password)
-  }
   return redirectUrl.toString()
 }
 
@@ -252,7 +248,7 @@ export async function createUserAccount(
         }
         const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
           email: normalizedEmail,
-          options: { emailRedirectTo: buildMagicLinkRedirectUrl(siteUrl, normalizedEmail) },
+          options: { emailRedirectTo: buildMagicLinkRedirectUrl(siteUrl) },
         })
         if (magicLinkError) {
           return { error: `User already exists. Failed to send login link: ${magicLinkError.message}`, data: null }
@@ -410,7 +406,7 @@ export async function createUserAccount(
 
     const { error: magicLinkError } = await supabaseCookie.auth.signInWithOtp({
       email: normalizedEmail,
-      options: { emailRedirectTo: buildMagicLinkRedirectUrl(siteUrl, normalizedEmail, password) },
+      options: { emailRedirectTo: buildMagicLinkRedirectUrl(siteUrl) },
     })
     if (magicLinkError) console.warn('Failed to send magic link:', magicLinkError.message)
 

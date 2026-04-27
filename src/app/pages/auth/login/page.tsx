@@ -26,7 +26,6 @@ function LoginPageContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [lockMagicPrefill, setLockMagicPrefill] = useState(false)
   // const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login')
 
   const {
@@ -46,49 +45,7 @@ function LoginPageContent() {
   useEffect(() => {
     const message = searchParams.get('message')
     const errorParam = searchParams.get('error')
-    const emailParam = searchParams.get('email')
-    const passwordParam = searchParams.get('password')
     const passwordChanged = searchParams.get('passwordChanged')
-    let t1: number | null = null
-    let t2: number | null = null
-    let t3: number | null = null
-    
-    // Pre-fill email if provided
-    if (emailParam) {
-      setValue('email', emailParam)
-      // Clear email from URL after setting
-      const url = new URL(window.location.href)
-      url.searchParams.delete('email')
-      window.history.replaceState({}, '', url)
-    }
-
-    // Pre-fill password if provided by callback flow (e.g. admin-created users via magic link).
-    if (passwordParam) {
-      setValue('password', passwordParam)
-      // Ensure stale signup cache can't overwrite the explicit magic-link password.
-      if (typeof window !== 'undefined') {
-        sessionStorage.removeItem('signup_password')
-      }
-      const url = new URL(window.location.href)
-      url.searchParams.delete('password')
-      window.history.replaceState({}, '', url)
-    }
-
-    // When callback provides explicit credentials, lock autofill override briefly
-    // so browser/password-manager doesn't replace them after initial paint.
-    if (emailParam || passwordParam) {
-      setLockMagicPrefill(true)
-      if (typeof window !== 'undefined') {
-        const enforce = () => {
-          if (emailParam) setValue('email', emailParam, { shouldDirty: false, shouldValidate: false })
-          if (passwordParam) setValue('password', passwordParam, { shouldDirty: false, shouldValidate: false })
-        }
-        enforce()
-        t1 = window.setTimeout(enforce, 50)
-        t2 = window.setTimeout(enforce, 250)
-        t3 = window.setTimeout(() => setLockMagicPrefill(false), 1200)
-      }
-    }
     
     // Handle password change - pre-fill email and new password from sessionStorage and show success message
     if (passwordChanged === 'true') {
@@ -116,14 +73,9 @@ function LoginPageContent() {
       window.history.replaceState({}, '', url)
     }
     
-    // Pre-fill password from sessionStorage if available (from signup)
-    if (typeof window !== 'undefined' && !passwordChanged && !passwordParam) {
-      const signupPassword = sessionStorage.getItem('signup_password')
-      if (signupPassword) {
-        setValue('password', signupPassword)
-        // Clear password from sessionStorage after use
-        sessionStorage.removeItem('signup_password')
-      }
+    // For security/UX consistency, login page should always open with empty credentials.
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('signup_password')
     }
     
     if (message) {
@@ -146,13 +98,6 @@ function LoginPageContent() {
       window.history.replaceState({}, '', url)
     }
 
-    return () => {
-      if (typeof window !== 'undefined') {
-        if (t1) window.clearTimeout(t1)
-        if (t2) window.clearTimeout(t2)
-        if (t3) window.clearTimeout(t3)
-      }
-    }
   }, [searchParams, setValue])
 
   const rememberMe = watch('rememberMe')
@@ -311,7 +256,7 @@ function LoginPageContent() {
               </div> */}
 
               {/* Login Form */}
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" autoComplete={lockMagicPrefill ? 'off' : 'on'}>
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" autoComplete="on">
                 {successMessage && (
                   <div className="bg-green-500/20 border border-green-500/50 text-green-100 px-4 py-3 rounded-xl text-sm backdrop-blur-sm">
                     {successMessage}
@@ -336,8 +281,8 @@ function LoginPageContent() {
                       id="email"
                       type="email"
                       {...register('email')}
-                      name={lockMagicPrefill ? 'magic_email' : 'email'}
-                      autoComplete={lockMagicPrefill ? 'off' : 'email'}
+                      name="email"
+                      autoComplete="email"
                       placeholder="you@example.com"
                       className="block w-full pl-12 pr-4 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all"
                       suppressHydrationWarning
@@ -361,8 +306,8 @@ function LoginPageContent() {
                       id="password"
                       type="password"
                       {...register('password')}
-                      name={lockMagicPrefill ? 'magic_password' : 'password'}
-                      autoComplete={lockMagicPrefill ? 'new-password' : 'current-password'}
+                      name="password"
+                      autoComplete="current-password"
                       placeholder="••••••••"
                       className="block w-full pl-12 pr-4 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-all"
                       suppressHydrationWarning

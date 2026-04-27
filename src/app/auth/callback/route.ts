@@ -7,34 +7,17 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const type = requestUrl.searchParams.get('type') // 'signup', 'recovery', 'magiclink', etc.
-  const magicEmail = requestUrl.searchParams.get('magic_email') || ''
-  const magicPassword = requestUrl.searchParams.get('magic_password') || ''
-  const passwordFromQuery = requestUrl.searchParams.get('password') || ''
 
   if (code) {
     const supabase = await createClient()
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error && data.session) {
-      // Successfully authenticated - get user email for login page
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      const userEmail = magicEmail || user?.email || ''
-      // Only trust password explicitly carried through the link redirect flow.
-      // Do not fallback to user_metadata.temporary_password because that value can be stale.
-      const temporaryPassword = magicPassword || passwordFromQuery
-      
       // Create redirect URL to login page first
       // Add 'from_callback' parameter to prevent middleware from redirecting
       const loginUrl = new URL('/pages/auth/login', requestUrl.origin)
       loginUrl.searchParams.set('message', 'Account activated successfully! Please sign in with your email and password.')
       loginUrl.searchParams.set('from_callback', 'true')
-      if (userEmail) {
-        loginUrl.searchParams.set('email', userEmail)
-      }
-      if (temporaryPassword) {
-        loginUrl.searchParams.set('password', temporaryPassword)
-      }
       
       // Sign out and get the response (which will have cleared cookies)
       const { error: signOutError } = await supabase.auth.signOut()
