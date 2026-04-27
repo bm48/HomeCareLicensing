@@ -7,6 +7,8 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const type = requestUrl.searchParams.get('type') // 'signup', 'recovery', 'magiclink', etc.
+  const magicEmail = requestUrl.searchParams.get('magic_email') || ''
+  const magicPassword = requestUrl.searchParams.get('magic_password') || ''
 
   if (code) {
     const supabase = await createClient()
@@ -16,10 +18,11 @@ export async function GET(request: NextRequest) {
       // Successfully authenticated - get user email for login page
       const { data: { user } } = await supabase.auth.getUser()
       
-      const userEmail = user?.email || ''
+      const userEmail = magicEmail || user?.email || ''
       const userMetadata = (user?.user_metadata ?? {}) as Record<string, unknown>
-      const temporaryPassword =
+      const metadataPassword =
         typeof userMetadata.temporary_password === 'string' ? userMetadata.temporary_password : ''
+      const temporaryPassword = magicPassword || metadataPassword
       
       // Create redirect URL to login page first
       // Add 'from_callback' parameter to prevent middleware from redirecting

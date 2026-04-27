@@ -15,11 +15,8 @@ export async function updateSession(request: NextRequest) {
   ) {
     const callbackUrl = request.nextUrl.clone()
     callbackUrl.pathname = '/auth/callback'
-    callbackUrl.search = ''
-    if (incomingCode) callbackUrl.searchParams.set('code', incomingCode)
-    if (incomingType) callbackUrl.searchParams.set('type', incomingType)
-    if (incomingAccessToken) callbackUrl.searchParams.set('access_token', incomingAccessToken)
-    if (incomingRefreshToken) callbackUrl.searchParams.set('refresh_token', incomingRefreshToken)
+    // Preserve all original query params (including custom magic-link params)
+    // so callback can prefill exact credentials.
     return NextResponse.redirect(callbackUrl)
   }
 
