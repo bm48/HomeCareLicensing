@@ -553,12 +553,12 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            <div className="space-y-3">
+            <div className="max-h-64 overflow-y-auto overflow-x-hidden space-y-3 pr-1 -mr-1">
               {notifications && notifications.length > 0 ? (
                 notifications.map((notification) => {
                   const Icon = getNotificationIcon(notification.type)
                   return (
-                    <div key={notification.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div key={notification.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg shrink-0">
                       <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${getNotificationColor(notification.type)}`} />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-900">{notification.title}</div>
