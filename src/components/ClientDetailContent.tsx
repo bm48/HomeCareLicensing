@@ -215,6 +215,7 @@ interface SmallClient {
 type StaffMember = { id: string; user_id?: string; first_name?: string; last_name?: string; [key: string]: unknown }
 type BillingCodeOption = { id: string; code: string; name: string; unit_type: 'hour' | 'visit' | '15_min_unit' }
 const BILLING_CODE_PICKLIST_ORDER = ['S5125', 'S5126', 'T1019', 'T1020', 'G0156', 'G0159', '97110', '97530', '99509', 'W1726'] as const
+const CAREGIVER_DISTANCE_LIMIT_MILES = 20
 
 interface ClientDetailContentProps {
   client: SmallClient
@@ -2520,13 +2521,17 @@ export default function ClientDetailContent({ client, allClients, representative
       }
     })
 
-    options.sort((a, b) => {
+    const eligibleByDistance = options.filter(
+      (o) => Number.isFinite(o.distanceMiles) && o.distanceMiles <= CAREGIVER_DISTANCE_LIMIT_MILES
+    )
+
+    eligibleByDistance.sort((a, b) => {
       // Closest first, then best skill match.
       if (a.distanceMiles !== b.distanceMiles) return a.distanceMiles - b.distanceMiles
       return b.skillMatchScore - a.skillMatchScore
     })
 
-    return options
+    return eligibleByDistance
   }, [
     staffList,
     caregiverRequirements,
@@ -2668,7 +2673,7 @@ export default function ClientDetailContent({ client, allClients, representative
 
         <div className="max-h-[240px] overflow-y-auto overflow-x-hidden">
           {filtered.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-gray-500">No caregivers found.</div>
+            <div className="px-4 py-6 text-center text-sm text-gray-500">No caregivers found within 20 miles.</div>
           ) : (
             sortedFiltered.map((o, idx) => {
               const c = o.caregiver
