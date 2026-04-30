@@ -1,13 +1,12 @@
 /**
  * Persists coordinator Time & Billing decisions to visit_approvals, visit_financials,
- * and visit_adjustment_history (audit trail). Reports should read frozen rows from visit_financials.
+ * and visit_adjustment_history (audit trail).
  */
 
 import type { Supabase } from '@/lib/supabase/types'
 import {
   resolvePayRateForVisit,
   type CaregiverPayRateRow,
-  type LegacyPayRateScheduleRow,
 } from '@/lib/caregiver-pay-rates'
 
 export type VisitRowForBillingApproval = {
@@ -54,19 +53,6 @@ function hoursFromSchedule(start: string | null | undefined, end: string | null 
   return round2((b - a) / 60)
 }
 
-async function loadFirstTaskIdForVisit(supabase: Supabase, visitId: string): Promise<string | null> {
-  const { data } = await supabase
-    .from('scheduled_visit_tasks')
-    .select('task_id')
-    .eq('scheduled_visit_id', visitId)
-    .not('task_id', 'is', null)
-    .order('sort_order', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  const tid = (data as { task_id?: string | null } | null)?.task_id
-  return tid?.trim() || null
-}
-
 export async function ensureVisitTimeEntryForBilling(
   supabase: Supabase,
   visit: VisitRowForBillingApproval
@@ -103,26 +89,14 @@ async function loadPayContext(
   caregiverMemberId: string
 ): Promise<{
   caregiverPayRows: CaregiverPayRateRow[]
-  legacyPayRows: LegacyPayRateScheduleRow[]
-  taskId: string | null
 }> {
-  const [payRes, legRes, taskId] = await Promise.all([
-    supabase
-      .from('caregiver_pay_rates')
-      .select('caregiver_member_id, pay_rate, unit_type, service_type, effective_start, effective_end')
-      .eq('caregiver_member_id', caregiverMemberId),
-    supabase
-      .from('pay_rate_schedule')
-      .select(
-        'caregiver_member_id, rate, unit_type, service_type, effective_start, effective_end, status, credential_id, task_id'
-      )
-      .eq('caregiver_member_id', caregiverMemberId),
-    loadFirstTaskIdForVisit(supabase, visit.id),
-  ])
+  const _visit = visit
+  const payRes = await supabase
+    .from('caregiver_pay_rates')
+    .select('caregiver_member_id, pay_rate, unit_type, service_type, effective_start, effective_end')
+    .eq('caregiver_member_id', caregiverMemberId)
   return {
     caregiverPayRows: (payRes.data ?? []) as CaregiverPayRateRow[],
-    legacyPayRows: (legRes.data ?? []) as LegacyPayRateScheduleRow[],
-    taskId,
   }
 }
 
@@ -130,21 +104,21 @@ export async function syncVisitApprovalAndFinancialsOnApprove(params: {
   supabase: Supabase
   approvedByUserId: string
   visit: VisitRowForBillingApproval
+  actualHours: number
   billableHours: number
   serviceType: 'non_skilled' | 'skilled'
   contract: ContractPick
   note: string | null
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { supabase, approvedByUserId, visit, billableHours, serviceType, contract, note } = params
-  const hours = round2(billableHours)
-  const scheduleH = hoursFromSchedule(visit.scheduled_start_time, visit.scheduled_end_time)
-  const actualHours = scheduleH > 0 ? scheduleH : hours
+  const { supabase, approvedByUserId, visit, actualHours, billableHours, serviceType, contract, note } = params
+  const approvedActualHours = round2(actualHours)
+  const approvedBillableHours = round2(billableHours)
 
   const vte = await ensureVisitTimeEntryForBilling(supabase, visit)
   if ('error' in vte) return { ok: false, error: vte.error }
   const vteId = vte.id
 
-  const { caregiverPayRows, legacyPayRows, taskId } = await loadPayContext(
+  const { caregiverPayRows } = await loadPayContext(
     supabase,
     visit,
     visit.caregiver_member_id!
@@ -153,17 +127,13 @@ export async function syncVisitApprovalAndFinancialsOnApprove(params: {
     visit.caregiver_member_id!,
     serviceType,
     visit.visit_date,
-    caregiverPayRows,
-    legacyPayRows,
-    { taskId, credentialId: null }
+    caregiverPayRows
   )
-  const payRate = Number(pay?.rate ?? 0)
+  const resolvedPayRate = Number(pay?.rate ?? 0)
   const payUnit = (pay?.unit_type as string | null) ?? 'hour'
-  const payAmount = round2(calcAmount(hours, payRate, payUnit))
 
-  const billRate = Number(contract?.bill_rate ?? 0)
+  const resolvedBillRate = Number(contract?.bill_rate ?? 0)
   const billUnit = String(contract?.bill_unit_type ?? 'hour')
-  const billAmount = round2(calcAmount(hours, billRate, billUnit))
 
   const { data: prevFin } = await supabase
     .from('visit_financials')
@@ -182,47 +152,48 @@ export async function syncVisitApprovalAndFinancialsOnApprove(params: {
     approved_actual_hours?: number | null
   } | null
 
-  const materiallyChanged =
-    prev != null &&
-    (round2(Number(prev.approved_billable_hours ?? 0)) !== hours ||
-      round2(Number(prev.pay_amount ?? 0)) !== payAmount ||
-      round2(Number(prev.bill_amount ?? 0)) !== billAmount)
+  const { data: existingApproval, error: apprSelErr } = await supabase
+    .from('visit_approvals')
+    .select('id, pay_rate, bill_rate, approved_actual_hours, approved_billable_hours')
+    .eq('visit_time_entry_id', vteId)
+    .maybeSingle()
+  if (apprSelErr) return { ok: false, error: apprSelErr.message }
 
-  const snapshot = {
-    previous: {
-      approved_billable_hours: prev?.approved_billable_hours ?? null,
-      approved_actual_hours: prev?.approved_actual_hours ?? null,
-      pay_rate: prev?.pay_rate ?? null,
-      pay_amount: prev?.pay_amount ?? null,
-      bill_rate: prev?.bill_rate ?? null,
-      bill_amount: prev?.bill_amount ?? null,
-    },
-    new: {
-      approved_billable_hours: hours,
-      approved_actual_hours: actualHours,
-      pay_rate: payRate,
-      pay_amount: payAmount,
-      bill_rate: billRate,
-      bill_amount: billAmount,
-    },
-    materially_changed: materiallyChanged,
-    coordinator_note: note,
-  }
+  const frozenPayRate =
+    existingApproval?.pay_rate != null && Number.isFinite(Number(existingApproval.pay_rate))
+      ? Number(existingApproval.pay_rate)
+      : resolvedPayRate
+  const frozenBillRate =
+    existingApproval?.bill_rate != null && Number.isFinite(Number(existingApproval.bill_rate))
+      ? Number(existingApproval.bill_rate)
+      : resolvedBillRate
+  const payAmount = round2(calcAmount(approvedActualHours, frozenPayRate, payUnit))
+  const billAmount = round2(calcAmount(approvedBillableHours, frozenBillRate, billUnit))
+
+  const previousActualHours =
+    prev?.approved_actual_hours != null
+      ? round2(Number(prev.approved_actual_hours))
+      : existingApproval?.approved_actual_hours != null
+        ? round2(Number(existingApproval.approved_actual_hours))
+        : null
+  const previousBillableHours =
+    prev?.approved_billable_hours != null
+      ? round2(Number(prev.approved_billable_hours))
+      : existingApproval?.approved_billable_hours != null
+        ? round2(Number(existingApproval.approved_billable_hours))
+        : null
   const { error: histErr } = await supabase.from('visit_adjustment_history').insert({
     agency_id: visit.agency_id,
     visit_time_entry_id: vteId,
     changed_by_user_id: approvedByUserId,
     reason: prev ? 'coordinator_time_billing_update' : 'coordinator_time_billing_initial',
-    comment: JSON.stringify(snapshot),
+    previous_actual_hours: previousActualHours,
+    current_actual_hours: approvedActualHours,
+    previous_billable_hours: previousBillableHours,
+    current_billable_hours: approvedBillableHours,
+    note: note,
   })
   if (histErr) return { ok: false, error: histErr.message }
-
-  const { data: existingApproval, error: apprSelErr } = await supabase
-    .from('visit_approvals')
-    .select('id')
-    .eq('visit_time_entry_id', vteId)
-    .maybeSingle()
-  if (apprSelErr) return { ok: false, error: apprSelErr.message }
 
   const approvalBase = {
     agency_id: visit.agency_id,
@@ -232,9 +203,11 @@ export async function syncVisitApprovalAndFinancialsOnApprove(params: {
     caregiver_member_id: visit.caregiver_member_id!,
     approved_by_user_id: approvedByUserId,
     approval_status: 'approved' as const,
-    approved_actual_hours: actualHours,
-    approved_billable_hours: hours,
+    approved_actual_hours: approvedActualHours,
+    approved_billable_hours: approvedBillableHours,
     approval_comment: note,
+    pay_rate: frozenPayRate,
+    bill_rate: frozenBillRate,
     approved_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }
@@ -250,54 +223,17 @@ export async function syncVisitApprovalAndFinancialsOnApprove(params: {
     if (apprInsErr) return { ok: false, error: apprInsErr.message }
   }
 
-  const { data: apprRow, error: apprFetchErr } = await supabase
-    .from('visit_approvals')
-    .select('id')
-    .eq('visit_time_entry_id', vteId)
-    .single()
-  if (apprFetchErr || !apprRow) return { ok: false, error: apprFetchErr?.message ?? 'Approval row missing.' }
-
-  const calculation_basis = {
-    approved_at: approvalBase.approved_at,
-    pay_resolution: pay
-      ? { source: pay.source, rate: payRate, unit_type: payUnit }
-      : { source: null as string | null },
-    bill_contract_id: contract?.id ?? null,
-    bill_unit_type: billUnit,
-    task_id: taskId,
-  }
-
-  const financialRow = {
-    agency_id: visit.agency_id,
-    scheduled_visit_id: visit.id,
-    visit_time_entry_id: vteId,
-    visit_approval_id: apprRow.id as string,
-    patient_id: visit.patient_id,
-    caregiver_member_id: visit.caregiver_member_id!,
-    contract_id: contract?.id ?? null,
-    billing_code_id: contract?.billing_code_id ?? null,
-    pay_rate: payRate,
-    pay_unit_type: payUnit,
-    pay_amount: payAmount,
-    bill_rate: billRate,
-    bill_unit_type: billUnit,
-    bill_amount: billAmount,
-    approved_actual_hours: actualHours,
-    approved_billable_hours: hours,
-    calculation_basis,
-    updated_at: new Date().toISOString(),
-  }
-
-  const { error: finErr } = await supabase.from('visit_financials').upsert(financialRow, {
-    onConflict: 'scheduled_visit_id',
-  })
-  if (finErr) return { ok: false, error: finErr.message }
+  const { error: finDeleteErr } = await supabase
+    .from('visit_financials')
+    .delete()
+    .eq('scheduled_visit_id', visit.id)
+  if (finDeleteErr) return { ok: false, error: finDeleteErr.message }
 
   const { error: vteUpdErr } = await supabase
     .from('visit_time_entries')
     .update({
-      billable_hours: hours,
-      actual_hours: actualHours,
+      actual_hours: approvedActualHours,
+      billable_hours: approvedBillableHours,
       entry_status: 'approved',
       adjustment_comment: note,
       updated_at: new Date().toISOString(),
@@ -322,40 +258,83 @@ export async function clearVisitApprovalAndFinancialsOnVoid(params: {
 
   const { data: prevFin } = await supabase
     .from('visit_financials')
-    .select('pay_amount, bill_amount, approved_billable_hours')
+    .select('pay_amount, bill_amount, approved_actual_hours, approved_billable_hours')
     .eq('scheduled_visit_id', visit.id)
     .maybeSingle()
+
+  const { data: existingApproval } = await supabase
+    .from('visit_approvals')
+    .select('approved_actual_hours, approved_billable_hours')
+    .eq('visit_time_entry_id', vteId)
+    .maybeSingle()
+
+  const previousActualHours =
+    (prevFin as { approved_actual_hours?: number | null } | null)?.approved_actual_hours != null
+      ? round2(Number((prevFin as { approved_actual_hours?: number | null }).approved_actual_hours))
+      : existingApproval?.approved_actual_hours != null
+        ? round2(Number(existingApproval.approved_actual_hours))
+        : null
+  const previousBillableHours =
+    (prevFin as { approved_billable_hours?: number | null } | null)?.approved_billable_hours != null
+      ? round2(Number((prevFin as { approved_billable_hours?: number | null }).approved_billable_hours))
+      : existingApproval?.approved_billable_hours != null
+        ? round2(Number(existingApproval.approved_billable_hours))
+        : null
 
   const { error: histErr } = await supabase.from('visit_adjustment_history').insert({
     agency_id: visit.agency_id,
     visit_time_entry_id: vteId,
     changed_by_user_id: voidedByUserId,
     reason: 'coordinator_void_billing',
-    comment: JSON.stringify({
-      previous: prevFin ?? null,
-      coordinator_note: note,
-    }),
+    previous_actual_hours: previousActualHours,
+    current_actual_hours: null,
+    previous_billable_hours: previousBillableHours,
+    current_billable_hours: null,
+    note: note,
   })
   if (histErr) return { ok: false, error: histErr.message }
 
-  const { error: delFinErr } = await supabase.from('visit_financials').delete().eq('scheduled_visit_id', visit.id)
-  if (delFinErr) {
-    const { error: zeroErr } = await supabase
-      .from('visit_financials')
-      .update({
-        pay_rate: 0,
-        pay_amount: 0,
-        bill_rate: 0,
-        bill_amount: 0,
-        approved_actual_hours: 0,
-        approved_billable_hours: 0,
-        visit_approval_id: null,
-        calculation_basis: { voided: true, at: new Date().toISOString() },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('scheduled_visit_id', visit.id)
-    if (zeroErr) return { ok: false, error: `${delFinErr.message} (${zeroErr.message})` }
-  }
+  const nowIso = new Date().toISOString()
+  const { data: existingFin } = await supabase
+    .from('visit_financials')
+    .select(
+      'pay_rate, pay_amount, bill_rate, bill_amount, approved_actual_hours, approved_billable_hours, service_type'
+    )
+    .eq('scheduled_visit_id', visit.id)
+    .maybeSingle()
+  const finBase = existingFin as {
+    pay_rate?: number | null
+    pay_amount?: number | null
+    bill_rate?: number | null
+    bill_amount?: number | null
+    approved_actual_hours?: number | null
+    approved_billable_hours?: number | null
+    service_type?: string | null
+  } | null
+
+  const { error: finErr } = await supabase.from('visit_financials').upsert(
+    {
+      agency_id: visit.agency_id,
+      scheduled_visit_id: visit.id,
+      visit_time_entry_id: vteId,
+      patient_id: visit.patient_id,
+      caregiver_member_id: visit.caregiver_member_id!,
+      status: 'voided',
+      service_type: finBase?.service_type ?? 'non_skilled',
+      coordinator_note: note,
+      pay_rate: Number(finBase?.pay_rate ?? 0),
+      pay_amount: Number(finBase?.pay_amount ?? 0),
+      bill_rate: Number(finBase?.bill_rate ?? 0),
+      bill_amount: Number(finBase?.bill_amount ?? 0),
+      approved_actual_hours: Number(finBase?.approved_actual_hours ?? 0),
+      approved_billable_hours: Number(finBase?.approved_billable_hours ?? 0),
+      visit_approval_id: null,
+      calculation_basis: { voided: true, at: nowIso },
+      updated_at: nowIso,
+    },
+    { onConflict: 'scheduled_visit_id' }
+  )
+  if (finErr) return { ok: false, error: finErr.message }
 
   const { data: appr } = await supabase.from('visit_approvals').select('id').eq('visit_time_entry_id', vteId).maybeSingle()
   if (appr?.id) {

@@ -53,6 +53,10 @@ import { visitStatusBadgeClass, visitStatusFromScheduleRow } from '@/lib/visit-s
 import type { PatientContractedHoursRow } from '@/lib/supabase/query/patient-contracted-hours'
 import type { PatientSkilledTaskDaySchedule, SkilledCarePlanTask } from '@/lib/supabase/query/skilled-care-plan'
 import type { PatientServiceContractRow } from '@/lib/supabase/query/patient-service-contracts'
+import {
+  patientServiceContractUiPhase,
+  patientServiceContractsSelectableForBillingVisit,
+} from '@/lib/patient-service-contract-effective'
 import Modal from '@/components/Modal'
 import zipcodes from 'zipcodes'
 
@@ -376,9 +380,17 @@ export default function ClientDetailContent({ client, allClients, representative
   const [serviceContractsModalOpen, setServiceContractsModalOpen] = useState(false)
   const [isSavingServiceContract, setIsSavingServiceContract] = useState(false)
   const [serviceContractError, setServiceContractError] = useState<string | null>(null)
-  const [serviceContractRateDrafts, setServiceContractRateDrafts] = useState<Record<string, string>>({})
-  const [isSavingServiceContractRates, setIsSavingServiceContractRates] = useState(false)
-  const [serviceContractRateErrorById, setServiceContractRateErrorById] = useState<Record<string, string>>({})
+  const [isSavingServiceContractRowAction, setIsSavingServiceContractRowAction] = useState(false)
+  const [editServiceContractModalOpen, setEditServiceContractModalOpen] = useState(false)
+  const [editingServiceContract, setEditingServiceContract] = useState<PatientServiceContractRow | null>(null)
+  const [isSavingServiceContractEdit, setIsSavingServiceContractEdit] = useState(false)
+  const [serviceContractEditError, setServiceContractEditError] = useState<string | null>(null)
+  const [serviceContractEditForm, setServiceContractEditForm] = useState({
+    contract_name: '',
+    bill_rate: '',
+    end_date: '',
+    note: '',
+  })
   const [billingCodeOptions, setBillingCodeOptions] = useState<BillingCodeOption[]>([])
   /** Set when billing_codes query fails or returns no active rows (empty <select> otherwise looks like a UI bug). */
   const [billingCodesLoadError, setBillingCodesLoadError] = useState<string | null>(null)
@@ -436,6 +448,9 @@ export default function ClientDetailContent({ client, allClients, representative
   const [caregiverAvailabilitySlots, setCaregiverAvailabilitySlots] = useState<CaregiverAvailabilitySlotRow[]>([])
   const [editVisitModalOpen, setEditVisitModalOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<ScheduleRow | null>(null)
+  const [editRecurringApplyScope, setEditRecurringApplyScope] = useState<
+    'this_visit' | 'this_and_future' | 'all_in_series' | 'weekday_in_series'
+  >('this_visit')
 
   // Caregiver dropdown (Add/Edit Visit modal, Schedule tab).
   const [caregiverPickerOpen, setCaregiverPickerOpen] = useState(false)
@@ -2352,15 +2367,39 @@ export default function ClientDetailContent({ client, allClients, representative
     )
   }
 
+  /** Billing contract(s) valid on the visit anchor date (visit date or repeat start), excluding weekly_hours-only rows. */
+  const visitContractAsOfDate = useMemo(() => {
+    if (editVisitModalOpen && editingSchedule?.date && /^\d{4}-\d{2}-\d{2}$/.test(editingSchedule.date)) {
+      return editingSchedule.date
+    }
+    const raw = visitForm.isRecurring ? visitForm.repeatStart : visitForm.date
+    if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+    return toLocalDateString(new Date())
+  }, [editVisitModalOpen, editingSchedule?.date, visitForm.isRecurring, visitForm.repeatStart, visitForm.date])
+
   const activeContracts = useMemo(
-    () => serviceContracts.filter((c) => (c.status ?? 'active') === 'active'),
-    [serviceContracts]
+    () => patientServiceContractsSelectableForBillingVisit(serviceContracts, visitContractAsOfDate),
+    [serviceContracts, visitContractAsOfDate]
   )
 
   const selectedVisitContract = useMemo(
     () => activeContracts.find((c) => c.id === visitForm.contractId) ?? null,
     [activeContracts, visitForm.contractId]
   )
+
+  const serviceContractsModalStatusAsOf = toLocalDateString(new Date())
+
+  useEffect(() => {
+    const list = patientServiceContractsSelectableForBillingVisit(serviceContracts, visitContractAsOfDate)
+    if (list.length === 0) {
+      setVisitForm((p) => (p.contractId ? { ...p, contractId: '' } : p))
+      return
+    }
+    setVisitForm((p) => {
+      if (list.some((c) => c.id === p.contractId)) return p
+      return { ...p, contractId: list[0]!.id }
+    })
+  }, [serviceContracts, visitContractAsOfDate])
 
   /** Pill segmented control for Details / ADLs in visit modals (matches design: grey track, white active segment). */
   const visitModalHeaderTabs = (
@@ -2829,6 +2868,7 @@ export default function ClientDetailContent({ client, allClients, representative
     setCaregiverPickerFilter('all')
     setCaregiverPickerSort('proximity')
     setEditingSchedule(schedule)
+    setEditRecurringApplyScope(schedule.is_recurring ? 'weekday_in_series' : 'this_visit')
     setVisitForm({
       date: schedule.date,
       startTime: start,
@@ -2869,6 +2909,7 @@ export default function ClientDetailContent({ client, allClients, representative
     if (!isSavingVisit) {
       setEditVisitModalOpen(false)
       setEditingSchedule(null)
+      setEditRecurringApplyScope('this_visit')
       setCaregiverPickerOpen(false)
       setCaregiverPickerFilter('all')
       setCaregiverPickerSort('proximity')
@@ -2912,7 +2953,9 @@ export default function ClientDetailContent({ client, allClients, representative
   }, [serviceContractsModalOpen, localClient.id])
 
   const closeManageLimitModal = () => {
-    if (!isSavingServiceContract && !isSavingServiceContractRates) setServiceContractsModalOpen(false)
+    if (!isSavingServiceContract && !isSavingServiceContractRowAction && !isSavingServiceContractEdit) {
+      setServiceContractsModalOpen(false)
+    }
   }
 
   const billingCodeSelectOptions = useMemo(() => {
@@ -2923,13 +2966,6 @@ export default function ClientDetailContent({ client, allClients, representative
     const remaining = billingCodeOptions.filter((row) => !BILLING_CODE_PICKLIST_ORDER.includes(row.code.toUpperCase() as (typeof BILLING_CODE_PICKLIST_ORDER)[number]))
     return [...ordered, ...remaining]
   }, [billingCodeOptions])
-
-  useEffect(() => {
-    setServiceContractRateDrafts(
-      Object.fromEntries(serviceContracts.map((row) => [row.id, row.bill_rate != null ? String(Number(row.bill_rate)) : '']))
-    )
-    setServiceContractRateErrorById({})
-  }, [serviceContracts])
 
   const handleSaveServiceContract = async () => {
     if (!serviceContractForm.billing_code_id) {
@@ -2965,17 +3001,27 @@ export default function ClientDetailContent({ client, allClients, representative
         setServiceContractError(error?.message ?? 'Failed to save contract.')
         return
       }
-      setServiceContracts((prev) => {
-        const inserted = data as PatientServiceContractRow
-        // Keep list status in sync immediately: newest contract is active, previous same-service active contracts become inactive.
-        const updatedPrev = prev.map((x) =>
-          x.id !== inserted.id && x.service_type === inserted.service_type && (x.status ?? 'active') === 'active'
-            ? { ...x, status: 'inactive' }
-            : x
+      // Guardrail: if contract starts today/past, enforce it as active so older same-service rows become inactive.
+      if (serviceContractForm.effective_date <= toLocalDateString(new Date())) {
+        const _statusRes = await q.updatePatientServiceContractStatus(
+          supabase,
+          (data as PatientServiceContractRow).id,
+          'active'
         )
-        return [{ ...inserted, status: 'active' }, ...updatedPrev.filter((x) => x.id !== inserted.id)]
-      })
-      setVisitForm((p) => ({ ...p, contractId: data.id }))
+        if (_statusRes.error) {
+          setServiceContractError(_statusRes.error.message ?? 'Saved contract, but failed to sync active status.')
+        }
+      }
+      const { data: refreshed, error: refetchErr } = await q.getPatientServiceContractsByPatientId(supabase, localClient.id)
+      if (!refetchErr && refreshed) {
+        setServiceContracts((refreshed ?? []) as PatientServiceContractRow[])
+      } else {
+        setServiceContracts((prev) => {
+          const inserted = data as PatientServiceContractRow
+          return [inserted, ...prev.filter((x) => x.id !== inserted.id)]
+        })
+      }
+      setVisitForm((p) => ({ ...p, contractId: (data as PatientServiceContractRow).id }))
       setServiceContractForm((p) => ({
         ...p,
         contract_name: '',
@@ -2992,55 +3038,122 @@ export default function ClientDetailContent({ client, allClients, representative
     }
   }
 
-  const handleDoneServiceContracts = async () => {
-    if (isSavingServiceContract || isSavingServiceContractRates) return
+  const handleDoneServiceContracts = () => {
+    if (isSavingServiceContract || isSavingServiceContractRowAction || isSavingServiceContractEdit) return
+    setServiceContractsModalOpen(false)
+  }
 
-    const nextErrors: Record<string, string> = {}
-    const updates: Array<{ id: string; rate: number }> = []
+  const openEditServiceContractModal = (row: PatientServiceContractRow) => {
+    setEditingServiceContract(row)
+    setServiceContractEditForm({
+      contract_name: row.contract_name ?? '',
+      bill_rate: row.bill_rate != null ? String(Number(row.bill_rate)) : '',
+      end_date: row.end_date ?? '',
+      note: row.note ?? '',
+    })
+    setServiceContractEditError(null)
+    setEditServiceContractModalOpen(true)
+  }
 
-    for (const row of serviceContracts) {
-      const draft = (serviceContractRateDrafts[row.id] ?? '').trim()
-      if (!draft) continue
-      const parsed = Number(draft)
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        nextErrors[row.id] = 'Enter a valid non-negative rate.'
-        continue
-      }
-      const current = row.bill_rate ?? null
-      if (current !== null && Number(current) === parsed) continue
-      updates.push({ id: row.id, rate: parsed })
-    }
+  const closeEditServiceContractModal = () => {
+    if (isSavingServiceContractEdit) return
+    setEditServiceContractModalOpen(false)
+    setEditingServiceContract(null)
+    setServiceContractEditError(null)
+  }
 
-    if (Object.keys(nextErrors).length > 0) {
-      setServiceContractRateErrorById(nextErrors)
+  const handleSaveServiceContractEdit = async () => {
+    if (!editingServiceContract) return
+    const nextRateRaw = serviceContractEditForm.bill_rate.trim()
+    const nextRate = nextRateRaw ? Number(nextRateRaw) : NaN
+    if (nextRateRaw && (!Number.isFinite(nextRate) || nextRate < 0)) {
+      setServiceContractEditError('Bill rate must be a valid non-negative number.')
       return
     }
-
-    if (updates.length === 0) {
-      setServiceContractsModalOpen(false)
+    const nextEnd = serviceContractEditForm.end_date.trim()
+    if (nextEnd && nextEnd < editingServiceContract.effective_date) {
+      setServiceContractEditError('End date cannot be before effective date.')
       return
     }
-
-    setIsSavingServiceContractRates(true)
-    setServiceContractRateErrorById({})
+    setServiceContractEditError(null)
+    setIsSavingServiceContractEdit(true)
     try {
-      for (const u of updates) {
-        const res = await updatePatientServiceContractBillRateAction(u.id, u.rate)
-        if (res.error) {
-          setServiceContractRateErrorById((prev) => ({ ...prev, [u.id]: res.error || 'Failed to update rate.' }))
-          setIsSavingServiceContractRates(false)
+      if (nextRateRaw) {
+        const rateRes = await updatePatientServiceContractBillRateAction(editingServiceContract.id, nextRate)
+        if (rateRes.error) {
+          setServiceContractEditError(rateRes.error || 'Failed to save bill rate.')
           return
         }
       }
-
-      const updateById = new Map(updates.map((u) => [u.id, u.rate]))
-      setServiceContracts((prev) =>
-        prev.map((row) => (updateById.has(row.id) ? { ...row, bill_rate: updateById.get(row.id)! } : row))
-      )
-      setServiceContractsModalOpen(false)
+      const supabase = createClient()
+      const res = await q.updatePatientServiceContractDetails(supabase, editingServiceContract.id, {
+        contract_name: serviceContractEditForm.contract_name.trim() || null,
+        end_date: nextEnd || null,
+        note: serviceContractEditForm.note.trim() || null,
+      })
+      if (res.error) {
+        setServiceContractEditError(res.error.message || 'Failed to save contract details.')
+        return
+      }
+      const { data: refreshed, error: refreshErr } = await q.getPatientServiceContractsByPatientId(supabase, localClient.id)
+      if (refreshErr) {
+        setServiceContractEditError(refreshErr.message || 'Saved but failed to refresh contracts.')
+        return
+      }
+      setServiceContracts((refreshed ?? []) as PatientServiceContractRow[])
+      setEditServiceContractModalOpen(false)
+      setEditingServiceContract(null)
     } finally {
-      setIsSavingServiceContractRates(false)
+      setIsSavingServiceContractEdit(false)
     }
+  }
+
+  const handleSetServiceContractStatus = async (
+    row: PatientServiceContractRow,
+    nextStatus: 'active' | 'inactive'
+  ) => {
+    if (isSavingServiceContractEdit || isSavingServiceContract || isSavingServiceContractRowAction) return
+    if ((row.status ?? '').toLowerCase() === nextStatus) return
+    setIsSavingServiceContractRowAction(true)
+    const supabase = createClient()
+    const res = await q.updatePatientServiceContractStatus(supabase, row.id, nextStatus)
+    if (res.error) {
+      setServiceContractError(res.error.message || 'Failed to update contract status.')
+      setIsSavingServiceContractRowAction(false)
+      return
+    }
+    const { data: refreshed, error: refreshErr } = await q.getPatientServiceContractsByPatientId(supabase, localClient.id)
+    if (refreshErr) {
+      setServiceContractError(refreshErr.message || 'Status updated but refresh failed.')
+      setIsSavingServiceContractRowAction(false)
+      return
+    }
+    setServiceContracts((refreshed ?? []) as PatientServiceContractRow[])
+    setIsSavingServiceContractRowAction(false)
+  }
+
+  const handleDeleteServiceContract = async (row: PatientServiceContractRow) => {
+    if (isSavingServiceContractEdit || isSavingServiceContract || isSavingServiceContractRowAction) return
+    const confirmed =
+      typeof window !== 'undefined' &&
+      window.confirm('Delete this contract permanently? This action cannot be undone.')
+    if (!confirmed) return
+    setIsSavingServiceContractRowAction(true)
+    const supabase = createClient()
+    const res = await q.deletePatientServiceContract(supabase, row.id)
+    if (res.error) {
+      setServiceContractError(res.error.message || 'Failed to delete contract.')
+      setIsSavingServiceContractRowAction(false)
+      return
+    }
+    const { data: refreshed, error: refreshErr } = await q.getPatientServiceContractsByPatientId(supabase, localClient.id)
+    if (refreshErr) {
+      setServiceContractError(refreshErr.message || 'Deleted but refresh failed.')
+      setIsSavingServiceContractRowAction(false)
+      return
+    }
+    setServiceContracts((refreshed ?? []) as PatientServiceContractRow[])
+    setIsSavingServiceContractRowAction(false)
   }
 
   const normalizeToWeekStart = (dateStr: string) => {
@@ -3279,7 +3392,7 @@ export default function ClientDetailContent({ client, allClients, representative
     setIsSavingVisit(true)
     try {
       const supabase = createClient()
-      const { error } = await q.updateSchedule(supabase, editingSchedule.id, {
+      const updatePatch = {
         date: dateToSave,
         start_time: visitForm.startTime.length === 5 ? visitForm.startTime : visitForm.startTime.slice(0, 5),
         end_time: visitForm.endTime.length === 5 ? visitForm.endTime : visitForm.endTime.slice(0, 5),
@@ -3304,10 +3417,29 @@ export default function ClientDetailContent({ client, allClients, representative
             : null,
         repeat_start: visitForm.isRecurring ? visitForm.repeatStart || null : null,
         repeat_end: visitForm.isRecurring && visitForm.repeatEnd ? visitForm.repeatEnd : null,
-      })
-      if (error) {
-        setVisitError(error.message ?? 'Failed to update visit.')
-        return
+      }
+      if (editingSchedule.is_recurring && editRecurringApplyScope !== 'this_visit') {
+        // Keep each occurrence on its own calendar day for bulk recurring edits.
+        const bulkPatch = {
+          ...updatePatch,
+          date: undefined,
+        }
+        const bulk = await q.updateRecurringSchedulesByScope(supabase, {
+          seed_schedule_id: editingSchedule.id,
+          scope: editRecurringApplyScope,
+          apply_from_date: editingSchedule.date,
+          patch: bulkPatch,
+        })
+        if (bulk.error) {
+          setVisitError(bulk.error.message ?? 'Failed to update recurring visits.')
+          return
+        }
+      } else {
+        const { error } = await q.updateSchedule(supabase, editingSchedule.id, updatePatch)
+        if (error) {
+          setVisitError(error.message ?? 'Failed to update visit.')
+          return
+        }
       }
       if (dateToSave >= scheduleWeekStartStr && dateToSave <= scheduleWeekEndStr) {
         const { data } = await q.getSchedulesByPatientIdAndDateRange(
@@ -3594,10 +3726,9 @@ export default function ClientDetailContent({ client, allClients, representative
 
   /**
    * Schedule tab: weekly hour limit row per service type for the **selected calendar week**.
-   * Must include inactive contracts: when a new contract is saved, older rows are marked inactive
-   * but still hold the limit that governed past weeks. Pick among all rows with a limit whose
-   * [effective_date, end_date] window overlaps the week, choosing the latest effective_date
-   * (then created_at, id) so past weeks use the contract that was in force then, not the newest row.
+   * Includes historical rows: timeline is `effective_date` / `end_date` (RPC does not rely on `status`).
+   * Pick among rows with a limit whose window overlaps the week, latest effective_date
+   * (then created_at, id) so past weeks use the contract that was in force then.
    */
   const currentWeeklyLimitByServiceType = useMemo(() => {
     const weekStart = scheduleWeekStartStr
@@ -4315,19 +4446,23 @@ export default function ClientDetailContent({ client, allClients, representative
                       const row = latestOverviewWeeklyByServiceType[key]
                       const label = key === 'skilled' ? 'Skilled' : 'Non-skilled'
                       const prevRows = overviewPreviousWeeklyByServiceType[key]
+                      const ocAsOf = toLocalDateString(new Date())
+                      const rowPhase = row ? patientServiceContractUiPhase(row, serviceContracts, ocAsOf) : null
                       return (
                         <div key={key} className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                            {row ? (
+                            {row && rowPhase ? (
                               <span
                                 className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                                  (row.status ?? 'active') === 'active'
+                                  rowPhase === 'current'
                                     ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-gray-200 text-gray-600'
+                                    : rowPhase === 'future'
+                                      ? 'bg-sky-100 text-sky-800'
+                                      : 'bg-gray-200 text-gray-600'
                                 }`}
                               >
-                                {(row.status ?? 'active') === 'active' ? 'Active' : 'Inactive'}
+                                {rowPhase === 'current' ? 'Current' : rowPhase === 'future' ? 'Future' : 'Ended'}
                               </span>
                             ) : null}
                           </div>
@@ -4359,7 +4494,7 @@ export default function ClientDetailContent({ client, allClients, representative
                                         {Number(p.weekly_hours_limit ?? 0)} hrs ·{' '}
                                         {p.bill_rate != null ? `${formatMoney(Number(p.bill_rate))}/${p.bill_unit_type}` : '—'} ·{' '}
                                         <span className="text-gray-400">
-                                          {(p.status ?? 'active') === 'active' ? 'active' : 'inactive'}
+                                          {patientServiceContractUiPhase(p, serviceContracts, ocAsOf)}
                                         </span>
                                       </span>
                                       <span className="shrink-0 tabular-nums">{formatShortDate(p.effective_date)}</span>
@@ -6788,7 +6923,9 @@ export default function ClientDetailContent({ client, allClients, representative
                 ))}
               </select>
               {activeContracts.length === 0 ? (
-                <p className="mt-1 text-xs text-amber-700">No active contracts on file. Add a contract before scheduling visits.</p>
+                <p className="mt-1 text-xs text-amber-700">
+                  No billing contract covers this visit date. Add or adjust contracts in Manage contracts.
+                </p>
               ) : null}
             </div>
             <div>
@@ -6853,6 +6990,35 @@ export default function ClientDetailContent({ client, allClients, representative
             {/* Recurring configuration (bottom box) */}
             {visitForm.isRecurring && (
               <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 space-y-4">
+                {editingSchedule?.is_recurring ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Apply Changes To</label>
+                    <select
+                      value={editRecurringApplyScope}
+                      onChange={(e) =>
+                        setEditRecurringApplyScope(
+                          e.target.value as
+                            | 'this_visit'
+                            | 'this_and_future'
+                            | 'all_in_series'
+                            | 'weekday_in_series'
+                        )
+                      }
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                      disabled={isSavingVisit}
+                    >
+                      <option value="this_visit">This visit only</option>
+                      <option value="this_and_future">This and future visits</option>
+                      <option value="all_in_series">All visits in series</option>
+                      <option value="weekday_in_series">
+                        All {new Date(`${editingSchedule.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' })} visits
+                      </option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Use weekday option to update one day pattern (for example all Fridays) in one action.
+                    </p>
+                  </div>
+                ) : null}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Repeat Frequency</label>
                   <select
@@ -7512,7 +7678,7 @@ export default function ClientDetailContent({ client, allClients, representative
             className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 flex items-center gap-2"
           >
             {isSavingVisit && <Loader2 className="w-4 h-4 animate-spin" />}
-            Update Visit
+            {editingSchedule?.is_recurring && editRecurringApplyScope !== 'this_visit' ? 'Update Visits' : 'Update Visit'}
           </button>
         </div>
       </Modal>
@@ -7521,11 +7687,12 @@ export default function ClientDetailContent({ client, allClients, representative
         isOpen={serviceContractsModalOpen}
         onClose={closeManageLimitModal}
         title={`Manage Service Contracts — ${localClient.full_name}`}
-        size="lg"
+        size="xl"
+        closeOnBackdropClick={false}
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-500 -mt-2">
-            Track billing contracts per service type. Only one active contract per service type is allowed at a time.
+            Track billing contracts by service type. Current vs ended is determined from effective and end dates (same timeline rules as the database).
           </p>
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
             <h4 className="text-sm font-semibold text-gray-900">New Contract</h4>
@@ -7593,7 +7760,7 @@ export default function ClientDetailContent({ client, allClients, representative
               <textarea value={serviceContractForm.note} onChange={(e) => setServiceContractForm((p) => ({ ...p, note: e.target.value }))} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" rows={2} />
             </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              If an active contract already exists for the same service type, it will be automatically expired when this contract becomes active.
+              For the same contract type and service type, saving a new effective date closes the previous open-ended row on that date and starts the new row.
             </div>
             {serviceContractError ? <p className="text-sm text-red-600">{serviceContractError}</p> : null}
             <div className="flex justify-end">
@@ -7617,6 +7784,7 @@ export default function ClientDetailContent({ client, allClients, representative
                     <th className="text-left p-2 font-medium text-gray-700">Weekly Hrs</th>
                     <th className="text-left p-2 font-medium text-gray-700">Effective</th>
                     <th className="text-left p-2 font-medium text-gray-700">Status</th>
+                    <th className="text-left p-2 font-medium text-gray-700">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -7629,33 +7797,75 @@ export default function ClientDetailContent({ client, allClients, representative
                         </span>
                       </td>
                       <td className="p-2">
-                        <div className="min-w-[130px]">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={serviceContractRateDrafts[row.id] ?? ''}
-                              onChange={(e) => {
-                                const nextVal = e.target.value
-                                setServiceContractRateDrafts((prev) => ({ ...prev, [row.id]: nextVal }))
-                                setServiceContractRateErrorById((prev) => ({ ...prev, [row.id]: '' }))
-                              }}
-                              className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                            />
-                            <span className="text-xs text-gray-500 shrink-0">/{row.bill_unit_type}</span>
-                          </div>
-                          {serviceContractRateErrorById[row.id] ? (
-                            <p className="mt-1 text-xs text-red-600">{serviceContractRateErrorById[row.id]}</p>
-                          ) : null}
-                        </div>
+                        {row.bill_rate != null ? `${formatMoney(Number(row.bill_rate))}/${row.bill_unit_type}` : '—'}
                       </td>
                       <td className="p-2">{row.weekly_hours_limit ?? '—'}</td>
                       <td className="p-2">{formatShortDate(row.effective_date)}</td>
                       <td className="p-2">
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${row.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
-                          {row.status === 'active' ? 'Active' : 'Inactive'}
-                        </span>
+                        <div className="space-y-1">
+                          <div className="inline-flex rounded-md border border-gray-200 bg-gray-100/80 p-0.5">
+                            <button
+                              type="button"
+                              onClick={() => void handleSetServiceContractStatus(row, 'active')}
+                              disabled={isSavingServiceContractRowAction}
+                              className={`px-2 py-1 text-[11px] font-semibold rounded transition-colors ${
+                                row.status === 'active'
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'text-gray-600 hover:text-emerald-700'
+                              }`}
+                            >
+                              Active
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleSetServiceContractStatus(row, 'inactive')}
+                              disabled={isSavingServiceContractRowAction}
+                              className={`px-2 py-1 text-[11px] font-semibold rounded transition-colors ${
+                                row.status === 'inactive'
+                                  ? 'bg-gray-600 text-white shadow-sm'
+                                  : 'text-gray-600 hover:text-gray-800'
+                              }`}
+                            >
+                              Inactive
+                            </button>
+                          </div>
+                          {row.status === 'scheduled' ? (
+                            <span className="inline-block rounded-full px-2 py-0.5 text-xs bg-violet-100 text-violet-700">
+                              Scheduled
+                            </span>
+                          ) : null}
+                          {(() => {
+                            const ph = patientServiceContractUiPhase(row, serviceContracts, serviceContractsModalStatusAsOf)
+                            const label = ph === 'current' ? 'Current' : ph === 'future' ? 'Future' : 'Ended'
+                            const cls =
+                              ph === 'current'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : ph === 'future'
+                                  ? 'bg-sky-100 text-sky-700'
+                                  : 'bg-gray-100 text-gray-600'
+                            return <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${cls}`}>{label}</span>
+                          })()}
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <div className="flex items-center gap-2 min-w-[88px]">
+                          <button
+                            type="button"
+                            onClick={() => openEditServiceContractModal(row)}
+                            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white p-1.5 text-blue-700 hover:bg-blue-50"
+                            title="Edit contract"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteServiceContract(row)}
+                            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white p-1.5 text-red-700 hover:bg-red-50"
+                            title="Delete contract"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -7667,11 +7877,92 @@ export default function ClientDetailContent({ client, allClients, representative
             <button
               type="button"
               onClick={handleDoneServiceContracts}
-              disabled={isSavingServiceContract || isSavingServiceContractRates}
+              disabled={isSavingServiceContract || isSavingServiceContractRowAction || isSavingServiceContractEdit}
               className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60"
             >
-              {isSavingServiceContractRates ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {isSavingServiceContractRowAction ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Done
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={editServiceContractModalOpen}
+        onClose={closeEditServiceContractModal}
+        title={`Edit Contract — ${editingServiceContract?.contract_name || editingServiceContract?.contract_type || ''}`}
+        size="md"
+        closeOnBackdropClick={false}
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contract Name</label>
+              <input
+                value={serviceContractEditForm.contract_name}
+                onChange={(e) => setServiceContractEditForm((p) => ({ ...p, contract_name: e.target.value }))}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Billing Rate ($)</label>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={serviceContractEditForm.bill_rate}
+                onChange={(e) => setServiceContractEditForm((p) => ({ ...p, bill_rate: e.target.value }))}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-gray-500">Unit type: {editingServiceContract?.bill_unit_type ?? 'hour'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Effective Date</label>
+              <input
+                type="date"
+                value={editingServiceContract?.effective_date ?? ''}
+                disabled
+                className="w-full rounded border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+              <input
+                type="date"
+                value={serviceContractEditForm.end_date}
+                onChange={(e) => setServiceContractEditForm((p) => ({ ...p, end_date: e.target.value }))}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea
+              rows={3}
+              value={serviceContractEditForm.note}
+              onChange={(e) => setServiceContractEditForm((p) => ({ ...p, note: e.target.value }))}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Optional"
+            />
+          </div>
+          {serviceContractEditError ? <p className="text-sm text-red-600">{serviceContractEditError}</p> : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={closeEditServiceContractModal}
+              disabled={isSavingServiceContractEdit}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveServiceContractEdit}
+              disabled={isSavingServiceContractEdit}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-60"
+            >
+              {isSavingServiceContractEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Save Changes
             </button>
           </div>
         </div>
